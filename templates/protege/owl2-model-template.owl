@@ -6,7 +6,8 @@
      xmlns:xml="http://www.w3.org/XML/1998/namespace"
      xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
      xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-     xmlns:dcterms="http://purl.org/dc/terms/">
+     xmlns:dcterms="http://purl.org/dc/terms/"
+     xmlns:template="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template#">
     <owl:Ontology rdf:about="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template">
         <owl:versionIRI rdf:resource="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template/0.1.0"/>
         <dcterms:title>OWL 2 Manufacturing Model Template</dcterms:title>
@@ -47,14 +48,14 @@
 
     <owl:NamedIndividual rdf:about="#ExampleProcess">
         <rdf:type rdf:resource="#ManufacturingProcess"/>
-        <usesResource rdf:resource="#ExampleResource"/>
-        <hasIdentifier>PROCESS-001</hasIdentifier>
+        <template:usesResource rdf:resource="#ExampleResource"/>
+        <template:hasIdentifier>PROCESS-001</template:hasIdentifier>
         <rdfs:label>example process</rdfs:label>
     </owl:NamedIndividual>
 
     <owl:NamedIndividual rdf:about="#ExampleResource">
         <rdf:type rdf:resource="#ManufacturingResource"/>
-        <hasIdentifier>RESOURCE-001</hasIdentifier>
+        <template:hasIdentifier>RESOURCE-001</template:hasIdentifier>
         <rdfs:label>example resource</rdfs:label>
     </owl:NamedIndividual>
 </rdf:RDF>
