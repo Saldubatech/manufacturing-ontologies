@@ -10,7 +10,7 @@
     <owl:Ontology rdf:about="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template">
         <owl:versionIRI rdf:resource="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template/0.1.0"/>
         <dcterms:title>OWL 2 model template</dcterms:title>
-        <dcterms:description>Starter ontology for developing OWL 2 models with Protege Desktop. Update the ontology IRI, version IRI, and placeholder entities before reuse.</dcterms:description>
+        <dcterms:description>Starter ontology for developing OWL 2 models with Protégé Desktop. Update the ontology IRI, version IRI, and placeholder entities before reuse.</dcterms:description>
         <dcterms:creator>Saldubatech</dcterms:creator>
         <owl:versionInfo>0.1.0</owl:versionInfo>
     </owl:Ontology>
