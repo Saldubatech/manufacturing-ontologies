@@ -9,7 +9,7 @@
      xmlns:dcterms="http://purl.org/dc/terms/">
     <owl:Ontology rdf:about="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template">
         <owl:versionIRI rdf:resource="https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template/0.1.0"/>
-        <dcterms:title>OWL 2 manufacturing model template</dcterms:title>
+        <dcterms:title>OWL 2 Manufacturing Model Template</dcterms:title>
         <dcterms:description>Starter ontology for developing OWL 2 models with Protégé Desktop. Update the ontology IRI, version IRI, and placeholder entities before reuse.</dcterms:description>
         <dcterms:creator>Saldubatech</dcterms:creator>
         <owl:versionInfo>0.1.0</owl:versionInfo>
@@ -17,7 +17,7 @@
 
     <owl:Class rdf:about="#ManufacturingEntity">
         <rdfs:label>manufacturing entity</rdfs:label>
-        <rdfs:comment>Placeholder superclass for manufacturing domain entities. Replace it with your own top-level concept or reuse it as a common superclass.</rdfs:comment>
+        <rdfs:comment>Placeholder superclass for manufacturing domain entities. Replace this class with your own top-level concept or reuse it as a common superclass.</rdfs:comment>
     </owl:Class>
 
     <owl:Class rdf:about="#ManufacturingProcess">
