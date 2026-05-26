@@ -26,7 +26,7 @@
 #
 # :ExampleAsset a schema:Thing ;
 #     skos:prefLabel "example asset"@en ;
-#     rdfs:comment "Example label using symbols discovered from LOV and imported via SKOS." .
+#     rdfs:comment "Example asset using symbols discovered from LOV and imported via SKOS." .
 #
 # Notes:
 # - LOV is a vocabulary catalog. Import the ontology you found through LOV, not LOV itself.
