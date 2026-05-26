@@ -1,0 +1,81 @@
+@base <https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template> .
+@prefix : <https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Optional examples for reusing external ontologies and vocabularies:
+#
+# @prefix iof-av: <https://spec.industrialontologies.org/ontology/annotation/> .
+# @prefix qudt: <http://qudt.org/schema/qudt/> .
+# @prefix unit: <http://qudt.org/vocab/unit/> .
+# @prefix schema: <https://schema.org/> .
+# @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+#
+# <https://example.com/my-ontology>
+#     owl:imports
+#         <https://spec.industrialontologies.org/ontology/core/Core/> ,
+#         <https://spec.industrialontologies.org/ontology/core/meta/AnnotationVocabulary/> ,
+#         <http://qudt.org/2.1/schema/qudt> ,
+#         <http://qudt.org/2.1/vocab/unit> ,
+#         <https://schema.org/version/latest/schemaorg-current.ttl> ,
+#         <http://www.w3.org/2004/02/skos/core> ;
+#     iof-av:maturity iof-av:Provisional .
+#
+# :ExampleAsset a schema:Thing ;
+#     skos:prefLabel "example asset"@en ;
+#     rdfs:comment "Example asset using symbols discovered from LOV and imported via SKOS." .
+#
+# Notes:
+# - LOV is a vocabulary catalog. Import the ontology you found through LOV, not LOV itself.
+# - Gemini is not an ontology IRI and cannot be imported with owl:imports.
+#
+<https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template>
+    a owl:Ontology ;
+    owl:versionIRI <https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template/0.1.0> ;
+    dcterms:title "OWL 2 Manufacturing Model Template" ;
+    dcterms:description "Starter ontology for developing OWL 2 models with Protégé Desktop. Update the ontology IRI, version IRI, and placeholder entities before reuse." ;
+    dcterms:creator "Saldubatech" ;
+    owl:versionInfo "0.1.0" .
+
+:ManufacturingEntity
+    a owl:Class ;
+    rdfs:label "manufacturing entity" ;
+    rdfs:comment "Placeholder superclass for manufacturing domain entities. Replace this class with your own top-level concept or reuse it as a common superclass." .
+
+:ManufacturingProcess
+    a owl:Class ;
+    rdfs:subClassOf :ManufacturingEntity ;
+    rdfs:label "manufacturing process" ;
+    rdfs:comment "Placeholder class for production, transformation, or workflow activities in the modeled domain." .
+
+:ManufacturingResource
+    a owl:Class ;
+    rdfs:subClassOf :ManufacturingEntity ;
+    rdfs:label "manufacturing resource" ;
+    rdfs:comment "Placeholder class for machines, tools, materials, people, or other resources used by a process." .
+
+:usesResource
+    a owl:ObjectProperty ;
+    rdfs:domain :ManufacturingProcess ;
+    rdfs:range :ManufacturingResource ;
+    rdfs:label "uses resource" .
+
+:hasIdentifier
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain :ManufacturingEntity ;
+    rdfs:range xsd:string ;
+    rdfs:label "has identifier" .
+
+:ExampleProcess
+    a owl:NamedIndividual, :ManufacturingProcess ;
+    :usesResource :ExampleResource ;
+    :hasIdentifier "PROCESS-001" ;
+    rdfs:label "example process" .
+
+:ExampleResource
+    a owl:NamedIndividual, :ManufacturingResource ;
+    :hasIdentifier "RESOURCE-001" ;
+    rdfs:label "example resource" .
