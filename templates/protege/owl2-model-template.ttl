@@ -6,6 +6,32 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+# Optional examples for reusing external ontologies and vocabularies:
+#
+# @prefix iof-av: <https://spec.industrialontologies.org/ontology/annotation/> .
+# @prefix qudt: <http://qudt.org/schema/qudt/> .
+# @prefix unit: <http://qudt.org/vocab/unit/> .
+# @prefix schema: <https://schema.org/> .
+# @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+#
+# <https://example.com/my-ontology>
+#     owl:imports
+#         <https://spec.industrialontologies.org/ontology/core/Core/> ,
+#         <https://spec.industrialontologies.org/ontology/core/meta/AnnotationVocabulary/> ,
+#         <http://qudt.org/2.1/schema/qudt> ,
+#         <http://qudt.org/2.1/vocab/unit> ,
+#         <https://schema.org/version/latest/schemaorg-current.ttl> ,
+#         <http://www.w3.org/2004/02/skos/core> ;
+#     iof-av:maturity iof-av:Provisional .
+#
+# :ExampleAsset a schema:Thing ;
+#     skos:prefLabel "example asset"@en ;
+#     rdfs:comment "Example label using symbols discovered from LOV and imported via SKOS." .
+#
+# Notes:
+# - LOV is a vocabulary catalog. Import the ontology you found through LOV, not LOV itself.
+# - Gemini is not an ontology IRI and cannot be imported with owl:imports.
+#
 <https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template>
     a owl:Ontology ;
     owl:versionIRI <https://saldubatech.github.io/manufacturing-ontologies/templates/owl2-model-template/0.1.0> ;
