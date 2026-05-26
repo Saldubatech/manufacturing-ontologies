@@ -72,3 +72,6 @@ Notes for the sources mentioned in the review:
 - **Gemini**: Gemini is not an ontology distribution endpoint, so it cannot be
   added with `owl:imports`. It can still help draft terminology or mappings
   before you connect your ontology to real imported vocabularies.
+
+For a compact markdown catalog of the referenced external sources and ontology
+artifacts, see `docs/external-ontology-catalog.md`.
