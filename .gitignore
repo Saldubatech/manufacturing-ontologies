@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Fetched analysis tools — rehydrate with `bash tools/get-tools.sh` (or `make tools`)
+/tools/*.jar

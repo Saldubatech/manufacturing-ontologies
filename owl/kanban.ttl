@@ -1,0 +1,202 @@
+@prefix : <http://manufacturing.ontology/kanban#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix iof: <https://spec.industrialontologies.org/ontology/construct/> .
+@prefix bfo: <http://purl.obolibrary.org/obo/> .
+
+<http://manufacturing.ontology/kanban> a owl:Ontology ;
+    owl:imports <https://spec.industrialontologies.org/ontology/core/Core/> ;
+    rdfs:label "Comprehensive Manufacturing Kanban and Resource State Ontology" ;
+    rdfs:comment "An operational ontology mapping manufacturing stations, Kanban loops, jobs, and an X.731-aligned three-vector resource state model, harmonized with the Industrial Ontologies Foundry (IOF) Core." ;
+    owl:versionInfo "1.0" .
+
+rdfs:comment a owl:AnnotationProperty .
+rdfs:label a owl:AnnotationProperty .
+
+:allocatedTo a owl:ObjectProperty ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Job :Loop ) ] ;
+    rdfs:range :Resource ;
+    rdfs:comment "Maps a production job or an entire loop to the specific resource(s) executing or facilitating it." .
+
+:associatedWithItemType a owl:ObjectProperty ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :KanbanCard :InventoryLot ) ] ;
+    rdfs:range :ItemType ;
+    rdfs:comment "Links a Kanban card or an physical inventory lot to its abstract design or part catalog specification." .
+
+:consistsOfCards a owl:ObjectProperty ;
+    rdfs:domain :Job ;
+    rdfs:range :KanbanCard ;
+    rdfs:comment "Defines the specific set of Kanban cards grouped together during the complex job-formation stage at a source station." .
+
+:hasAdministrativeState a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:domain :Resource ;
+    rdfs:range :AdministrativeState ;
+    rdfs:comment "X.731: Reflects the policy or management-driven permission status of the resource." .
+
+:hasKanbanState a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:domain :KanbanCard ;
+    rdfs:range :KanbanLifecycleState ;
+    rdfs:comment "Tracks the current position of a Kanban card within its 8-state tracking lifecycle loop." .
+
+:hasOperationalState a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:domain :Resource ;
+    rdfs:range :OperationalState ;
+    rdfs:comment "X.731: Reflects the physical capability of the resource to operate, regardless of scheduling or policy." .
+
+:hasPart a owl:ObjectProperty ;
+    rdfs:domain :CompositeResource ;
+    rdfs:range :Resource ;
+    rdfs:comment "Decomposes a composite resource system (like a Kanban Loop) into its individual physical and human assets." .
+
+:hasSinkStation a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:domain :Loop ;
+    rdfs:range :SinkStation ;
+    rdfs:comment "Defines the boundary destination (consumption point) of a Kanban Loop." .
+
+:hasSourceStation a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:domain :Loop ;
+    rdfs:range :SourceStation ;
+    rdfs:comment "Defines the boundary origination (production point) of a Kanban Loop." .
+
+:hasUsageState a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:domain :Resource ;
+    rdfs:range :UsageState ;
+    rdfs:comment "X.731: Tracks the instantaneous utilization state of the resource (busy vs. waiting)." .
+
+:hasCapacityUnit a owl:DatatypeProperty ;
+    rdfs:domain :Resource ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The unit of measurement for capacity expressions (e.g., 'cards/hour', 'parts/shift')." .
+
+:hasEffectiveCapacityValue a owl:DatatypeProperty ;
+    rdfs:domain :Resource ;
+    rdfs:range xsd:float ;
+    rdfs:comment "The real-world operational capacity value, accounting for standard losses, maintenance downtimes, and setups." .
+
+:hasLoopCapacityLimit a owl:DatatypeProperty ;
+    rdfs:domain :Loop ;
+    rdfs:range xsd:integer ;
+    rdfs:comment "The absolute authorization cap (WIP limit) bounding the total number of valid Kanban cards circulating in the loop." .
+
+:hasTheoreticalCapacityValue a owl:DatatypeProperty ;
+    rdfs:domain :Resource ;
+    rdfs:range xsd:float ;
+    rdfs:comment "The idealized, frictionless capacity ceiling under perfect operating conditions." .
+
+:AdministrativeState a owl:Class ;
+    owl:equivalentClass [ a owl:Class ; owl:oneOf ( :Locked :ShuttingDown :Unlocked ) ] ;
+    rdfs:subClassOf :StateValue ;
+    rdfs:comment "Policy permission states governed by business decisions or administrative profiles." .
+
+:AtomicResource a owl:Class ;
+    rdfs:subClassOf :Resource ;
+    rdfs:comment "A single, non-decomposable manufacturing resource asset." .
+
+:CompositeResource a owl:Class ;
+    rdfs:subClassOf :Resource ;
+    rdfs:comment "A system of individual resource components collaborating as a functional unit." .
+
+:ControlArtifact a owl:Class ;
+    rdfs:subClassOf iof:InformationContentEntity ;
+    rdfs:comment "Coordination, authorization, and information entities steering production logic." .
+
+:Equipment a owl:Class ;
+    rdfs:subClassOf :AtomicResource , iof:MaterialResource ;
+    rdfs:comment "Physical hardware, machinery, transport mechanisms, or tooling components." .
+
+:InventoryLot a owl:Class ;
+    rdfs:subClassOf :MaterialEntity ;
+    rdfs:comment "A batch or distinct physical instantiation of processed components or raw items." .
+
+:ItemType a owl:Class ;
+    rdfs:subClassOf iof:DescriptiveInformationContentEntity ;
+    rdfs:comment "The conceptual catalog designator defining structural requirements for inventory objects." .
+
+:Job a owl:Class ;
+    rdfs:subClassOf :ControlArtifact ;
+    rdfs:comment "An optimization aggregation of one or more Kanban cards bundled at a Source Station to harmonize setup and sequencing constraints." .
+
+:KanbanCard a owl:Class ;
+    rdfs:subClassOf :ControlArtifact ;
+    rdfs:comment "The core authorization token containing standard data vectors to govern production/withdrawal cycles." .
+
+:KanbanLifecycleState a owl:Class ;
+    owl:equivalentClass [ a owl:Class ; owl:oneOf ( :State1_AttachedAtSink :State2_ReleasedFromSink :State3_TransitingToSource :State4_ArrivedAtSource :State5_GroupedIntoJob :State6_InProcessAtSource :State7_CompletedAtSource :State8_TransitingToSink ) ] ;
+    rdfs:subClassOf :StateValue ;
+    rdfs:comment "Enumeration of the 8 separate steps tracking a single Kanban card's recurring lifecycle closed loop." .
+
+:Loop a owl:Class ;
+    rdfs:subClassOf :CompositeResource , iof:EngineeredSystem ;
+    owl:equivalentClass [ a owl:Class ;
+            owl:intersectionOf (
+                [ a owl:Restriction ; owl:onProperty :hasSinkStation ; owl:someValuesFrom :SinkStation ]
+                [ a owl:Restriction ; owl:onProperty :hasSourceStation ; owl:someValuesFrom :SourceStation ]
+            )
+        ] ;
+    rdfs:comment "The complete tracking loop linking a Source Station to a Sink Station, operating as a composite infrastructure system." .
+
+:MaterialEntity a owl:Class ;
+    rdfs:subClassOf bfo:BFO_0000030 ;
+    rdfs:comment "Physical materials or parts passing through the shop-floor transformations." .
+
+:OperationalState a owl:Class ;
+    owl:equivalentClass [ a owl:Class ; owl:oneOf ( :Disabled :Enabled ) ] ;
+    rdfs:subClassOf :StateValue ;
+    rdfs:comment "Physical health or capability vector independent of operational loading or policy." .
+
+:Personnel a owl:Class ;
+    rdfs:subClassOf :AtomicResource , iof:Agent ;
+    rdfs:comment "Human capital, operators, and staff driving manual, loading, or regulatory tasks." .
+
+:ProcessingStation a owl:Class ;
+    rdfs:subClassOf :Station, :AtomicResource ;
+    rdfs:comment "A station characterized by value-adding physical material conversion tasks." .
+
+:Resource a owl:Class ;
+    rdfs:comment "Any asset, device, human, or macro-system mapped to an X.731 state configuration model and capable of processing or material execution." .
+
+:SinkStation a owl:Class ;
+    rdfs:subClassOf :Station ;
+    rdfs:comment "The consumption node triggering signal demands and deciding inbound parsing parameters." .
+
+:SourceStation a owl:Class ;
+    rdfs:subClassOf :Station ;
+    rdfs:comment "The production node managing the optimization decision workspace for Job aggregation, sequence execution, and setup reduction." .
+
+:StateValue a owl:Class ;
+    rdfs:comment "Top-level value partition containing finite state sets for cards and resources." .
+
+:Station a owl:Class ;
+    rdfs:subClassOf iof:MaterialResource ;
+    rdfs:comment "A defined locational space or physical staging zone within the factory routing environment." .
+
+:UsageState a owl:Class ;
+    owl:equivalentClass [ a owl:Class ; owl:oneOf ( :Active :Busy :Idle ) ] ;
+    rdfs:subClassOf :StateValue ;
+    rdfs:comment "Instantaneous state reflecting real-time task loading and process intersection context." .
+
+# External classes (bfo:BFO_0000030 'object', iof:* construct classes) are
+# provided by the imported IOF Core closure — no local stub declarations needed.
+
+:Disabled a owl:NamedIndividual, :OperationalState .
+:Enabled a owl:NamedIndividual, :OperationalState .
+
+:Active a owl:NamedIndividual, :UsageState .
+:Busy a owl:NamedIndividual, :UsageState .
+:Idle a owl:NamedIndividual, :UsageState .
+
+:Locked a owl:NamedIndividual, :AdministrativeState .
+:ShuttingDown a owl:NamedIndividual, :AdministrativeState .
+:Unlocked a owl:NamedIndividual, :AdministrativeState .
+
+:State1_AttachedAtSink a owl:NamedIndividual, :KanbanLifecycleState .
+:State2_ReleasedFromSink a owl:NamedIndividual, :KanbanLifecycleState .
+:State3_TransitingToSource a owl:NamedIndividual, :KanbanLifecycleState .
+:State4_ArrivedAtSource a owl:NamedIndividual, :KanbanLifecycleState .
+:State5_GroupedIntoJob a owl:NamedIndividual, :KanbanLifecycleState .
+:State6_InProcessAtSource a owl:NamedIndividual, :KanbanLifecycleState .
+:State7_CompletedAtSource a owl:NamedIndividual, :KanbanLifecycleState .
+:State8_TransitingToSink a owl:NamedIndividual, :KanbanLifecycleState .

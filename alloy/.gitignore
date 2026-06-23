@@ -1,0 +1,4 @@
+# Alloy Analyzer CLI output (exec creates a dir named after the source stem)
+/manufacturing-systems/
+/out/
+/kanban/

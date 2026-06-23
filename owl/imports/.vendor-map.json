@@ -1,0 +1,19 @@
+{
+  "https://spec.industrialontologies.org/ontology/core/Core/": "iof-core.rdf",
+  "http://qudt.org/vocab/unit": "qudt-org-vocab-unit.ttl",
+  "http://qudt.org/vocab/quantitykind": "qudt-org-vocab-quantitykind.ttl",
+  "http://purl.obolibrary.org/obo/bfo/2020/bfo.owl": "bfo.owl",
+  "https://spec.industrialontologies.org/ontology/202602/core/meta/AnnotationVocabulary/": "iof-annotation-vocabulary.rdf",
+  "http://qudt.org/schema/facade/qudt": "qudt-org-schema-facade-qudt.ttl",
+  "http://qudt.org/vocab/prefix": "qudt-org-vocab-prefix.ttl",
+  "http://qudt.org/vocab/sou": "qudt-org-vocab-sou.ttl",
+  "http://qudt.org/vocab/dimensionvector": "qudt-org-vocab-dimensionvector.ttl",
+  "http://qudt.org/vocab/soqk": "qudt-org-vocab-soqk.ttl",
+  "http://qudt.org/collection/usertest": "qudt-org-collection-usertest.ttl",
+  "http://qudt.org/schema/qudt": "qudt-org-schema-qudt.ttl",
+  "http://qudt.org/schema/coordinateSystems": "qudt-org-schema-coordinatesystems.ttl",
+  "http://qudt.org/schema/datatype": "qudt-org-schema-datatype.ttl",
+  "http://www.linkedmodel.org/schema/dtype": "www-linkedmodel-org-schema-dtype.rdf",
+  "http://www.linkedmodel.org/schema/vaem": "www-linkedmodel-org-schema-vaem.rdf",
+  "http://www.w3.org/2004/02/skos/core": "www-w3-org-2004-02-skos-core.rdf"
+}
