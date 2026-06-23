@@ -1,6 +1,6 @@
 module resources/kanban_card
 
-open reference_data/item  // ItemType
+open resources/item_type  // ItemType
 open resources/loop       // Loop
 
 // The 8-stage Kanban lifecycle (relocated; names kept — redesign aligns to the

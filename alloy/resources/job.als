@@ -1,6 +1,6 @@
 module resources/job
 
-open reference_data/item    // ItemType
+open resources/item_type    // ItemType
 open resources/kanban_card  // KanbanCard
 
 // A Job — an aggregation of homogeneous Kanban cards formed at a source station.
