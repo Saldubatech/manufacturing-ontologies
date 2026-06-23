@@ -11,27 +11,32 @@ module meta/kernel
 sig EntityId {}
 
 // Identity-bearing thing. `eId` is a primary key (injective — EntityIdIsKey).
-// `refs` is the set of OUTGOING soft references this entity holds — it belongs at the
-// Entity level (any entity may hold references, scoped or not) and is the hook for
-// generic cross-reference rules. Alloy has no field reflection, so each concrete
-// entity's module pins its `refs` (one fact; `no x.refs` when it holds none) or the
-// field is left under-constrained.
+// `dataRefs` is the set of OUTGOING soft references the entity's module declares (the
+// data references, excluding the scope ref). Each concrete entity's module pins it
+// (one fact; `no x.dataRefs` when it holds none), since Alloy has no field
+// reflection. The COMPLETE reference set is the derived `refs` (below).
 abstract sig Entity {
-  eId:  one EntityId,
-  refs: set EntityId
+  eId:      one EntityId,
+  dataRefs: set EntityId
 }
 fact EntityIdIsKey { all disj a, b: Entity | a.eId != b.eId }
 
 // Tenant-scoped entity. `tenantId` is a SOFT reference (an EntityId, not a Tenant
 // sig) — keeps meta/kernel free of any domain dependency. The Tenant entity lives
 // in the system domain (not yet modeled); "tenantId resolves to a Tenant" is a
-// check for a root that opens both. (`refs` is inherited from Entity.)
+// check for a root that opens both.
 abstract sig Scoped extends Entity { tenantId: one EntityId }
 
-// Cross-tenant isolation — one rule over `Entity.refs`, but restricted to
-// tenant-bearing entities: if a Scoped entity refers to another Scoped entity that
-// resolves in scope, they share a tenant. Refs to non-Scoped/global entities, or
-// unresolved refs, are exempt via the `b in Scoped` guard.
+// The COMPLETE set of an entity's outgoing soft references: the module-declared
+// `dataRefs` PLUS, for a Scoped entity, its scope reference (`tenantId`).
+// `this.tenantId` is empty for non-Scoped entities, so this holds for any Entity.
+// Generic cross-reference rules quantify over `refs`.
+fun Entity.refs: set EntityId { this.dataRefs + this.tenantId }
+
+// Cross-tenant isolation — over the complete `refs` set, restricted to tenant-bearing
+// entities: if a Scoped entity refers to another Scoped entity that resolves in
+// scope, they share a tenant. Refs to non-Scoped/global entities (incl. the scope
+// ref's Tenant), or unresolved refs, are exempt via the `b in Scoped` guard.
 fact CrossTenantIsolation {
   all a: Scoped, id: a.refs |
     let b = resolve[id] | b in Scoped implies a.tenantId = b.tenantId

@@ -10,4 +10,4 @@ enum BusinessRoleType { VENDOR, CUSTOMER, CARRIER, OPERATOR, OTHER }
 sig BusinessRole extends Scoped { role: one BusinessRoleType }
 
 // No outgoing soft references (must be pinned, or `refs` is under-constrained).
-fact BusinessRoleRefs { all r: BusinessRole | no r.refs }
+fact BusinessRoleRefs { all r: BusinessRole | no r.dataRefs }

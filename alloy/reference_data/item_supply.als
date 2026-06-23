@@ -28,5 +28,5 @@ fact SupplierRefIsVendor {
 
 // Outgoing soft references, for the kernel's generic cross-reference rules.
 fact ItemSupplyRefs {
-  all s: ItemSupply | s.refs = s.supplier.vendorRef + s.supplier.affiliateRef
+  all s: ItemSupply | s.dataRefs = s.supplier.vendorRef + s.supplier.affiliateRef
 }

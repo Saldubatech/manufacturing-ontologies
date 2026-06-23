@@ -19,4 +19,4 @@ fact ItemSupplyOwnership {
 
 // Outgoing soft references (the parent→child `supplies` is a direct relation, not a
 // soft ref, and is already kept in-tenant by ItemSupplyOwnership).
-fact ItemRefs { all i: Item | i.refs = i.defaultSupply }
+fact ItemRefs { all i: Item | i.dataRefs = i.defaultSupply }
