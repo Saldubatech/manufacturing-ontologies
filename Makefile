@@ -7,7 +7,7 @@
 ALLOY := tools/alloy.jar
 ROBOT := tools/robot.jar
 
-.PHONY: tools alloy check-alloy test-unit test-sys check-owl check
+.PHONY: tools alloy check-alloy check-examples test-unit test-sys check-owl check
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -23,6 +23,14 @@ alloy: $(ALLOY)
 ## check-alloy: run every command in every test root (any alloy/**/tests/*.als)
 check-alloy: $(ALLOY)
 	@find alloy -path '*/tests/*.als' | sort | while read f; do \
+	  echo "== $$f =="; \
+	  java -jar $(ALLOY) -D info exec -c "*" -o /tmp/alloy-out -f "$$f" 2>&1 \
+	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
+	done; rm -rf /tmp/alloy-out
+
+## check-examples: run every command in the modeling cookbook (alloy/meta/examples/*.als)
+check-examples: $(ALLOY)
+	@find alloy/meta/examples -name '*.als' ! -name 'ex00_*' | sort | while read f; do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec -c "*" -o /tmp/alloy-out -f "$$f" 2>&1 \
 	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
@@ -48,4 +56,4 @@ check-owl: $(ROBOT)
 	  echo "owl/kanban.ttl: loaded, $$n unresolved-entity (Error#) warnings"
 
 ## check: run all checks
-check: check-alloy check-owl
+check: check-alloy check-examples check-owl
