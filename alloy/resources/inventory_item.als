@@ -71,7 +71,7 @@ fact DepletionInterlock {
   all ii: InventoryItem | ii.usageState = BUSY iff ii.actualQuantity.amount = 0
 }
 
-// Tight by default: no orphan individualizers (self-contained). PhysicalLocator and
-// Quantity are shared across modules, so their no-orphan rules await the §5/§6
-// shared-value-type decision (DT-004).
+// Tight by default: no orphan individualizers (a module-local handle type). Quantity
+// and PhysicalLocator are SHARED value objects, hence orphan-EXEMPT (DT-004 Q8) — no
+// no-orphan rule for them.
 fact NoOrphanIndividualizer { all x: Individualizer | x in InventoryItem.individualizers }

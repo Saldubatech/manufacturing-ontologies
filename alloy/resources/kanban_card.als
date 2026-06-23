@@ -149,18 +149,11 @@ fact KanbanPrintConsistency {
     firedInto[KanbanPrintMachine, c.printStatus, c.lastPrintEvent.type]
 }
 
-// Tight by default: no orphan value atoms owned by the card.
+// Tight by default: no orphan value atoms owned by the card. Quantity and
+// PhysicalLocator are SHARED value objects (used across modules) and are therefore
+// orphan-EXEMPT (DT-004 Q8) — only the card-local handles are constrained here.
 fact NoOrphanCardValues {
   all e: KanbanCardEvent      | e in KanbanCard.lastEvent
   all e: KanbanCardPrintEvent | e in KanbanCard.lastPrintEvent
   all s: SerialNumber         | s in KanbanCard.serialNumber
-  all p: PhysicalLocator      | p in KanbanCard.locator
-                                   + KanbanCardEvent.fromWhere + KanbanCardEvent.toWhere
-}
-
-// Tight by default: Quantity is SHARED across domains (ItemSupply.orderQuantity +
-// KanbanCard.cardQuantity). This module is the lowest in the open-DAG that sees both
-// users, so the no-orphan-Quantity rule lives here (relocated from item_supply, §6).
-fact NoOrphanQuantity {
-  all q: Quantity | q in ItemSupply.orderQuantity + KanbanCard.cardQuantity
 }
