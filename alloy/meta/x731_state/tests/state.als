@@ -1,6 +1,29 @@
 module meta/x731_state/tests/state
 
+open meta/state_machine/machine
 open meta/x731_state/state
 
-// Resource X.731 interlock holds (relocated from meta/tests/util.als; name kept).
-check X731Consistency for 5
+/*
+ * X.731 suite. The interlock holds (relocated check; name kept), a valid resource
+ * exists, and each region machine is well-formed (all states reachable, signals
+ * live). Scope pins the reified families: 8 State, 10 Signal, 10 Transition,
+ * 3 StateMachine, 0 Guard; Resource left at the global scope.
+ */
+
+check X731Consistency
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+
+run someResource { some Resource }
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+
+check x731_op_reachable    { allStatesReachable[OperationalMachine] }
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+check x731_usage_reachable { allStatesReachable[UsageMachine] }
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+check x731_admin_reachable { allStatesReachable[AdministrativeMachine] }
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+check x731_liveSignals {
+  liveSignals[OperationalMachine]
+  liveSignals[UsageMachine]
+  liveSignals[AdministrativeMachine]
+} for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard

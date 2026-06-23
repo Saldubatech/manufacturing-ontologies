@@ -13,7 +13,8 @@ tree mirrors the system's **functional decomposition**.
   - `meta/kernel.als` — identity + the `Entity`/`Scoped` bound, `EntityId`, soft-ref `resolve`, cross-tenant isolation (DT-001.02, implemented).
   - `meta/values.als` — value objects: `Quantity` (amount+unit), `PhysicalLocator`; `Money`/`Duration` still opaque (QUDT bridge deferred, DT-002).
   - `meta/std/{bfo,iof,qudt}.als` — **vendored boundary stubs** copied from the OWL standards (MIREOT: only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. OWL stays system-of-record.
-  - `meta/x731_state/` — the ITU-T X.731 state machinery (state vectors + abstract `Resource`); `state.als` today, room for transition/attribute files + `tests/` as it grows.
+  - `meta/state_machine/machine.als` — generic FSM framework reifying common-module's `StateEngine` (DT-003): `State`/`Signal`/`Guard`/`Transition`/`StateMachine` + once-stated well-formedness/determinism FACTS + checkable `allStatesReachable`/`liveSignals`/`firedInto`. Concrete machines extend `State`/`Signal` and pin a `StateMachine` atom.
+  - `meta/x731_state/state.als` — ITU-T X.731 expressed via `meta/state_machine`: three region machines (Operational ∥ Usage ∥ Administrative) + `Resource` host + interlocks as cross-region invariants (DT-003).
 - Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` (Item/ItemSupply/BusinessAffiliate/BusinessRole) and `resources` (KanbanCard) have content; the rest are stubbed (`.gitkeep`).
 - The original throwaway X.731 behavioral spike (Loop/Station/Operator/Job/InventoryLot + 8-state lifecycle) was archived to `../alloy-sample/kanban_sim/` when the real code-faithful `KanbanCard` landed (DT-001.08). It is not in the `make check-alloy` set; see its README.
 
@@ -71,6 +72,11 @@ Interpreting: `run` SAT = instance found; `check` UNSAT = assertion holds.
 4. Scope must exceed the atoms a predicate forces (shared abstract supertypes
    share the scope); don't put a numeric scope on a `one sig`.
 5. Open a root, not a submodule, in the GUI.
+6. **Reified state machines (DT-003) need explicit per-sig scopes.** `State`/
+   `Signal` are abstract and fully partitioned into `one sig`s, and the no-orphan
+   facts pin `Transition`/`Guard`, so each command must size those families exactly
+   (e.g. kanban: `but 16 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard`).
+   `sig` is a reserved keyword — never a variable name (use `sg`).
 
 ## Pointers
 

@@ -1,8 +1,9 @@
 module resources/kanban_card
 
 open meta/kernel
-open meta/values            // Quantity, PhysicalLocator
-open reference_data/item    // Item (soft-ref target); transitively ItemSupply for the shared-Quantity rule
+open meta/values                 // Quantity, PhysicalLocator
+open meta/state_machine/machine  // State, Signal, StateMachine, firedInto, …
+open reference_data/item         // Item (soft-ref target); transitively ItemSupply for the shared-Quantity rule
 
 /*
  * Kanban Card — the demand signal at the heart of replenishment. Tenant-scoped
@@ -10,70 +11,87 @@ open reference_data/item    // Item (soft-ref target); transitively ItemSupply f
  * (cards/arda/operations/resources/kanban, KanbanCard.kt); see the published docs:
  * https://arda-cards.github.io  →  Current System / Functional / Resources / Kanban Cards.
  *
- * Two orthogonal state machines (operational + print), each modeled per DT-001.02
- * decision (b): a constant transition table (`produces` / `printProduces`) plus a
- * snapshot-consistency invariant tying the card's current status to its last event.
- * No temporal trace and no event history — the event timestamp/author and the
- * `kanban_card_event` stream belong to the deferred bitemporal layer (DT-001.03).
- * Loop is documented but unimplemented in code, so it is not modeled here.
+ * Two orthogonal state machines (operational + print). Each is a REIFIED
+ * StateMachine (meta/state_machine, DT-003), so the generic well-formedness,
+ * determinism, reachability and live-signal properties apply uniformly; the
+ * snapshot-consistency rule (DT-001.02 (b)) is the generic `firedInto`. No temporal
+ * trace / event history — event timestamp/author and the kanban_card_event stream
+ * belong to the deferred bitemporal layer (DT-001.03). Loop is documented but
+ * unimplemented in code, so it is not modeled here.
  */
 
 // ---------------------------------------------------------------------------
-// Operational state machine (KanbanCardStatus / KanbanCardEventType — code names)
+// Operational state machine (KanbanCardStatus / KanbanCardEventType — code names).
+// Enums are the long form (abstract sig + one sigs) so they extend State/Signal.
 // ---------------------------------------------------------------------------
-enum KanbanCardStatus {
-  AVAILABLE, REQUESTING, REQUESTED, IN_PROCESS, READY,
-  FULFILLING, FULFILLED, IN_USE, DEPLETED, UNKNOWN
-}
-enum KanbanCardEventType {
-  REQUEST, ACCEPT, SHELVE, START_PROCESSING, COMPLETE_PROCESSING,
-  FULFILL, RECEIVE, USE, DEPLETE, WITHDRAW, NONE, FAILED_ACTION
+abstract sig KanbanCardStatus extends State {}
+one sig AVAILABLE, REQUESTING, REQUESTED, IN_PROCESS, READY,
+        FULFILLING, FULFILLED, IN_USE, DEPLETED, UNKNOWN extends KanbanCardStatus {}
+
+abstract sig KanbanCardEventType extends Signal {}
+one sig REQUEST, ACCEPT, SHELVE, START_PROCESSING, COMPLETE_PROCESSING,
+        FULFILL, RECEIVE, USE, DEPLETE, WITHDRAW, NONE, FAILED_ACTION extends KanbanCardEventType {}
+
+one sig KanbanOpMachine extends StateMachine {}
+abstract sig KOpTransition extends Transition {}
+// Code's LifecycleImpl maps event → state regardless of current state, so every
+// transition's `from` is ANY (all states; pinned in the machine fact below).
+one sig KOp_request  extends KOpTransition {} { on = REQUEST             and to = REQUESTING }
+one sig KOp_accept   extends KOpTransition {} { on = ACCEPT              and to = REQUESTED }
+one sig KOp_shelve   extends KOpTransition {} { on = SHELVE              and to = REQUESTING }
+one sig KOp_start    extends KOpTransition {} { on = START_PROCESSING    and to = IN_PROCESS }
+one sig KOp_complete extends KOpTransition {} { on = COMPLETE_PROCESSING and to = READY }
+one sig KOp_fulfill  extends KOpTransition {} { on = FULFILL             and to = FULFILLING }
+one sig KOp_receive  extends KOpTransition {} { on = RECEIVE             and to = FULFILLED }
+one sig KOp_use      extends KOpTransition {} { on = USE                 and to = IN_USE }
+one sig KOp_deplete  extends KOpTransition {} { on = DEPLETE             and to = DEPLETED }
+one sig KOp_withdraw extends KOpTransition {} { on = WITHDRAW            and to = AVAILABLE }
+one sig KOp_none     extends KOpTransition {} { on = NONE                and no to }   // "no change"
+one sig KOp_fail     extends KOpTransition {} { on = FAILED_ACTION       and no to }   // "no change"
+fact KanbanOpMachineDef {
+  KanbanOpMachine.states      = KanbanCardStatus
+  KanbanOpMachine.signals     = KanbanCardEventType
+  KanbanOpMachine.start       = AVAILABLE
+  KanbanOpMachine.transitions = KOpTransition
+  all t: KOpTransition | t.from = KanbanCardStatus and no t.guard   // ANY source, no guards
 }
 
-// The status an event yields (LifecycleImpl). NONE / FAILED_ACTION are absent →
-// "no change" (they leave the prior status in place).
-fun produces: KanbanCardEventType -> lone KanbanCardStatus {
-    REQUEST             -> REQUESTING
-  + ACCEPT              -> REQUESTED
-  + SHELVE              -> REQUESTING
-  + START_PROCESSING    -> IN_PROCESS
-  + COMPLETE_PROCESSING -> READY
-  + FULFILL             -> FULFILLING
-  + RECEIVE             -> FULFILLED
-  + USE                 -> IN_USE
-  + DEPLETE             -> DEPLETED
-  + WITHDRAW            -> AVAILABLE
-}
-
 // ---------------------------------------------------------------------------
-// Print state machine (KanbanCardPrintStatus / KanbanCardPrintEventType).
-// Alloy enum members are GLOBAL singletons, so the print enums are prefixed
-// (PS_/PE_) to avoid clashing with the operational enums (UNKNOWN, LOST, NONE).
-// PS_* ↔ NOT_PRINTED/PRINTED/LOST/DEPRECATED/RETIRED/UNKNOWN;
+// Print state machine. Alloy enum members are GLOBAL singletons, so print states/
+// signals are PS_/PE_-prefixed to avoid clashing with the operational ones
+// (UNKNOWN, LOST, NONE). PS_* ↔ NOT_PRINTED/PRINTED/LOST/DEPRECATED/RETIRED/UNKNOWN;
 // PE_* ↔ PRINT/REPRINT/LOST/DEPRECATE/RETIRE/DESTROY/UNMARK/NONE.
 // ---------------------------------------------------------------------------
-enum KanbanCardPrintStatus {
-  PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED, PS_UNKNOWN
-}
-enum KanbanCardPrintEventType {
-  PE_PRINT, PE_REPRINT, PE_LOST, PE_DEPRECATE, PE_RETIRE, PE_DESTROY, PE_UNMARK, PE_NONE
-}
+abstract sig KanbanCardPrintStatus extends State {}
+one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED, PS_UNKNOWN
+        extends KanbanCardPrintStatus {}
 
-// The print status an event yields (PrintLifecycleImpl). PE_DESTROY clears the status
-// (→ none) and PE_NONE is "no change" — both absent here.
-fun printProduces: KanbanCardPrintEventType -> lone KanbanCardPrintStatus {
-    PE_PRINT     -> PS_PRINTED
-  + PE_REPRINT   -> PS_PRINTED
-  + PE_LOST      -> PS_LOST
-  + PE_DEPRECATE -> PS_DEPRECATED
-  + PE_RETIRE    -> PS_RETIRED
-  + PE_UNMARK    -> PS_NOT_PRINTED
+abstract sig KanbanCardPrintEventType extends Signal {}
+one sig PE_PRINT, PE_REPRINT, PE_LOST, PE_DEPRECATE, PE_RETIRE, PE_DESTROY, PE_UNMARK, PE_NONE
+        extends KanbanCardPrintEventType {}
+
+one sig KanbanPrintMachine extends StateMachine {}
+abstract sig KPrintTransition extends Transition {}
+one sig KPr_print     extends KPrintTransition {} { on = PE_PRINT     and to = PS_PRINTED }
+one sig KPr_reprint   extends KPrintTransition {} { on = PE_REPRINT   and to = PS_PRINTED }
+one sig KPr_lost      extends KPrintTransition {} { on = PE_LOST      and to = PS_LOST }
+one sig KPr_deprecate extends KPrintTransition {} { on = PE_DEPRECATE and to = PS_DEPRECATED }
+one sig KPr_retire    extends KPrintTransition {} { on = PE_RETIRE    and to = PS_RETIRED }
+one sig KPr_unmark    extends KPrintTransition {} { on = PE_UNMARK    and to = PS_NOT_PRINTED }
+one sig KPr_destroy   extends KPrintTransition {} { on = PE_DESTROY   and no to }   // clears status → modeled "no change"
+one sig KPr_none      extends KPrintTransition {} { on = PE_NONE      and no to }   // "no change"
+fact KanbanPrintMachineDef {
+  KanbanPrintMachine.states      = KanbanCardPrintStatus
+  KanbanPrintMachine.signals     = KanbanCardPrintEventType
+  KanbanPrintMachine.start       = PS_NOT_PRINTED
+  KanbanPrintMachine.transitions = KPrintTransition
+  all t: KPrintTransition | t.from = KanbanCardPrintStatus and no t.guard
 }
 
 // ---------------------------------------------------------------------------
 // Event value objects (embedded snapshots of the last lifecycle/print event).
 // No identity. Code also carries atTime (TimeCoordinates) + author — deferred to
-// the bitemporal layer, so not modeled here.
+// the bitemporal layer, so not modeled here. `type` is the driving Signal.
 // ---------------------------------------------------------------------------
 sig KanbanCardEvent {
   type:      one KanbanCardEventType,
@@ -117,19 +135,15 @@ fact SerialNumberUniqueInTenant {
   all disj a, b: KanbanCard | a.tenantId = b.tenantId implies a.serialNumber != b.serialNumber
 }
 
-// DT-001.02 (b): operational snapshot consistency. If the last event is a
-// state-changing one, the current status equals what it produces (and is present).
-fact StatusMatchesLastEvent {
-  all c: KanbanCard |
-    (some c.lastEvent and some produces[c.lastEvent.type])
-      implies c.status = produces[c.lastEvent.type]
+// DT-001.02 (b), reified: a card's status is consistent with the result of its last
+// operational event (and is forced present when that event is state-changing).
+fact KanbanOpConsistency {
+  all c: KanbanCard | some c.lastEvent implies
+    firedInto[KanbanOpMachine, c.status, c.lastEvent.type]
 }
-
-// DT-001.02 (b): print snapshot consistency (PE_DESTROY/PE_NONE leave it free).
-fact PrintStatusMatchesLastEvent {
-  all c: KanbanCard |
-    (some c.lastPrintEvent and some printProduces[c.lastPrintEvent.type])
-      implies c.printStatus = printProduces[c.lastPrintEvent.type]
+fact KanbanPrintConsistency {
+  all c: KanbanCard | some c.lastPrintEvent implies
+    firedInto[KanbanPrintMachine, c.printStatus, c.lastPrintEvent.type]
 }
 
 // Tight by default: no orphan value atoms owned by the card.
@@ -141,7 +155,7 @@ fact NoOrphanCardValues {
                                    + KanbanCardEvent.fromWhere + KanbanCardEvent.toWhere
 }
 
-// Tight by default: Quantity is now SHARED across domains (ItemSupply.orderQuantity +
+// Tight by default: Quantity is SHARED across domains (ItemSupply.orderQuantity +
 // KanbanCard.cardQuantity). This module is the lowest in the open-DAG that sees both
 // users, so the no-orphan-Quantity rule lives here (relocated from item_supply, §6).
 fact NoOrphanQuantity {

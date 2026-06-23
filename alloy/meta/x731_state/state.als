@@ -1,39 +1,91 @@
 module meta/x731_state/state
 
+open meta/state_machine/machine
+
 /*
- * ITU-T X.731 three-vector resource state model + the abstract Resource bearer.
- * Relocated verbatim from meta/util.als (names unchanged — see DT-001.08 for the
- * redesign onto meta/kernel). This is the first file of the meta/x731_state package,
- * which will grow to hold state transitions, additional state attributes, and their
- * tests as the state machinery gains sophistication.
+ * ITU-T X.731 resource state model, expressed with the generic state-machine
+ * framework (DT-003): three orthogonal REGIONS, each a reified StateMachine, plus
+ * the X.731 interlocks as cross-region invariants on the Resource host. This mirrors
+ * how the email config runs parallel StateEngine machines (Operational ∥
+ * Administrative) on one host. Multi-region = a host with several state fields, each
+ * bound (by type) to a region machine; no separate Region sig (DT-003).
  */
 
--- X.731 Operational State (physical health / capability)
-abstract sig OperationalState {}
-one sig Enabled, Disabled extends OperationalState {}
+// --- Operational region: physical health / capability -----------------------
+abstract sig OperationalState extends State {}
+one sig ENABLED, DISABLED extends OperationalState {}
+abstract sig OperationalSignal extends Signal {}
+one sig DISABLE, ENABLE extends OperationalSignal {}
 
--- X.731 Usage State (process loading)
-abstract sig UsageState {}
-one sig Idle, Active, Busy extends UsageState {}
-
--- X.731 Administrative State (policy control)
-abstract sig AdministrativeState {}
-one sig Unlocked, Locked, ShuttingDown extends AdministrativeState {}
-
--- Any asset carrying an X.731 state configuration. Concrete resources
--- (Equipment, Personnel, Loop) extend this in the resources/ domain.
-abstract sig Resource {
-  var operationalState:    one OperationalState,
-  var usageState:          one UsageState,
-  var administrativeState: one AdministrativeState
+one sig OperationalMachine extends StateMachine {}
+abstract sig OpTransition extends Transition {}
+one sig XOp_disable extends OpTransition {} { from = ENABLED  and on = DISABLE and to = DISABLED }
+one sig XOp_enable  extends OpTransition {} { from = DISABLED and on = ENABLE  and to = ENABLED }
+fact OperationalMachineDef {
+  OperationalMachine.states      = OperationalState
+  OperationalMachine.signals     = OperationalSignal
+  OperationalMachine.start       = ENABLED
+  OperationalMachine.transitions = OpTransition
+  all t: OpTransition | no t.guard
 }
 
-fact ResourceStateInvariants {
-  all r: Resource | r.operationalState   = Disabled => r.usageState = Idle
-  all r: Resource | r.administrativeState = Locked  => r.usageState = Idle
+// --- Usage region: process loading ------------------------------------------
+abstract sig UsageState extends State {}
+one sig IDLE, ACTIVE, BUSY extends UsageState {}
+abstract sig UsageSignal extends Signal {}
+one sig ACQUIRE, SATURATE, RELIEVE, QUIESCE extends UsageSignal {}
+
+one sig UsageMachine extends StateMachine {}
+abstract sig UsageTransition extends Transition {}
+one sig XUse_acquire  extends UsageTransition {} { from = IDLE   and on = ACQUIRE  and to = ACTIVE }
+one sig XUse_saturate extends UsageTransition {} { from = ACTIVE and on = SATURATE and to = BUSY }
+one sig XUse_relieve  extends UsageTransition {} { from = BUSY   and on = RELIEVE  and to = ACTIVE }
+one sig XUse_quiesce  extends UsageTransition {} { from = ACTIVE and on = QUIESCE  and to = IDLE }
+fact UsageMachineDef {
+  UsageMachine.states      = UsageState
+  UsageMachine.signals     = UsageSignal
+  UsageMachine.start       = IDLE
+  UsageMachine.transitions = UsageTransition
+  all t: UsageTransition | no t.guard
 }
 
--- Checkable form of the interlock (command lives in meta/x731_state/tests/state.als).
+// --- Administrative region: policy control ----------------------------------
+abstract sig AdministrativeState extends State {}
+one sig UNLOCKED, LOCKED, SHUTTING_DOWN extends AdministrativeState {}
+abstract sig AdministrativeSignal extends Signal {}
+one sig LOCK, UNLOCK, SHUTDOWN, DRAINED extends AdministrativeSignal {}
+
+one sig AdministrativeMachine extends StateMachine {}
+abstract sig AdminTransition extends Transition {}
+one sig XAdm_lock     extends AdminTransition {} { from = UNLOCKED               and on = LOCK     and to = LOCKED }
+one sig XAdm_shutdown extends AdminTransition {} { from = UNLOCKED               and on = SHUTDOWN and to = SHUTTING_DOWN }
+one sig XAdm_drained  extends AdminTransition {} { from = SHUTTING_DOWN          and on = DRAINED  and to = LOCKED }
+one sig XAdm_unlock   extends AdminTransition {} { from = LOCKED + SHUTTING_DOWN and on = UNLOCK   and to = UNLOCKED }
+fact AdministrativeMachineDef {
+  AdministrativeMachine.states      = AdministrativeState
+  AdministrativeMachine.signals     = AdministrativeSignal
+  AdministrativeMachine.start       = UNLOCKED
+  AdministrativeMachine.transitions = AdminTransition
+  all t: AdminTransition | no t.guard
+}
+
+// --- Resource: a three-region host ------------------------------------------
+// Concrete resources (Equipment, Personnel, …) will refine this. Each field is
+// bound by type to one region machine's state set.
+sig Resource {
+  opState:    one OperationalState,
+  usageState: one UsageState,
+  adminState: one AdministrativeState
+}
+
+// X.731 interlocks — entry/exit conditions modeled as cross-region state invariants
+// (DT-003 decision 2): a disabled or locked resource cannot be carrying load.
+fact ResourceInterlocks {
+  all r: Resource | r.opState    = DISABLED => r.usageState = IDLE
+  all r: Resource | r.adminState = LOCKED   => r.usageState = IDLE
+}
+
+// Checkable form of the operational interlock (relocated assert; name kept).
 assert X731Consistency {
-  all r: Resource | r.operationalState = Disabled => r.usageState = Idle
+  all r: Resource | r.opState = DISABLED => r.usageState = IDLE
 }
