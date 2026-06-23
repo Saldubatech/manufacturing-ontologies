@@ -1,6 +1,6 @@
 module resources/operator
 
-open meta/util   // Resource
+open meta/x731_state/state   // Resource
 
 // Personnel — human resources executing manual work. (Relocated; name kept.)
 sig Personnel extends Resource {}

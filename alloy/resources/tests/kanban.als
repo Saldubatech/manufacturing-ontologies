@@ -1,6 +1,6 @@
 module resources/tests/kanban
 
-open meta/util
+open meta/x731_state/state
 open reference_data/item
 open resources/station
 open resources/operator
@@ -12,7 +12,7 @@ open resources/inventory_item
 /*
  * Kanban behavioral suite — transition operations + simulation run.
  * Relocated verbatim from the old kanban.als (RELOCATION; predicate and command
- * names unchanged). Operations span resources modules + meta/util state, so they
+ * names unchanged). Operations span resources modules + meta/x731_state, so they
  * live in this domain test root rather than in any single library module.
  */
 

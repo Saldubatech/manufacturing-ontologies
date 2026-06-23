@@ -1,6 +1,6 @@
 module resources/station
 
-open meta/util   // Resource (for Equipment and ProcessingStation.associatedResource)
+open meta/x731_state/state   // Resource (for Equipment and ProcessingStation.associatedResource)
 
 // Structural workstations / physical resources.
 abstract sig Station {}

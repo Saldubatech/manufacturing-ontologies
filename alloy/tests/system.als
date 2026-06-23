@@ -1,7 +1,7 @@
 module tests/system
 
 // Whole-system / cross-domain suite. Opens every defined module; sys_* commands.
-open meta/util
+open meta/x731_state/state
 open resources/item_type
 open resources/station
 open resources/operator

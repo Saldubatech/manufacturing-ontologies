@@ -12,7 +12,7 @@ tree mirrors the system's **functional decomposition**.
 - **`meta/` is not a domain.** It holds modeling machinery:
   - `meta/kernel.als` — Entity/Value/Reference/Scoped/EntityId/TimeCoordinates (currently a STUB; DT-001.02).
   - `meta/std/{bfo,iof,qudt}.als` — **vendored boundary stubs** copied from the OWL standards (MIREOT: only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. OWL stays system-of-record.
-  - `meta/util.als` — reusable utilities (today: the X.731 state vectors + abstract `Resource`).
+  - `meta/x731_state/` — the ITU-T X.731 state machinery (state vectors + abstract `Resource`); `state.als` today, room for transition/attribute files + `tests/` as it grows.
 - Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` and `resources` have content; the rest are stubbed (`.gitkeep`).
 
 ## ⚠️ Naming: snake_case, never `-` or `.`

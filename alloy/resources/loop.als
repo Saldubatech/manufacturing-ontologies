@@ -1,6 +1,6 @@
 module resources/loop
 
-open meta/util          // Resource, state vectors
+open meta/x731_state/state          // Resource, state vectors
 open resources/station  // SourceStation, SinkStation
 
 // A Kanban Loop: a composite resource linking a source to a sink station.

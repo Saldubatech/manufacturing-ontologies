@@ -1,9 +1,11 @@
-module meta/util
+module meta/x731_state/state
 
 /*
- * Reusable modeling utilities. Currently: the ITU-T X.731 three-vector resource
- * state model + the abstract Resource bearer. Relocated verbatim from the old
- * resource.als (RELOCATION; names unchanged — see DT-001.08 for redesign).
+ * ITU-T X.731 three-vector resource state model + the abstract Resource bearer.
+ * Relocated verbatim from meta/util.als (names unchanged — see DT-001.08 for the
+ * redesign onto meta/kernel). This is the first file of the meta/x731_state package,
+ * which will grow to hold state transitions, additional state attributes, and their
+ * tests as the state machinery gains sophistication.
  */
 
 -- X.731 Operational State (physical health / capability)
@@ -31,7 +33,7 @@ fact ResourceStateInvariants {
   all r: Resource | r.administrativeState = Locked  => r.usageState = Idle
 }
 
--- Checkable form of the interlock (command lives in meta/tests/util.als).
+-- Checkable form of the interlock (command lives in meta/x731_state/tests/state.als).
 assert X731Consistency {
   all r: Resource | r.operationalState = Disabled => r.usageState = Idle
 }
