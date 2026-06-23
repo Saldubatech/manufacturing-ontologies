@@ -19,15 +19,15 @@ module meta/examples/ex02_scoping_and_soft_refs
 
 @startuml
 hide empty members
-class Hotel <<tenant>>
-class Guest <<Scoped>>
-class Reservation <<Scoped>> {
+entity Hotel <<tenant>>
+entity Guest <<Scoped>>
+entity Reservation <<Scoped>> {
   guestRef : EntityId
 }
 Reservation ..> Guest : guestRef (soft ref, resolve)
 Guest --> Hotel : tenantId
 Reservation --> Hotel : tenantId
-note as C
+note as C#white
 //{ Guest.tenantId = Reservation.tenantId }//
 end note
 C .> (Guest, Hotel)

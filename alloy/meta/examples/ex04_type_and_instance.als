@@ -19,12 +19,12 @@ module meta/examples/ex04_type_and_instance
 
 @startuml
 hide empty members
-class RoomType <<classification>>
-class Room <<instance>> {
+entity RoomType <<classification>>
+entity Room <<instance>> {
   roomTypeRef : EntityId
 }
 Room ..> RoomType : roomTypeRef (classified-as)
-note right of RoomType
+note right of RoomType #white
   extensible reference data — new kinds are new atoms:
   Suite, King, Double Queen, Single, Beach View, Patio View, ...
 end note

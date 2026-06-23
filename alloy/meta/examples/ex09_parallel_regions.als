@@ -41,7 +41,7 @@ state Room {
     OUT_OF_SERVICE --> IN_SERVICE : RELEASE
   }
 }
-note bottom of Room : //{ maintenance = OUT_OF_SERVICE implies occupancy != OCCUPIED }//
+note bottom of Room #white : //{ maintenance = OUT_OF_SERVICE implies occupancy != OCCUPIED }//
 @enduml
 */
 

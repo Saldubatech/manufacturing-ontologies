@@ -31,18 +31,18 @@ The cast and its relationships (preview with the VS Code PlantUML plugin):
 ```plantuml
 @startuml
 hide empty members
-class Hotel <<tenant>>
-class RoomType <<classification>>
-class Room <<instance>>
-class Reservation
-class Guest
-class RatePlan <<bitemporal>>
+entity Hotel <<tenant>>
+entity RoomType <<classification>>
+entity Room <<instance>>
+entity Reservation
+entity Guest
+entity RatePlan <<bitemporal>>
 Hotel "1" o-- "*" Room : owns
 Room ..> RoomType : classified-as
 Reservation ..> Guest : guest
 Reservation ..> Room : room
 Reservation ..> RatePlan : rate
-note bottom : every entity is scoped to a Hotel (tenant)
+note bottom #white : every entity is scoped to a Hotel (tenant)
 @enduml
 ```
 
@@ -90,6 +90,9 @@ and the workbook `modeling-conventions.md` (the *why* behind each convention).
   **Stay dependency-free:** do NOT use `<latex>`/`<math>` — math-to-SVG needs Apache
   Batik, which the stock local `plantuml.jar` lacks (it fails in the VS Code preview).
   Plain creole (`//italic//`, `<b></b>`, `{ }`) renders everywhere with no extra setup.
+- **Render entity sigs as `entity`** (not `class`) to align with the kernel's `Entity`
+  bound, and give notes a **`#white`** background (`note as N #white` / `note … #white :`)
+  so they stay unobtrusive against the diagram.
 - **Definition of done for new `meta` machinery: it ships with an example here.** That
   rule keeps the cookbook from going stale — framework and tutorial move together.
 
