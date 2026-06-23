@@ -6,9 +6,17 @@ tree mirrors the system's **functional decomposition**.
 
 ## Structure & filing rule
 
-- **Domain → directory, Module → file, one owning module per entity.** To add an
-  entity, pick its single owning module and create/extend `<domain>/<module>.als`;
-  reference other modules via `open`.
+- **Domain → directory, Module → directory, one owning module per entity.** The
+  **module** is the unit of modeling/development: each module is a directory
+  `<domain>/<module>/` holding its definition/fact files (one per entity/concept,
+  e.g. `reference_data/item/item.als` + `reference_data/item/item_supply.als`) and a
+  `tests/` subdirectory. A child entity lives in its parent's module (ItemSupply in
+  `item/`, BusinessRole in `business_affiliate/`). Module paths therefore carry the
+  module segment: `module reference_data/item/item`, `open resources/kanban_card/kanban_card`.
+- **Every defined concept carries a glossary doc-comment.** Immediately above each
+  `sig`/`enum`, a `/** Term — one-line glossary definition. */` block (the
+  type-level "description"; Alloy has no sig annotations, so this is the convention).
+  It is inert to the analyzer and extractable (sig name → definition).
 - **`meta/` is not a domain.** It holds modeling machinery:
   - `meta/kernel.als` — identity + the `Entity`/`Scoped` bound, `EntityId`, soft-ref `resolve`, cross-tenant isolation (DT-001.02, implemented).
   - `meta/values.als` — value objects: `Quantity` (amount+unit), `PhysicalLocator`; `Money`/`Duration` still opaque (QUDT bridge deferred, DT-002).
@@ -30,26 +38,29 @@ Therefore:
   even though the functional domain canonical names are kebab-case
   (`reference-data` ↔ `reference_data`). This overrides the workspace kebab-case
   convention **inside `alloy/` only**.
-- Every file declares `module <path-under-alloy>` (e.g. `module resources/loop`,
-  `module resources/tests/kanban`, `module meta/std/iof`).
-- `open` uses paths-from-`alloy/`: `open meta/util`, `open resources/loop`.
+- Every file declares `module <path-under-alloy>` (e.g.
+  `module resources/kanban_card/kanban_card`,
+  `module resources/kanban_card/tests/kanban_card`, `module meta/std/iof`).
+- `open` uses paths-from-`alloy/`: `open meta/x731_state/state`,
+  `open reference_data/item/item`.
 
 ## Library vs. root (where commands live)
 
-- **Library files** (`meta/…`, `<domain>/<module>.als`) carry all model-defining
-  elements: `sig`, `fact`, `fun`, and co-located checkable `assert`/`pred`.
+- **Library files** (`meta/…`, `<domain>/<module>/<file>.als`) carry all
+  model-defining elements: `sig`, `fact`, `fun`, and co-located checkable `assert`/`pred`.
 - **Only root files carry `run`/`check`.** A root does **not** execute commands
   from the modules it opens. Roots are the `tests/*.als` files.
 - Open a **root** in the GUI / pass it to `exec`; never a library module.
 
 ## Tests & command tiers
 
-- Tests live in a **`tests/` subdirectory** of each modeling directory (NOT
-  `*.test.als` — dotted module names are illegal). Per-module suite
-  `<domain>/tests/<module>.als`; domain-aggregate `<domain>/tests/aggregate.als`;
-  whole-system `tests/system.als`.
+- Tests live in a **`tests/` subdirectory**: per-module suite at
+  `<domain>/<module>/tests/<file>.als`; domain-level cross-module suite at
+  `<domain>/tests/<domain>.als` (named after the domain — avoid the overloaded word
+  "aggregate"); whole-system at `tests/system.als`. (NOT `*.test.als` — dotted module
+  names are illegal.)
 - **Command-name tiers** (for wildcard selection): `unit_*` (module), `dom_*`
-  (domain aggregate), `sys_*` (system). New commands follow this; relocated
+  (domain-level), `sys_*` (system). New commands follow this; relocated
   commands kept their original names (`showSimulation`, `X731Consistency`).
 - **No master root** aggregates suites — the Makefile iterates `tests/` roots.
 

@@ -1,9 +1,9 @@
-module resources/inventory_item
+module resources/inventory_item/inventory_item
 
 open meta/kernel
 open meta/values               // PhysicalLocator, Quantity
 open meta/x731_state/state     // OperationalState, UsageState, AdministrativeState (X.731 regions)
-open reference_data/item       // Item — the primary classifier
+open reference_data/item/item       // Item — the primary classifier
 
 /*
  * InventoryItem — a discrete amount of goods/materials under a tenant's control,

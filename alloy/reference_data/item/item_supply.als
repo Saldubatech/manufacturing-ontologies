@@ -1,8 +1,8 @@
-module reference_data/item_supply
+module reference_data/item/item_supply
 
 open meta/kernel
 open meta/values
-open reference_data/business_affiliate   // SupplierReference (+ BusinessRole, transitively, for the integrity fact)
+open reference_data/business_affiliate/business_affiliate   // SupplierReference (+ BusinessRole, transitively, for the integrity fact)
 
 enum OrderMethod {
   UNKNOWN, PURCHASE_ORDER, EMAIL, PHONE, IN_STORE, ONLINE, RFQ, PRODUCTION, TASK, THIRD_PARTY, OTHER

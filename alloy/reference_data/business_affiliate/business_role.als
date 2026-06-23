@@ -1,4 +1,4 @@
-module reference_data/business_role
+module reference_data/business_affiliate/business_role
 
 open meta/kernel
 

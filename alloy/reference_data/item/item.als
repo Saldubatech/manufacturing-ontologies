@@ -1,7 +1,7 @@
-module reference_data/item
+module reference_data/item/item
 
 open meta/kernel
-open reference_data/item_supply
+open reference_data/item/item_supply
 
 // Reference data for a material / product. Tenant-scoped entity.
 sig Item extends Scoped {

@@ -1,10 +1,10 @@
-module resources/tests/inventory_item
+module resources/inventory_item/tests/inventory_item
 
 open meta/kernel
 open meta/values
 open meta/x731_state/state
-open reference_data/item
-open resources/inventory_item
+open reference_data/item/item
+open resources/inventory_item/inventory_item
 
 /*
  * Unit suite for InventoryItem (DT-004). Opening meta/x731_state brings the region

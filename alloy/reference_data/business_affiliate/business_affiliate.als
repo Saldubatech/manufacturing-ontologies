@@ -1,7 +1,7 @@
-module reference_data/business_affiliate
+module reference_data/business_affiliate/business_affiliate
 
 open meta/kernel
-open reference_data/business_role
+open reference_data/business_affiliate/business_role
 
 // A legal entity participating in a tenant's transactions.
 sig BusinessAffiliate extends Scoped {

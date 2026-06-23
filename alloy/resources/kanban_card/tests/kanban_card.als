@@ -1,10 +1,10 @@
-module resources/tests/kanban_card
+module resources/kanban_card/tests/kanban_card
 
 open meta/kernel
 open meta/values
 open meta/state_machine/machine
-open reference_data/item
-open resources/kanban_card
+open reference_data/item/item
+open resources/kanban_card/kanban_card
 
 /*
  * Unit suite for the Kanban Card. Idiom: SAT scenarios prove coherent cards/machines

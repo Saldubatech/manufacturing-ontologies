@@ -1,10 +1,10 @@
-module reference_data/tests/aggregate
+module reference_data/tests/reference_data
 
 open meta/kernel
-open reference_data/item
-open reference_data/item_supply
-open reference_data/business_affiliate
-open reference_data/business_role
+open reference_data/item/item
+open reference_data/item/item_supply
+open reference_data/business_affiliate/business_affiliate
+open reference_data/business_affiliate/business_role
 
 // A fully-linked, single-tenant instance exists — the model coheres and the
 // reference chain Item → ItemSupply → SupplierReference → BusinessRole(VENDOR)

@@ -3,8 +3,8 @@ module tests/system
 // Whole-system / cross-domain suite for the live entity model; sys_* commands.
 // (The X.731 behavioral spike was archived to alloy-sample/kanban_sim/.)
 open meta/kernel
-open reference_data/item       // transitively: item_supply, business_affiliate, business_role
-open resources/kanban_card
+open reference_data/item/item       // transitively: item_supply, business_affiliate, business_role
+open resources/kanban_card/kanban_card
 
 // Smoke: the union of the live modules admits a consistent instance.
 pred sys_modelLoads {}
