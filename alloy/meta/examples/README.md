@@ -62,6 +62,7 @@ note bottom #white : every entity is scoped to a Hotel (tenant)
 | 10 | Tight by default (no-orphan, forcing function) | planned | (no clean UML analogue) |
 | 11 | Change & the frame problem | deferred (DT-001.03) | operation; FP `old→new` |
 | 12 | Bitemporality (versions as data) | deferred (DT-001.03) | temporal/historized data |
+| 13 | Keyed value algebra (MultiMoney / MultiQuantity) | **ready** | free module; finitely-supported map |
 
 "Ready" = a runnable file exists. "Planned" = a catalog slot to fill as the pattern is
 needed. "Deferred" = waits on a modeling decision not yet made (the behavioral/temporal
