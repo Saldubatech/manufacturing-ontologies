@@ -21,33 +21,41 @@ sig Quantity {
   unit:   one Unit
 }
 
-// Tight by default (§6): a quantity is strictly positive. (Relax explicitly if a
-// zero/negative quantity ever becomes meaningful — e.g. an adjustment delta.)
-fact PositiveQuantity { all q: Quantity | q.amount > 0 }
+// Quantities are non-negative. RELAXED from strictly-positive — the §6 forcing
+// function fired: InventoryItem.actualQuantity can be zero (a depleted item). Specific
+// uses may re-tighten locally (e.g. an order quantity should be > 0).
+fact NonNegativeQuantity { all q: Quantity | q.amount >= 0 }
 
 // Tight by default: no orphan units — every Unit labels some Quantity. Self-contained
 // (Unit is used only here). Relax when units gain a standalone catalog (QUDT bridge).
 fact NoOrphanUnit { all u: Unit | u in Quantity.unit }
 
-// --- PhysicalLocator: a hierarchical place within a facility ---------------
-// facility > department > location > subLocation. `facility` is required; the lower
-// levels are optional. Levels are opaque text handles (code: String).
+// --- PhysicalLocator: a containment hierarchy of physical space ------------
+// Nine nesting levels, outermost → innermost. All optional opaque labels (code:
+// String); the `facility` module will model this richly later. Two locators with the
+// same values denote the EXACT SAME physical space (containment is implicit for now).
 sig Label {}
 sig PhysicalLocator {
-  facility:    one Label,
-  department:  lone Label,
-  location:    lone Label,
-  subLocation: lone Label
+  region:   lone Label,
+  facility: lone Label,
+  area:     lone Label,
+  aisle:    lone Label,
+  bay:      lone Label,
+  shelf:    lone Label,
+  tier:     lone Label,
+  slot:     lone Label,
+  bin:      lone Label
 }
 
-// Tight by default: a sub-location presupposes a location (you cannot name a slot
-// within an unnamed place). The code leaves the levels independently nullable, so
-// this is a deliberate tightening to revisit if a flatter locator is ever needed.
-fact LocatorHierarchy { all p: PhysicalLocator | some p.subLocation implies some p.location }
+// A locator names at least one level (it must point somewhere). The full containment
+// chain (a bin sits within a slot within a tier …) is deferred to the facility module.
+fact LocatorNonEmpty {
+  all p: PhysicalLocator |
+    some (p.region + p.facility + p.area + p.aisle + p.bay + p.shelf + p.tier + p.slot + p.bin)
+}
 
 // Tight by default: no orphan labels — every Label is used at some locator level.
 // Self-contained (Label is used only by PhysicalLocator).
 fact NoOrphanLabel {
-  all l: Label | l in PhysicalLocator.facility + PhysicalLocator.department
-                    + PhysicalLocator.location + PhysicalLocator.subLocation
+  all l: Label | l in PhysicalLocator.(region + facility + area + aisle + bay + shelf + tier + slot + bin)
 }
