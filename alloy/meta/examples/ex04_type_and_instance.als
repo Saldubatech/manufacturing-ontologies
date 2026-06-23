@@ -14,6 +14,23 @@ module meta/examples/ex04_type_and_instance
  * data: new kinds are new ATOMS, not new code. A Room (instance) is classified by one.
  */
 
+/*
+  Type / instance at a glance — preview with the VS Code PlantUML plugin:
+
+@startuml
+hide empty members
+class RoomType <<classification>>
+class Room <<instance>> {
+  roomTypeRef : EntityId
+}
+Room ..> RoomType : roomTypeRef (classified-as)
+note right of RoomType
+  extensible reference data — new kinds are new atoms:
+  Suite, King, Double Queen, Single, Beach View, Patio View, ...
+end note
+@enduml
+*/
+
 open meta/kernel
 
 // The classification catalog — extensible reference data, scoped to a hotel.

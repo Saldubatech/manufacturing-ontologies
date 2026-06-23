@@ -14,6 +14,26 @@ module meta/examples/ex02_scoping_and_soft_refs
  * so this file does not repeat it — it just shows it biting.
  */
 
+/*
+  Structure at a glance — preview with the VS Code PlantUML plugin:
+
+@startuml
+hide empty members
+class Hotel <<tenant>>
+class Guest <<Scoped>>
+class Reservation <<Scoped>> {
+  guestRef : EntityId
+}
+Reservation ..> Guest : guestRef (soft ref, resolve)
+Guest --> Hotel : tenantId
+Reservation --> Hotel : tenantId
+note as N
+  cross-tenant isolation (stated once in meta/kernel):
+  Reservation.tenantId = resolve(guestRef).tenantId
+end note
+@enduml
+*/
+
 open meta/kernel
 
 // A Hotel is the tenant boundary; its eId is the tenantId every scoped entity carries.

@@ -26,6 +26,26 @@ cast** (learn it once):
 `RoomType` (type) vs `Room` (instance) is the neutral stand-in for the live model's
 `Item` vs `InventoryItem`; the Room's three orthogonal state regions stand in for X.731.
 
+The cast and its relationships (preview with the VS Code PlantUML plugin):
+
+```plantuml
+@startuml
+hide empty members
+class Hotel <<tenant>>
+class RoomType <<classification>>
+class Room <<instance>>
+class Reservation
+class Guest
+class RatePlan <<bitemporal>>
+Hotel "1" o-- "*" Room : owns
+Room ..> RoomType : classified-as
+Reservation ..> Guest : guest
+Reservation ..> Room : room
+Reservation ..> RatePlan : rate
+note bottom : every entity is scoped to a Hotel (tenant)
+@enduml
+```
+
 ## Catalog (the tour, in reading order)
 
 | # | Pattern | Status | UML / FP analogue |
@@ -59,6 +79,12 @@ and the workbook `modeling-conventions.md` (the *why* behind each convention).
 - **Fixed recipe header** (copy [`ex00_template.als`](ex00_template.als)): Pattern / UML /
   FP / Use-when / Avoid / See-also.
 - **Every file is a root** carrying `run`/`check` — never `open`ed by other code.
+- **Diagrams welcome.** Where a picture clarifies, embed a PlantUML diagram — in a
+  fenced ` ```plantuml ` block in markdown, or inside a `/* … */` block comment in an
+  `.als` file (preview with the VS Code PlantUML plugin). In `.als` comments, do **not**
+  prefix the diagram lines with `*` — a leading `*` corrupts the PlantUML the plugin
+  extracts; keep the `@startuml…@enduml` lines flush. Validate via the PlantUML MCP tool
+  before committing (workspace convention).
 - **Definition of done for new `meta` machinery: it ships with an example here.** That
   rule keeps the cookbook from going stale — framework and tutorial move together.
 

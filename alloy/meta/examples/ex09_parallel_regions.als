@@ -14,6 +14,37 @@ module meta/examples/ex09_parallel_regions
  * of X.731's "disabled ⇒ idle"). Multi-region = several state fields, one per machine.
  */
 
+/*
+  Orthogonal regions at a glance — preview this block with the VS Code PlantUML plugin
+  (cursor inside, "PlantUML: Preview Current Diagram"):
+
+@startuml
+state Room {
+  state Occupancy {
+    [*] --> VACANT
+    VACANT --> RESERVED : RESERVE
+    RESERVED --> OCCUPIED : CHECK_IN
+    OCCUPIED --> VACANT : CHECK_OUT
+  }
+  --
+  state Housekeeping {
+    [*] --> CLEAN
+    CLEAN --> DIRTY : SOIL
+    INSPECTED --> DIRTY : SOIL
+    DIRTY --> CLEAN : CLEAN_UP
+    CLEAN --> INSPECTED : INSPECT
+  }
+  --
+  state Maintenance {
+    [*] --> IN_SERVICE
+    IN_SERVICE --> OUT_OF_SERVICE : BLOCK
+    OUT_OF_SERVICE --> IN_SERVICE : RELEASE
+  }
+}
+note bottom of Room : interlock: maintenance = OUT_OF_SERVICE  =>  occupancy != OCCUPIED
+@enduml
+*/
+
 open meta/state_machine/machine
 
 // --- Region 1: occupancy ----------------------------------------------------
