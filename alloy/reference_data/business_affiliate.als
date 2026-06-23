@@ -15,6 +15,9 @@ fact BusinessRoleOwnership {
   all b: BusinessAffiliate, r: b.roles | r.tenantId = b.tenantId
 }
 
+// No outgoing soft references (must be pinned, or `refs` is under-constrained).
+fact BusinessAffiliateRefs { all b: BusinessAffiliate | no b.refs }
+
 // Denormalized cross-module handle to a VENDOR BusinessRole (and its affiliate),
 // carried by item-side supply records. Soft references (EntityId) — `lone` because
 // a handle may be unresolved/denormalized across Universes.

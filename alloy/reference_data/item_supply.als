@@ -25,3 +25,8 @@ fact SupplierRefIsVendor {
   all s: ItemSupply | let v = resolve[s.supplier.vendorRef] |
     some v implies (v in BusinessRole and v.role = VENDOR)
 }
+
+// Outgoing soft references, for the kernel's generic cross-reference rules.
+fact ItemSupplyRefs {
+  all s: ItemSupply | s.refs = s.supplier.vendorRef + s.supplier.affiliateRef
+}

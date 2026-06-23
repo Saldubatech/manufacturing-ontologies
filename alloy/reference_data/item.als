@@ -16,3 +16,7 @@ fact ItemSupplyOwnership {
   all i: Item, c: i.supplies | c.tenantId = i.tenantId
   all i: Item | let d = resolve[i.defaultSupply] | some d implies d in i.supplies
 }
+
+// Outgoing soft references (the parent→child `supplies` is a direct relation, not a
+// soft ref, and is already kept in-tenant by ItemSupplyOwnership).
+fact ItemRefs { all i: Item | i.refs = i.defaultSupply }

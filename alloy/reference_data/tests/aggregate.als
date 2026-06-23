@@ -33,3 +33,18 @@ assert dom_referenceData_supplierIsVendor {
     some v implies (v in BusinessRole and v.role = VENDOR)
 }
 check dom_referenceData_supplierIsVendor for 6
+
+// Cross-tenant isolation holds for every resolved reference (regression guard for
+// the kernel's CrossTenantIsolation) — UNSAT = holds.
+assert dom_referenceData_tenantIsolation {
+  all a: Scoped, id: a.refs | let b = resolve[id] |
+    b in Scoped implies a.tenantId = b.tenantId
+}
+check dom_referenceData_tenantIsolation for 6
+
+// Negative: no ItemSupply can resolve its vendor ref to a BusinessRole in a DIFFERENT
+// tenant. Expect UNSAT — the kernel's CrossTenantIsolation makes it impossible.
+run dom_referenceData_noCrossTenantSupplier {
+  some s: ItemSupply, r: BusinessRole |
+    s.supplier.vendorRef = r.eId and s.tenantId != r.tenantId
+} for 6
