@@ -24,9 +24,11 @@ open reference_data/item         // Item (soft-ref target); transitively ItemSup
 // Operational state machine (KanbanCardStatus / KanbanCardEventType — code names).
 // Enums are the long form (abstract sig + one sigs) so they extend State/Signal.
 // ---------------------------------------------------------------------------
+// (Code's KanbanCardStatus.UNKNOWN is a null/unknown sentinel — an implementation
+// artifact, not a lifecycle state — so it is omitted from the model.)
 abstract sig KanbanCardStatus extends State {}
 one sig AVAILABLE, REQUESTING, REQUESTED, IN_PROCESS, READY,
-        FULFILLING, FULFILLED, IN_USE, DEPLETED, UNKNOWN extends KanbanCardStatus {}
+        FULFILLING, FULFILLED, IN_USE, DEPLETED extends KanbanCardStatus {}
 
 abstract sig KanbanCardEventType extends Signal {}
 one sig REQUEST, ACCEPT, SHELVE, START_PROCESSING, COMPLETE_PROCESSING,
@@ -59,11 +61,12 @@ fact KanbanOpMachineDef {
 // ---------------------------------------------------------------------------
 // Print state machine. Alloy enum members are GLOBAL singletons, so print states/
 // signals are PS_/PE_-prefixed to avoid clashing with the operational ones
-// (UNKNOWN, LOST, NONE). PS_* ↔ NOT_PRINTED/PRINTED/LOST/DEPRECATED/RETIRED/UNKNOWN;
+// (LOST, NONE). PS_* ↔ NOT_PRINTED/PRINTED/LOST/DEPRECATED/RETIRED;
 // PE_* ↔ PRINT/REPRINT/LOST/DEPRECATE/RETIRE/DESTROY/UNMARK/NONE.
+// (Code's KanbanCardPrintStatus.UNKNOWN is a null sentinel — omitted, as above.)
 // ---------------------------------------------------------------------------
 abstract sig KanbanCardPrintStatus extends State {}
-one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED, PS_UNKNOWN
+one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED
         extends KanbanCardPrintStatus {}
 
 abstract sig KanbanCardPrintEventType extends Signal {}
