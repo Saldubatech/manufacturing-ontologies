@@ -27,10 +27,11 @@ class Reservation <<Scoped>> {
 Reservation ..> Guest : guestRef (soft ref, resolve)
 Guest --> Hotel : tenantId
 Reservation --> Hotel : tenantId
-note as N
-  cross-tenant isolation (stated once in meta/kernel):
-  Reservation.tenantId = resolve(guestRef).tenantId
+note as C
+<latex>\mathit{Guest}.\mathit{tenantId} = \mathit{Reservation}.\mathit{tenantId}</latex>
 end note
+C .> (Guest, Hotel)
+(Reservation, Hotel) <. C
 @enduml
 */
 
