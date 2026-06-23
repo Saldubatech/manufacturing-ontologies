@@ -54,6 +54,12 @@ pred nf[a: univ -> lone Scalar] { no k: univ | a[k] = SZero }
 
 // Pointwise addition: same-key amounts sum, different keys coexist (widen), a key whose
 // total nets to zero drops (collapse). Result is in normal form.
+//
+// Alloy syntax: the body is a SET COMPREHENSION `{ k: univ, v: Scalar | … }` — it builds
+// the result relation as the (key, amount) pairs satisfying the condition. `a[k]` is the
+// "box join" (= `k.a`) = the lone amount a assigns to k (empty if k is absent).
+// `a[k].splus[b[k]]` applies the scalar ring's `+`. The three disjuncts cover: present in
+// both (sum), only in a, only in b. `v != SZero` drops a key whose total nets to zero.
 fun add[a, b: univ -> lone Scalar]: univ -> lone Scalar {
   { k: univ, v: Scalar |
       v != SZero and
