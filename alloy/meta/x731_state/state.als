@@ -12,8 +12,10 @@ open meta/state_machine/machine
  */
 
 // --- Operational region: physical health / capability -----------------------
+/** OperationalState — X.731 operational region: physical health / capability (ENABLED, DISABLED). */
 abstract sig OperationalState extends State {}
 one sig ENABLED, DISABLED extends OperationalState {}
+/** OperationalSignal — events driving the operational region (ENABLE, DISABLE). */
 abstract sig OperationalSignal extends Signal {}
 one sig DISABLE, ENABLE extends OperationalSignal {}
 
@@ -30,8 +32,10 @@ fact OperationalMachineDef {
 }
 
 // --- Usage region: process loading ------------------------------------------
+/** UsageState — X.731 usage region: process loading (IDLE, ACTIVE, BUSY). */
 abstract sig UsageState extends State {}
 one sig IDLE, ACTIVE, BUSY extends UsageState {}
+/** UsageSignal — events driving the usage region. */
 abstract sig UsageSignal extends Signal {}
 one sig ACQUIRE, SATURATE, RELIEVE, QUIESCE extends UsageSignal {}
 
@@ -50,8 +54,10 @@ fact UsageMachineDef {
 }
 
 // --- Administrative region: policy control ----------------------------------
+/** AdministrativeState — X.731 administrative region: policy control (UNLOCKED, LOCKED, SHUTTING_DOWN). */
 abstract sig AdministrativeState extends State {}
 one sig UNLOCKED, LOCKED, SHUTTING_DOWN extends AdministrativeState {}
+/** AdministrativeSignal — events driving the administrative region. */
 abstract sig AdministrativeSignal extends Signal {}
 one sig LOCK, UNLOCK, SHUTDOWN, DRAINED extends AdministrativeSignal {}
 
@@ -72,6 +78,8 @@ fact AdministrativeMachineDef {
 // --- Resource: a three-region host ------------------------------------------
 // Concrete resources (Equipment, Personnel, …) will refine this. Each field is
 // bound by type to one region machine's state set.
+/** Resource — an asset bearing an X.731 three-region state (operational ∥ usage ∥
+    administrative), with cross-region interlocks. */
 sig Resource {
   opState:    one OperationalState,
   usageState: one UsageState,

@@ -3,7 +3,8 @@ module reference_data/item/item
 open meta/kernel
 open reference_data/item/item_supply
 
-// Reference data for a material / product. Tenant-scoped entity.
+/** Item — reference-data master for a material/product (the TYPE); InventoryItems and
+    supply records classify against it. Tenant-scoped. */
 sig Item extends Scoped {
   supplies:      set ItemSupply,   // parent → child aggregation (no backref)
   defaultSupply: lone EntityId      // soft ref → one of this item's ItemSupply

@@ -14,30 +14,36 @@ module meta/values
 open meta/algebra/keyed_monoid   // Scalar, nf, add, scale, negate, zero, isZero/isSingle/isMulti
 
 // --- monoid key types -------------------------------------------------------
-// Money key — real currencies are common-module Currency.kt (USD, EUR, …); opaque here.
+/** Currency — the key of the Money monoid; a currency. Real values: common-module Currency.kt (USD, EUR, …). */
 sig Currency {}
-// Quantity key — a unit of measure; opaque now (QUDT bridge later, DT-002).
+/** Unit — the key of the Quantity monoid; a unit of measure (QUDT bridge later, DT-002). */
 sig Unit {}
 
 // --- Money: the Currency-keyed monoid instance (MultiMoney) -----------------
-// A value spanning one or more currencies (no conversion); normal form (no zero entries).
+/** Money — a monetary value spanning one or more currencies WITHOUT conversion (the
+    Currency-keyed monoid instance, MultiMoney); normal form (no zero entries). */
 sig Money { byCurrency: Currency -> lone Scalar } { nf[byCurrency] }
 // Value semantics: a Money IS its amounts — no two Money atoms share the same map.
 fact MoneyExtensional { all disj a, b: Money | a.byCurrency != b.byCurrency }
 
 // --- Quantity: the Unit-keyed monoid instance (MultiQuantity) ---------------
+/** Quantity — a measured amount spanning one or more units WITHOUT conversion (the
+    Unit-keyed monoid instance, MultiQuantity); normal form. */
 sig Quantity { byUnit: Unit -> lone Scalar } { nf[byUnit] }
 fact QuantityExtensional { all disj a, b: Quantity | a.byUnit != b.byUnit }
 
 // --- still opaque -----------------------------------------------------------
-// A length of time. (A future time-unit monoid; QUDT bridge deferred, DT-002.)
+/** Duration — a length of time (opaque; a future time-unit monoid, QUDT bridge DT-002). */
 sig Duration {}
 
 // --- PhysicalLocator: a containment hierarchy of physical space ------------
 // Nine nesting levels, outermost → innermost. All optional opaque labels (code: String);
 // the `facility` module will model this richly later. Two locators with the same values
 // denote the EXACT SAME physical space (containment is implicit for now).
+/** Label — an opaque text label (e.g. a physical-locator level name). */
 sig Label {}
+/** PhysicalLocator — a place in a nine-level physical containment hierarchy (Region…Bin);
+    equal locators denote the exact same physical space. */
 sig PhysicalLocator {
   region:   lone Label,
   facility: lone Label,

@@ -14,18 +14,17 @@ module meta/state_machine/machine
  * exactly how the model surfaces gaps (unreachable states, dead signals).
  */
 
+/** State — a state of some state machine; a concrete machine's state enum extends it. */
 abstract sig State  {}
+/** Signal — an event that drives a transition; a concrete machine's signal enum extends it. */
 abstract sig Signal {}
 
-// Opaque guard discriminator. Reifies a StateEngine guard (a payload-type or
-// payload-value predicate). Two transitions sharing a (state, signal) must carry
-// distinct guards — the structural face of "exactly one applicable transition".
+/** Guard — an opaque discriminator distinguishing transitions that share a (state, signal);
+    the structural face of "exactly one applicable transition" (reifies a StateEngine guard). */
 sig Guard {}
 
-// A transition edge. `from` is the resolved StatePattern (ANY = the machine's whole
-// state set; Multiple = the listed states; Single = one). `to` is lone: present =
-// Explicit target; absent = Same (self-loop, state unchanged). `guard` is lone:
-// present only where a (state, signal) needs disambiguation.
+/** Transition — a reified edge: from a set of source states (the resolved StatePattern;
+    ANY = all states), on a signal, to a target state (absent = Same/self-loop), optionally guarded. */
 sig Transition {
   from:  some State,
   on:    one Signal,
@@ -33,6 +32,7 @@ sig Transition {
   guard: lone Guard
 }
 
+/** StateMachine — a reified finite-state machine: its states, signals, start state, and transitions. */
 sig StateMachine {
   states:      some State,
   signals:     some Signal,

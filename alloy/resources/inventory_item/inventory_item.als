@@ -30,10 +30,12 @@ open reference_data/item/item       // Item — the primary classifier
  * quantities), a MultiQuantity algebra, and the individualizer-modeling blend.
  */
 
-// Open-ended immutable individualizers (lot/serial/…). Generic placeholder for now;
-// the named-typed vs conditional-bundle vs (key,value,type) blend is open (DT-004).
+/** Individualizer — an immutable attribute value that distinguishes an InventoryItem
+    (lot number, serial number, …); open-ended placeholder (the modeling blend is DT-004 Q6). */
 sig Individualizer {}
 
+/** InventoryItem — a discrete, non-overlapping amount of goods/materials under a
+    tenant's control, classified by an Item. */
 sig InventoryItem extends Scoped {
   // primary classifier
   itemRef:               one EntityId,          // → Item (required, immutable)

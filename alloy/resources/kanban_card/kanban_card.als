@@ -26,10 +26,12 @@ open reference_data/item/item         // Item (soft-ref target); transitively It
 // ---------------------------------------------------------------------------
 // (Code's KanbanCardStatus.UNKNOWN is a null/unknown sentinel — an implementation
 // artifact, not a lifecycle state — so it is omitted from the model.)
+/** KanbanCardStatus — the operational lifecycle state of a kanban card. */
 abstract sig KanbanCardStatus extends State {}
 one sig AVAILABLE, REQUESTING, REQUESTED, IN_PROCESS, READY,
         FULFILLING, FULFILLED, IN_USE, DEPLETED extends KanbanCardStatus {}
 
+/** KanbanCardEventType — an event driving a card's operational lifecycle. */
 abstract sig KanbanCardEventType extends Signal {}
 one sig REQUEST, ACCEPT, SHELVE, START_PROCESSING, COMPLETE_PROCESSING,
         FULFILL, RECEIVE, USE, DEPLETE, WITHDRAW, NONE, FAILED_ACTION extends KanbanCardEventType {}
@@ -65,10 +67,12 @@ fact KanbanOpMachineDef {
 // PE_* ↔ PRINT/REPRINT/LOST/DEPRECATE/RETIRE/DESTROY/UNMARK/NONE.
 // (Code's KanbanCardPrintStatus.UNKNOWN is a null sentinel — omitted, as above.)
 // ---------------------------------------------------------------------------
+/** KanbanCardPrintStatus — the print/physical-artifact state of a kanban card. */
 abstract sig KanbanCardPrintStatus extends State {}
 one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED
         extends KanbanCardPrintStatus {}
 
+/** KanbanCardPrintEventType — an event driving a card's print lifecycle. */
 abstract sig KanbanCardPrintEventType extends Signal {}
 one sig PE_PRINT, PE_REPRINT, PE_LOST, PE_DEPRECATE, PE_RETIRE, PE_DESTROY, PE_UNMARK, PE_NONE
         extends KanbanCardPrintEventType {}
@@ -96,22 +100,25 @@ fact KanbanPrintMachineDef {
 // No identity. Code also carries atTime (TimeCoordinates) + author — deferred to
 // the bitemporal layer, so not modeled here. `type` is the driving Signal.
 // ---------------------------------------------------------------------------
+/** KanbanCardEvent — an embedded snapshot of a card's last operational event (type + from/to locations). */
 sig KanbanCardEvent {
   type:      one KanbanCardEventType,
   fromWhere: lone PhysicalLocator,
   toWhere:   lone PhysicalLocator
 }
+/** KanbanCardPrintEvent — an embedded snapshot of a card's last print event. */
 sig KanbanCardPrintEvent {
   type: one KanbanCardPrintEventType
 }
 
-// Serial number — the card's natural identifier (unique within tenant). Opaque
-// handle (code: String); identity for the model is still the kernel eId.
+/** SerialNumber — a kanban card's natural identifier, unique within a tenant (opaque handle). */
 sig SerialNumber {}
 
 // ---------------------------------------------------------------------------
 // The aggregate root.
 // ---------------------------------------------------------------------------
+/** KanbanCard — a replenishment demand signal: a tenant-scoped card classifying an Item,
+    with orthogonal operational + print state. */
 sig KanbanCard extends Scoped {
   serialNumber:   one SerialNumber,
   itemRef:        one EntityId,            // soft ref → Item (code: ItemReference handle)

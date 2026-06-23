@@ -2,11 +2,11 @@ module reference_data/business_affiliate/business_role
 
 open meta/kernel
 
+/** BusinessRoleType — the kind of role a business affiliate plays. */
 enum BusinessRoleType { VENDOR, CUSTOMER, CARRIER, OPERATOR, OTHER }
 
-// A role a business affiliate plays. Child entity of BusinessAffiliate (owned via
-// BusinessAffiliate.roles; ownership + scope facts live there). First-class (not a
-// value) because it is the target of SupplierReference (the VENDOR role).
+/** BusinessRole — a role a BusinessAffiliate plays (e.g. VENDOR); a child entity of
+    BusinessAffiliate, first-class as the target of SupplierReference. */
 sig BusinessRole extends Scoped { role: one BusinessRoleType }
 
 // No outgoing soft references (must be pinned, or `refs` is under-constrained).

@@ -7,5 +7,7 @@ module meta/bitemporal
  */
 open meta/kernel
 
+/** TimeCoordinates — a point on the (effective, recorded) bitemporal grid (placeholder; DT-001.03). */
 sig TimeCoordinates {}                                   // placeholder: effective + recorded later
+/** Version — a recorded version of an Entity at given time coordinates (placeholder; DT-001.03). */
 sig Version { subject: one Entity, coords: one TimeCoordinates }   // placeholder relation

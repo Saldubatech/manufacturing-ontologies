@@ -4,12 +4,13 @@ open meta/kernel
 open meta/values
 open reference_data/business_affiliate/business_affiliate   // SupplierReference (+ BusinessRole, transitively, for the integrity fact)
 
+/** OrderMethod — how an item is ordered from a supplier. */
 enum OrderMethod {
   UNKNOWN, PURCHASE_ORDER, EMAIL, PHONE, IN_STORE, ONLINE, RFQ, PRODUCTION, TASK, THIRD_PARTY, OTHER
 }
 
-// A supply source for an item. Child entity of Item (owned via Item.supplies).
-// First-class because it is the target of Item.defaultSupply.
+/** ItemSupply — a supply source for an Item (vendor, order method, cost, lead time);
+    a child entity of Item, first-class as the target of Item.defaultSupply. */
 sig ItemSupply extends Scoped {
   supplier:        one SupplierReference,
   orderMethod:     lone OrderMethod,

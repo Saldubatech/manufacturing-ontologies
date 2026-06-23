@@ -3,7 +3,8 @@ module reference_data/business_affiliate/business_affiliate
 open meta/kernel
 open reference_data/business_affiliate/business_role
 
-// A legal entity participating in a tenant's transactions.
+/** BusinessAffiliate — a legal entity participating in a tenant's transactions (as
+    vendor, customer, carrier, …). */
 sig BusinessAffiliate extends Scoped {
   roles: set BusinessRole          // parent → child aggregation (no backref)
 }
@@ -18,9 +19,8 @@ fact BusinessRoleOwnership {
 // No outgoing soft references (must be pinned, or `refs` is under-constrained).
 fact BusinessAffiliateRefs { all b: BusinessAffiliate | no b.dataRefs }
 
-// Denormalized cross-module handle to a VENDOR BusinessRole (and its affiliate),
-// carried by item-side supply records. Soft references (EntityId) — `lone` because
-// a handle may be unresolved/denormalized across Universes.
+/** SupplierReference — a denormalized handle (soft EntityId refs) to a VENDOR BusinessRole
+    and its affiliate, carried by item-side supply records. */
 sig SupplierReference {
   vendorRef:    lone EntityId,     // → BusinessRole(VENDOR)
   affiliateRef: lone EntityId      // → BusinessAffiliate

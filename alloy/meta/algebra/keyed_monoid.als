@@ -19,8 +19,8 @@ module meta/algebra/keyed_monoid
  * Reference: Money.kt. See DT-004 / money-quantity-algebra.md.
  */
 
-// A decimal/real value — an amount or a scalar factor. Uninterpreted; arithmetic is the
-// reified ring operations below.
+/** Scalar — a decimal/real value: an amount or a scalar factor. Uninterpreted (Alloy has
+    no reals); its arithmetic is the reified ring operations below. */
 sig Scalar {
   splus: Scalar -> one Scalar,    // a.splus[b] = a + b
   smul:  Scalar -> one Scalar,    // a.smul[b]  = a * b
