@@ -19,7 +19,7 @@ tree mirrors the system's **functional decomposition**.
   It is inert to the analyzer and extractable (sig name → definition).
 - **`meta/` is not a domain.** It holds modeling machinery:
   - `meta/kernel.als` — identity + the `Entity`/`Scoped` bound, `EntityId`, soft-ref `resolve`, cross-tenant isolation (DT-001.02, implemented).
-  - `meta/values.als` — value objects: `Quantity` (amount+unit), `PhysicalLocator`; `Money`/`Duration` still opaque (QUDT bridge deferred, DT-002).
+  - `meta/values.als` — value objects: `Money` (Currency-keyed) and `Quantity` (Unit-keyed) are **instances of the keyed monoid** (`byCurrency`/`byUnit` normal-form maps, DT-005); `PhysicalLocator` (9-level); `Duration` opaque (QUDT bridge deferred, DT-002).
   - `meta/std/{bfo,iof,qudt}.als` — **vendored boundary stubs** copied from the OWL standards (MIREOT: only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. OWL stays system-of-record.
   - `meta/state_machine/machine.als` — generic FSM framework reifying common-module's `StateEngine` (DT-003): `State`/`Signal`/`Guard`/`Transition`/`StateMachine` + once-stated well-formedness/determinism FACTS + checkable `allStatesReachable`/`liveSignals`/`firedInto`. Concrete machines extend `State`/`Signal` and pin a `StateMachine` atom.
   - `meta/algebra/keyed_monoid.als` — keyed additive ℤ-module reifying common-module's `MultiMoney` (DT-005): a value is a normal-form map `key -> lone Scalar` (`add`/`scale`/`negate`/`zero`); add same-key sums, different keys widen, zero-nets collapse. `Scalar` is an abstract decimal (assumed ring axioms). Instantiate `MultiMoney = Currency -> lone Scalar`, `MultiQuantity = Unit -> lone Scalar`.

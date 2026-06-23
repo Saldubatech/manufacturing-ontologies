@@ -29,10 +29,11 @@ sig Scalar {
 one sig SZero in Scalar {}        // additive identity (0)
 one sig SOne  in Scalar {}        // multiplicative identity (1)
 
-// Assumed: (Scalar, splus, smul) is a non-trivial commutative ring with unit. (These are
-// textbook for the reals; we assume rather than re-prove them, and check the keyed
-// algebra on top.)
-fact ScalarRing {
+// (Scalar, splus, smul) is a non-trivial commutative ring with unit. Stated as a
+// PREMISE predicate, NOT a global fact: the keyed-algebra law checks assume it
+// (`ringAxioms implies <law>`), but modules that merely CARRY Scalar-valued maps
+// (meta/values' Money/Quantity, and their users) do not pay to solve a ring.
+pred ringAxioms {
   SZero != SOne
   all a, b: Scalar      | a.splus[b] = b.splus[a]
   all a, b, c: Scalar   | (a.splus[b]).splus[c] = a.splus[b.splus[c]]

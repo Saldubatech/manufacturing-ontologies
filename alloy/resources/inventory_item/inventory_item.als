@@ -65,10 +65,10 @@ fact ItemClassifierIntegrity {
 }
 
 // Interlock (proposed, DT-004 §2.5): an item is depleted (usage BUSY) exactly when its
-// actual quantity is zero. Other interlocks (operational/administrative ↔ usage) remain
-// open.
+// actual quantity is the zero MultiQuantity (an empty unit→amount map). Other interlocks
+// (operational/administrative ↔ usage) remain open.
 fact DepletionInterlock {
-  all ii: InventoryItem | ii.usageState = BUSY iff ii.actualQuantity.amount = 0
+  all ii: InventoryItem | ii.usageState = BUSY iff isZero[ii.actualQuantity.byUnit]
 }
 
 // Tight by default: no orphan individualizers (a module-local handle type). Quantity

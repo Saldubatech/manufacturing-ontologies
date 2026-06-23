@@ -29,7 +29,7 @@ run unit_inventoryItem_crossTenantItem
 
 // UNSAT: the depletion interlock forbids a zero-quantity item that is not BUSY.
 pred unit_inventoryItem_depletionViolation {
-  some ii: InventoryItem | ii.actualQuantity.amount = 0 and ii.usageState != BUSY
+  some ii: InventoryItem | isZero[ii.actualQuantity.byUnit] and ii.usageState != BUSY
 }
 run unit_inventoryItem_depletionViolation
   for 6 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard, 5 Int

@@ -24,26 +24,32 @@ open meta/algebra/keyed_monoid
 sig Currency {}   // e.g. USD, EUR
 sig Unit {}       // e.g. KG, EACH
 
+// All runs assume `ringAxioms` (the scalar ring is a premise, not a global fact).
+
 // Revenue booked in two currencies can't be collapsed without an FX rate — it stays a
 // two-currency MultiMoney (widen).
 run multiCurrencyTotal {
-  some usd, eur: Currency -> lone Scalar |
-    isSingle[usd] and isSingle[eur] and usd.Scalar != eur.Scalar and isMulti[add[usd, eur]]
+  ringAxioms and
+  (some usd, eur: Currency -> lone Scalar |
+    isSingle[usd] and isSingle[eur] and usd.Scalar != eur.Scalar and isMulti[add[usd, eur]])
 } for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
 
 // Quantities in different units likewise cannot be added into one number (widen).
 run multiUnitQuantity {
-  some kg, each: Unit -> lone Scalar |
-    isSingle[kg] and isSingle[each] and kg.Scalar != each.Scalar and isMulti[add[kg, each]]
+  ringAxioms and
+  (some kg, each: Unit -> lone Scalar |
+    isSingle[kg] and isSingle[each] and kg.Scalar != each.Scalar and isMulti[add[kg, each]])
 } for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
 
 // A booking and its reversal net to zero (collapse).
 run reversalCollapses {
-  some m: Currency -> lone Scalar | isSingle[m] and isZero[add[m, negate[m]]]
+  ringAxioms and (some m: Currency -> lone Scalar | isSingle[m] and isZero[add[m, negate[m]]])
 } for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
 
 // Scaling by the zero decimal annihilates; by one is the identity.
-run scaleByZero { some m: Currency -> lone Scalar | isSingle[m] and isZero[scale[SZero, m]] }
-  for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
-run scaleByOne  { some m: Currency -> lone Scalar | isSingle[m] and scale[SOne, m] = m }
-  for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+run scaleByZero {
+  ringAxioms and (some m: Currency -> lone Scalar | isSingle[m] and isZero[scale[SZero, m]])
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+run scaleByOne {
+  ringAxioms and (some m: Currency -> lone Scalar | isSingle[m] and scale[SOne, m] = m)
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit

@@ -1,39 +1,42 @@
 module meta/values
 
 /*
- * Universal value objects (no identity; not entities). Money and Duration remain
- * opaque slots until the QUDT bridge (DT-002). Quantity and PhysicalLocator are
- * given structure now — they are needed, with real fields, by reference_data and
- * resources. No external-source linkage yet (DT-002).
+ * Universal value objects (no identity; equal-by-content). Money and Quantity are
+ * INSTANCES of the keyed monoid (meta/algebra/keyed_monoid): a value is a normal-form
+ * map  key -> lone Scalar  with the monoid's add / scale / negate / zero.
+ *   Money    = the Currency-keyed instance  (MultiMoney)
+ *   Quantity = the Unit-keyed instance       (MultiQuantity)
+ * Alloy has no type aliases, so each is a thin sig wrapping its normal-form map; the
+ * monoid operations apply to that map (e.g. `add[m1.byCurrency, m2.byCurrency]`).
+ * Amounts are decimals (abstract Scalar). Duration stays opaque for now (a future
+ * time-unit monoid); the QUDT bridge for Unit/Currency is deferred (DT-002, DT-005).
  */
+open meta/algebra/keyed_monoid   // Scalar, nf, add, scale, negate, zero, isZero/isSingle/isMulti
 
-// --- Still opaque (QUDT bridge deferred) -----------------------------------
-sig Money {}
+// --- monoid key types -------------------------------------------------------
+// Money key — real currencies are common-module Currency.kt (USD, EUR, …); opaque here.
+sig Currency {}
+// Quantity key — a unit of measure; opaque now (QUDT bridge later, DT-002).
+sig Unit {}
+
+// --- Money: the Currency-keyed monoid instance (MultiMoney) -----------------
+// A value spanning one or more currencies (no conversion); normal form (no zero entries).
+sig Money { byCurrency: Currency -> lone Scalar } { nf[byCurrency] }
+// Value semantics: a Money IS its amounts — no two Money atoms share the same map.
+fact MoneyExtensional { all disj a, b: Money | a.byCurrency != b.byCurrency }
+
+// --- Quantity: the Unit-keyed monoid instance (MultiQuantity) ---------------
+sig Quantity { byUnit: Unit -> lone Scalar } { nf[byUnit] }
+fact QuantityExtensional { all disj a, b: Quantity | a.byUnit != b.byUnit }
+
+// --- still opaque -----------------------------------------------------------
+// A length of time. (A future time-unit monoid; QUDT bridge deferred, DT-002.)
 sig Duration {}
 
-// --- Quantity: a magnitude in a unit of measure ----------------------------
-// `unit` is an opaque handle for now; it will bridge to a QUDT unit/quantity-kind
-// in meta/std/qudt (DT-002). `amount` is modeled as an Int (an abstraction of the
-// code's Double) so we can state a real constraint on it.
-sig Unit {}
-sig Quantity {
-  amount: one Int,
-  unit:   one Unit
-}
-
-// Quantities are non-negative. RELAXED from strictly-positive — the §6 forcing
-// function fired: InventoryItem.actualQuantity can be zero (a depleted item). Specific
-// uses may re-tighten locally (e.g. an order quantity should be > 0).
-fact NonNegativeQuantity { all q: Quantity | q.amount >= 0 }
-
-// Tight by default: no orphan units — every Unit labels some Quantity. Self-contained
-// (Unit is used only here). Relax when units gain a standalone catalog (QUDT bridge).
-fact NoOrphanUnit { all u: Unit | u in Quantity.unit }
-
 // --- PhysicalLocator: a containment hierarchy of physical space ------------
-// Nine nesting levels, outermost → innermost. All optional opaque labels (code:
-// String); the `facility` module will model this richly later. Two locators with the
-// same values denote the EXACT SAME physical space (containment is implicit for now).
+// Nine nesting levels, outermost → innermost. All optional opaque labels (code: String);
+// the `facility` module will model this richly later. Two locators with the same values
+// denote the EXACT SAME physical space (containment is implicit for now).
 sig Label {}
 sig PhysicalLocator {
   region:   lone Label,
@@ -55,7 +58,6 @@ fact LocatorNonEmpty {
 }
 
 // Tight by default: no orphan labels — every Label is used at some locator level.
-// Self-contained (Label is used only by PhysicalLocator).
 fact NoOrphanLabel {
   all l: Label | l in PhysicalLocator.(region + facility + area + aisle + bay + shelf + tier + slot + bin)
 }
