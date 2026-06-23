@@ -1,40 +1,47 @@
-# Manufacturing Kanban Model — `alloy/`
+# Manufacturing Domain Model — `alloy/`
 
-Alloy 6 model of the pull-based Kanban shop-floor system — the dynamic /
-behavioral counterpart to the OWL ontology in `../owl/kanban.ttl`.
+Alloy model of the manufacturing domain — the behavioral / model-finding
+counterpart to the OWL ontology in `../owl/`. The directory tree mirrors the
+system's **functional decomposition** (domain → directory, module → file), with a
+non-domain `meta/` for modeling machinery. See `CLAUDE.md` for the full
+conventions.
 
-## How to open / run
+## Layout
 
-Open **`kanban.als`** in the Alloy Analyzer (`java -jar ~/tools/alloy/alloy.jar`).
-It is **self-contained** — no `open` statements, so no module-resolution issues.
+```
+alloy/
+├── meta/           kernel.als · std/{bfo,iof,qudt}.als (vendored stubs) · util.als · tests/
+├── reference_data/ item.als                                    (+ tests/)
+├── resources/      station · operator · loop · kanban_card · job · inventory_item   (+ tests/)
+├── system/ procurement/ shop_access/ fulfillment/ operations/ receiving/ shipping/ oam/ workflows_and_integrations/   (stubbed)
+└── tests/system.als
+```
 
-- **Execute → Run showSimulation**, then **Show Latest Instance** (⌘L) and step the
-  trace (Prev/Next) to watch the 8-state Kanban lifecycle and the X.731 resource
-  states evolve. (A `run` that is SAT is viewable; the `check` below is not.)
-- **Execute → Check X731Consistency** — verifies the state-interlock invariant
-  (UNSAT = no counterexample = holds).
-- **Execute → Show Metamodel** (⌘M) — static signature/field/extends diagram.
+Module/dir names are **snake_case** (Alloy module names cannot contain `-` or
+`.`), even though the functional domain canonical names are kebab-case
+(`reference-data` ↔ `reference_data`).
 
-Headless: `java -jar ~/tools/alloy/alloy.jar exec -c "*" -f kanban.als`.
+## How to run
 
-## Content
+Use the repo-root **Makefile**:
 
-Stations (source / sink / processing), Resources (Equipment, Personnel, Loop),
-KanbanCard, Job, InventoryLot, ItemType, the X.731 three-vector resource state
-model (operational / usage / administrative) and the 8-state Kanban lifecycle.
-`var` fields carry the mutable state; predicates encode the transition
-operations and `fact`s the invariants.
+```
+make tools          # fetch Alloy + ROBOT (pinned)
+make check-alloy    # run every command in every alloy/**/tests/*.als
+make test-unit      # only unit_* commands
+make test-sys       # the whole-system suite
+make alloy          # launch the GUI — then File→Open a ROOT (a tests/*.als file)
+```
 
-## Relationship to the rest of the project
+Open a **root** (a `tests/*.als` file) in the Analyzer, never a library module —
+commands only run from the opened root. Current roots:
+`meta/tests/util.als` (X731Consistency), `resources/tests/kanban.als`
+(showSimulation + ops), `tests/system.als` (whole-model smoke).
 
-| | `../owl/kanban.ttl` (Protégé) | `kanban.als` (Alloy) |
-|---|---|---|
-| Captures | static structure + IOF/BFO alignment | behavior over time: traces, invariants |
-| Lens | classification / consistency | bounded model finding / counterexamples |
+## Status
 
-The earlier placeholder scaffolding (a modular `core/material/resource/process/
-quantity` mirror) is archived in `../alloy-sample/`.
-
----
-
-Copyright: (c) Arda Systems 2025-2026, All rights reserved
+Relocation of the original `kanban.als` + `resource.als` into this structure is
+complete and verified (X731Consistency UNSAT; showSimulation SAT; sys_modelLoads
+SAT). Predicate/command names were kept; the redesign to the documented domain
+model (and populating `meta/kernel` + `meta/std`) is the next phase — see the
+workbook notebook `domain-ontology` (DT-001, DT-002).

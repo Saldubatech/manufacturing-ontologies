@@ -1,115 +1,21 @@
-module KanbanManufacturingSystem
+module resources/tests/kanban
 
-open resource   -- Resource sig + X.731 state vectors (operational / usage / administrative)
-
-/*
-================================================================================
-1. STATIC SIGNATURES & VALUE PARTITIONS (The Data Schema)
-================================================================================
-*/
-
--- Abstract structural types
-abstract sig ItemType {}
-
--- NOTE: Resource and the X.731 state vectors (OperationalState, UsageState,
--- AdministrativeState) now live in resource.als (opened above).
-
--- The 8-Stage Kanban Lifecycle Vector
-abstract sig KanbanLifecycleState {}
-one sig State1_AttachedAtSink,
-        State2_ReleasedFromSink,
-        State3_TransitingToSource,
-        State4_ArrivedAtSource,
-        State5_GroupedIntoJob,
-        State6_InProcessAtSource,
-        State7_CompletedAtSource,
-        State8_TransitingToSink extends KanbanLifecycleState {}
-
--- Structural Workstations
-abstract sig Station {}
-sig SinkStation extends Station {}
-sig SourceStation extends Station {}
-
--- Resource Hierarchies (Resource + X.731 state vectors are defined in resource.als)
-sig Equipment extends Resource {}
-sig Personnel extends Resource {}
-
-sig ProcessingStation extends Station {
-  associatedResource: one Resource
-}
-
-sig Loop extends Resource {
-  source: one SourceStation,
-  sink: one SinkStation,
-  elements: some Resource,
-  capacityLimit: one Int
-} {
-  capacityLimit > 0
-  this not in elements
-}
-
--- Control Tokens and Aggregations
-sig KanbanCard {
-  itemType: one ItemType,
-  belongsToLoop: one Loop,
-  var lifecycleState: one KanbanLifecycleState
-}
-
-sig Job {
-  jobItemType: one ItemType,
-  cards: some KanbanCard
-}
-
--- Physical Material Batches
-sig InventoryLot {
-  lotItemType: one ItemType,
-  var currentStation: one Station
-}
+open meta/util
+open reference_data/item
+open resources/station
+open resources/operator
+open resources/loop
+open resources/kanban_card
+open resources/job
+open resources/inventory_item
 
 /*
-================================================================================
-2. FACT CONSTRAINTS (Invariants Enforced Across All Valid States)
-================================================================================
-*/
+ * Kanban behavioral suite — transition operations + simulation run.
+ * Relocated verbatim from the old kanban.als (RELOCATION; predicate and command
+ * names unchanged). Operations span resources modules + meta/util state, so they
+ * live in this domain test root rather than in any single library module.
+ */
 
-fact StructuralInvariants {
-  -- Disjoint stations
-  -- no (SinkStation & SourceStation)
-  -- no (SinkStation & ProcessingStation)
-  -- no (SourceStation & ProcessingStation)
-  
-  -- Every card belongs to a loop matching its lifecycle bounds
-  all c: KanbanCard | c.belongsToLoop.capacityLimit >= 1
-
-  -- Loop decomposition constraints
-  all l: Loop | no (l & l.elements)
-  
-  -- Every Job must be homogenous in terms of ItemType
-  all j: Job | all c: j.cards | c.itemType = j.jobItemType
-  
-  -- Prevent cards from belonging to multiple overlapping active jobs simultaneously
-  all var_job1, var_job2: Job | var_job1 != var_job2 => no (var_job1.cards & var_job2.cards)
-}
-
--- Resource-level X.731 interlocks live in resource.als (ResourceStateInvariants).
--- This keeps only the Loop-level aggregation rule, which needs Loop + elements.
-fact LoopStateInvariants {
-  -- If a loop is disabled, its component resources drop to Idle.
-  all l: Loop | l.operationalState = Disabled => (all e: l.elements | e.usageState = Idle)
-}
-
-fact LoopCapacityLimits {
-  -- The number of active Kanban cards circulating inside a loop cannot exceed its authorized WIP cap
-  all l: Loop | # {c: KanbanCard | c.belongsToLoop = l} <= l.capacityLimit
-}
-
-/*
-================================================================================
-3. STATE TRANSITIONS (Dynamic Behavior Operations)
-================================================================================
-*/
-
--- Op 1: Downstream Consumption (Card release at Sink)
 pred releaseCardFromSink [c: KanbanCard, lot: InventoryLot] {
   -- Pre-conditions
   c.lifecycleState = State1_AttachedAtSink

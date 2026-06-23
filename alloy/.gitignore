@@ -1,4 +1,7 @@
-# Alloy Analyzer CLI output (exec creates a dir named after the source stem)
-/manufacturing-systems/
+# Alloy Analyzer CLI output. `make` targets write to /tmp; an ad-hoc `exec` run
+# creates a directory named after the source-file stem in the cwd — run with
+# `-o /tmp/...` or clean up. Common stems from the test roots:
 /out/
+/util/
 /kanban/
+/system/

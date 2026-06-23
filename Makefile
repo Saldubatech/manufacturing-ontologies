@@ -7,7 +7,7 @@
 ALLOY := tools/alloy.jar
 ROBOT := tools/robot.jar
 
-.PHONY: tools alloy check-alloy check-owl check
+.PHONY: tools alloy check-alloy test-unit test-sys check-owl check
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -16,18 +16,30 @@ tools:
 $(ALLOY) $(ROBOT):
 	@bash tools/get-tools.sh
 
-## alloy: launch the Alloy Analyzer GUI (then File-Open alloy/kanban.als)
+## alloy: launch the Alloy Analyzer GUI (then File-Open a ROOT, e.g. alloy/resources/tests/kanban.als)
 alloy: $(ALLOY)
 	@java -jar $(ALLOY) &
 
-## check-alloy: headlessly run every command in every Alloy module
+## check-alloy: run every command in every test root (any alloy/**/tests/*.als)
 check-alloy: $(ALLOY)
-	@cd alloy && for f in *.als; do \
+	@find alloy -path '*/tests/*.als' | sort | while read f; do \
 	  echo "== $$f =="; \
-	  java -jar "$(CURDIR)/$(ALLOY)" -D info exec -c "*" -f "$$f" 2>&1 \
+	  java -jar $(ALLOY) -D info exec -c "*" -o /tmp/alloy-out -f "$$f" 2>&1 \
 	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
-	  rm -rf "$${f%.als}"; \
-	done
+	done; rm -rf /tmp/alloy-out
+
+## test-unit: run only unit_* commands across all test roots
+test-unit: $(ALLOY)
+	@find alloy -path '*/tests/*.als' | sort | while read f; do \
+	  echo "== $$f =="; \
+	  java -jar $(ALLOY) exec -c "unit_*" -o /tmp/alloy-out -f "$$f" 2>&1 \
+	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
+	done; rm -rf /tmp/alloy-out
+
+## test-sys: run the whole-system suite (sys_* in alloy/tests/system.als)
+test-sys: $(ALLOY)
+	@java -jar $(ALLOY) exec -c "sys_*" -o /tmp/alloy-out -f alloy/tests/system.als 2>&1 \
+	  | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; rm -rf /tmp/alloy-out
 
 ## check-owl: validate owl/kanban.ttl loads its full import closure (ROBOT/OWLAPI)
 check-owl: $(ROBOT)

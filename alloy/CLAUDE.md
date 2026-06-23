@@ -1,66 +1,79 @@
-# Working with the Alloy models — `alloy/`
+# Working with the Alloy model — `alloy/`
 
-Agent + contributor guide for the Alloy side of the manufacturing-ontologies
-project. The Alloy models are the **behavioral / dynamic** counterpart to the OWL
-ontology in `../owl/` (which is static structure + IOF/BFO alignment).
+Agent + contributor guide for the Alloy side of the project. The model is the
+**behavioral / model-finding** counterpart to the OWL ontology in `../owl/`. The
+tree mirrors the system's **functional decomposition**.
 
-## Files
+## Structure & filing rule
 
-| File | Role |
-|---|---|
-| `kanban.als` | Root model — open/execute this. `module KanbanManufacturingSystem`; `open resource`. Stations, Resources' subtypes (Equipment/Personnel/Loop), KanbanCard, Job, InventoryLot, the 8-state lifecycle, operations, and the project's `run`/`check` commands. |
-| `resource.als` | `module resource` — the `Resource` sig + ITU-T X.731 state vectors (operational/usage/administrative) + `ResourceStateInvariants` + its own `check`. Self-contained and independently analysable. |
-| `../alloy-sample/` | Archived placeholder scaffolding (multi-file modular example). Not live. |
+- **Domain → directory, Module → file, one owning module per entity.** To add an
+  entity, pick its single owning module and create/extend `<domain>/<module>.als`;
+  reference other modules via `open`.
+- **`meta/` is not a domain.** It holds modeling machinery:
+  - `meta/kernel.als` — Entity/Value/Reference/Scoped/EntityId/TimeCoordinates (currently a STUB; DT-001.02).
+  - `meta/std/{bfo,iof,qudt}.als` — **vendored boundary stubs** copied from the OWL standards (MIREOT: only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. OWL stays system-of-record.
+  - `meta/util.als` — reusable utilities (today: the X.731 state vectors + abstract `Resource`).
+- Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` and `resources` have content; the rest are stubbed (`.gitkeep`).
 
-## Running the Analyzer
+## ⚠️ Naming: snake_case, never `-` or `.`
 
-The tools are **Alloy 6.2** and **ROBOT 1.9.10** (needs Java; Corretto 21 is installed).
-They are not committed — fetch them, pinned + checksum-verified, into the
-git-ignored `tools/` dir. The fetch reuses `~/tools/{alloy,robot}/*.jar` if already
-present (no re-download), otherwise downloads the pinned release.
+Alloy module names cannot contain `-` or `.` (both are **syntax errors**), and the
+`module <path>` declaration **must equal the file's path under `alloy/`** (Alloy
+strips it to compute the project root, then resolves every `open` from there).
+Therefore:
 
-### Make targets (preferred — run from the repo root, one dir up)
+- Directories and files use **snake_case** (`reference_data/`, `kanban_card.als`),
+  even though the functional domain canonical names are kebab-case
+  (`reference-data` ↔ `reference_data`). This overrides the workspace kebab-case
+  convention **inside `alloy/` only**.
+- Every file declares `module <path-under-alloy>` (e.g. `module resources/loop`,
+  `module resources/tests/kanban`, `module meta/std/iof`).
+- `open` uses paths-from-`alloy/`: `open meta/util`, `open resources/loop`.
 
-| Target | What it does |
-|---|---|
-| `make tools` | Fetch/verify Alloy + ROBOT into `tools/` (reuses `~/tools` if matching). Other targets depend on this and auto-run it. |
-| `make alloy` | Launch the Alloy Analyzer **GUI** (then File→Open `alloy/kanban.als`). |
-| `make check-alloy` | Headlessly run **every command in every `alloy/*.als`** and print SAT/UNSAT per command. Use this to validate after edits. |
-| `make check-owl` | Validate `owl/kanban.ttl` loads its full import closure (ROBOT/OWLAPI). |
-| `make check` | `check-alloy` + `check-owl`. |
+## Library vs. root (where commands live)
 
-### Direct jar invocation (equivalent; jar path is `tools/alloy.jar` after `make tools`)
+- **Library files** (`meta/…`, `<domain>/<module>.als`) carry all model-defining
+  elements: `sig`, `fact`, `fun`, and co-located checkable `assert`/`pred`.
+- **Only root files carry `run`/`check`.** A root does **not** execute commands
+  from the modules it opens. Roots are the `tests/*.als` files.
+- Open a **root** in the GUI / pass it to `exec`; never a library module.
 
-```bash
-java -jar tools/alloy.jar exec -c "*" -f alloy/kanban.als            # run all commands in a module
-java -jar tools/alloy.jar -D info exec -c "*" -f alloy/resource.als  # -D info shows SAT/UNSAT per command
-```
+## Tests & command tiers
 
-(`~/tools/alloy/alloy.jar` also works as a fallback if `make tools` hasn't run.)
+- Tests live in a **`tests/` subdirectory** of each modeling directory (NOT
+  `*.test.als` — dotted module names are illegal). Per-module suite
+  `<domain>/tests/<module>.als`; domain-aggregate `<domain>/tests/aggregate.als`;
+  whole-system `tests/system.als`.
+- **Command-name tiers** (for wildcard selection): `unit_*` (module), `dom_*`
+  (domain aggregate), `sys_*` (system). New commands follow this; relocated
+  commands kept their original names (`showSimulation`, `X731Consistency`).
+- **No master root** aggregates suites — the Makefile iterates `tests/` roots.
 
-- `exec` writes a `<stem>/receipt.json` (the full sig/field schema — a metamodel dump). Delete the dir after; it is git-ignored (`.gitignore` lists `/kanban/`, `/resource/`, etc.). `make check-alloy` cleans these for you.
-- **Interpreting results**: a `run` that is **SAT** = instance found (good, and viewable). A `check` that is **UNSAT** = no counterexample = the assertion **holds** (good). UNSAT `run` = over-constrained/empty.
-- **GUI** (`make alloy`, or `java -jar tools/alloy.jar` with no args): Execute menu has per-command entries plus **Show Metamodel** (⌘M, static schema diagram), **Show Latest Instance** (⌘L), **Show Parse Tree** (⌘P). After a SAT `run`, **Show** opens the Visualizer; for temporal (`var`) models step the trace with **Prev/Next state**. **Projection** slices the view over a chosen sig; **Theme** lists every sig/relation and controls styling.
+## Running
 
-## Project conventions
+From the repo root: `make check-alloy` (all), `make test-unit`, `make test-sys`,
+`make alloy` (GUI). Direct: `java -jar tools/alloy.jar exec -c "<name|glob|*>" -o /tmp/ao -f <root>.als`.
+Interpreting: `run` SAT = instance found; `check` UNSAT = assertion holds.
 
-- **One concern per module** (`resource`, `kanban`, …); lower-level/shared concerns at the bottom, `open` only downward, no cycles.
-- **Pattern (a): every module self-tests.** A concern module carries its own `fact` invariants *and* its own `assert`/`check` commands, and must be analysable standalone (open it directly to run its checks). `resource.als` is the template. The root (`kanban.als`) additionally holds whole-system commands.
-- **Same-directory `open`s only** (`open resource`, not `open modules/a/b`). Deep paths trigger module-resolution friction. Use qualified names (`resource/Resource`) only on clashes.
-- **Be sparing with global `fact`s** in reusable modules — a fact constrains every instance unconditionally and can mask inconsistency. Prefer predicates invoked by commands for optional/scenario constraints; reserve facts for inviolable structure.
-- **Consider splitting static schema from dynamic behavior** as modules grow (sigs in one module, `var` fields + transition predicates in another).
-- **Reuse `util/*`** (`util/ordering`, `util/integer`, `util/relation`, …); don't hand-roll.
-- **Parameterize for reuse**: `module statemachine[S]` … `open statemachine[KanbanCard]`.
+## `fact` vs `assert` vs `pred`
 
-## Gotchas (all hit in practice — check these first)
+- `fact` — inviolable structural invariant, always enforced (use sparingly).
+- `assert`+`check` — property to verify (counterexample if wrong); most tests.
+- `pred`+`run` — scenario existence / "this works".
 
-1. **Identifiers cannot contain `-`** (hyphens). Module/sig/field names use `_` or camelCase even if the filename has hyphens.
-2. **Commands run only from the opened ROOT module.** `run`/`check` in an `open`ed module do **not** execute from the root — open that module directly to run them. (This is why pattern (a) requires each module be standalone-analysable.)
-3. **Scope must exceed the atoms a predicate forces.** Sigs sharing an abstract supertype share the scope; e.g. `run` needing 5 distinct entities under one abstract parent is UNSAT at `for 4`. Raise the scope or scope sigs individually (`for 4 but 8 Int`).
-4. **Don't scope a `one sig`.** `... but 3 SomeOneSig` is an error — `one` already fixes it at 1.
-5. **Open the root, not a submodule, in the GUI.** Hovering over an `open` line can print a harmless `/private/var/.../T/...als (No such file)` tooltip stack trace — cosmetic; execution resolves relative to the opened root's directory.
-6. **`Int`/`String` appear in menus/projection** because built-ins are in scope (e.g. `capacityLimit: Int`); usually not worth projecting over.
+## Gotchas
 
-## Relationship to `../owl/`
+1. **No `-` or `.` in module names** (snake_case; see above).
+2. **Commands run only from the opened root**; library `run`/`check` won't fire.
+3. `module <path>` must match the file's path under `alloy/`.
+4. Scope must exceed the atoms a predicate forces (shared abstract supertypes
+   share the scope); don't put a numeric scope on a `one sig`.
+5. Open a root, not a submodule, in the GUI.
 
-Same domain, complementary lenses: OWL/Protégé answers "is it consistent / how does it classify (under IOF/BFO)?"; Alloy answers "can this scenario occur / does an invariant ever break (within a finite scope)?". Keep the two in rough conceptual sync, but they are independent artifacts — Alloy has no IOF/BFO/QUDT imports.
+## Pointers
+
+Canonical structure spec + rationale: workbook notebook `domain-ontology` →
+`alloy-repository-structure.md`, `threads/dt-001-alloy-directory-structure.md`
+(layout, DT-001.01 decided), `threads/dt-002-bridging-owl-standard-models.md`
+(vendoring). Current state is a **relocation** of the original model; redesign to
+the documented domain + populating `meta/kernel`/`meta/std` is next.
