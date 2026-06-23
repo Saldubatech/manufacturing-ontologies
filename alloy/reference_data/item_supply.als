@@ -30,3 +30,23 @@ fact SupplierRefIsVendor {
 fact ItemSupplyRefs {
   all s: ItemSupply | s.dataRefs = s.supplier.vendorRef + s.supplier.affiliateRef
 }
+
+// Tight by default (see modeling-conventions §6): a resolved affiliateRef is a
+// BusinessAffiliate, and the resolved vendor role belongs to that affiliate.
+fact SupplierRefIntegrity {
+  all s: ItemSupply |
+    let ar = resolve[s.supplier.affiliateRef], vr = resolve[s.supplier.vendorRef] {
+      some ar implies ar in BusinessAffiliate
+      (some vr and some ar) implies vr in ar.roles
+    }
+}
+
+// Tight by default: no orphan value/handle atoms. Each must be attached to an
+// ItemSupply. (These assume ItemSupply is the only user — relax/move explicitly when
+// Money/Quantity/Duration/SupplierReference become shared across domains.)
+fact NoOrphanSupplierReference { all sr: SupplierReference | sr in ItemSupply.supplier }
+fact NoOrphanItemSupplyValues {
+  all q: Quantity | q in ItemSupply.orderQuantity
+  all m: Money    | m in ItemSupply.unitCost
+  all d: Duration | d in ItemSupply.averageLeadTime
+}

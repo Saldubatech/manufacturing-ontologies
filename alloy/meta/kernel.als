@@ -42,6 +42,11 @@ fact CrossTenantIsolation {
     let b = resolve[id] | b in Scoped implies a.tenantId = b.tenantId
 }
 
+// Tight by default: no orphan identities — every EntityId is either some entity's
+// own identity or is referenced by some entity. (Relax explicitly to model a
+// minted-but-not-yet-used id.) See modeling-conventions §6.
+fact NoOrphanEntityId { all id: EntityId | id in Entity.eId + Entity.refs }
+
 // Resolve a soft reference within the current scope. `lone`: 0 (dangling /
 // not-loaded / cross-Universe — the 'soft' case) or 1 (key ⇒ never more).
 fun resolve[id: EntityId]: lone Entity { eId.id }
