@@ -1,6 +1,6 @@
-module resources/operator
+module kanban_sim/operator
 
-open meta/x731_state/state   // Resource
+open kanban_sim/x731_state   // Resource
 
 // Personnel — human resources executing manual work. (Relocated; name kept.)
 sig Personnel extends Resource {}

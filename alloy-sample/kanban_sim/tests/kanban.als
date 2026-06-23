@@ -1,13 +1,12 @@
-module resources/tests/kanban
+module kanban_sim/tests/kanban
 
-open meta/x731_state/state
-open reference_data/item
-open resources/station
-open resources/operator
-open resources/loop
-open resources/kanban_card
-open resources/job
-open resources/inventory_item
+open kanban_sim/x731_state
+open kanban_sim/station
+open kanban_sim/operator
+open kanban_sim/loop
+open kanban_sim/kanban_card
+open kanban_sim/job
+open kanban_sim/inventory_item
 
 /*
  * Kanban behavioral suite — transition operations + simulation run.

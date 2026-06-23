@@ -1,4 +1,4 @@
-module resources/item_type
+module kanban_sim/item_type
 
 // Placeholder ItemType for the relocated kanban spike. Kept local to `resources`
 // so the spike stays decoupled from the redesigned `reference_data/item` (the real

@@ -1,15 +1,15 @@
 module tests/system
 
-// Whole-system / cross-domain suite. Opens every defined module; sys_* commands.
-open meta/x731_state/state
-open resources/item_type
-open resources/station
-open resources/operator
-open resources/loop
+// Whole-system / cross-domain suite for the live entity model; sys_* commands.
+// (The X.731 behavioral spike was archived to alloy-sample/kanban_sim/.)
+open meta/kernel
+open reference_data/item       // transitively: item_supply, business_affiliate, business_role
 open resources/kanban_card
-open resources/job
-open resources/inventory_item
 
-// Smoke: the union of all modules admits a consistent instance.
+// Smoke: the union of the live modules admits a consistent instance.
 pred sys_modelLoads {}
-run sys_modelLoads for 4 but 8 Int
+run sys_modelLoads for 6 but 5 Int
+
+// Cross-domain: a card references an Item — and by kernel isolation they share a tenant.
+pred sys_cardReferencesItem { some c: KanbanCard, i: Item | resolve[c.itemRef] = i }
+run sys_cardReferencesItem for 6 but 5 Int

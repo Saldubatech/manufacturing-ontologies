@@ -1,7 +1,7 @@
-module resources/job
+module kanban_sim/job
 
-open resources/item_type    // ItemType
-open resources/kanban_card  // KanbanCard
+open kanban_sim/item_type    // ItemType
+open kanban_sim/kanban_card  // KanbanCard
 
 // A Job — an aggregation of homogeneous Kanban cards formed at a source station.
 sig Job {

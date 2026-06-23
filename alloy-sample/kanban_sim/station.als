@@ -1,6 +1,6 @@
-module resources/station
+module kanban_sim/station
 
-open meta/x731_state/state   // Resource (for Equipment and ProcessingStation.associatedResource)
+open kanban_sim/x731_state   // Resource (for Equipment and ProcessingStation.associatedResource)
 
 // Structural workstations / physical resources.
 abstract sig Station {}

@@ -10,10 +10,12 @@ tree mirrors the system's **functional decomposition**.
   entity, pick its single owning module and create/extend `<domain>/<module>.als`;
   reference other modules via `open`.
 - **`meta/` is not a domain.** It holds modeling machinery:
-  - `meta/kernel.als` — Entity/Value/Reference/Scoped/EntityId/TimeCoordinates (currently a STUB; DT-001.02).
+  - `meta/kernel.als` — identity + the `Entity`/`Scoped` bound, `EntityId`, soft-ref `resolve`, cross-tenant isolation (DT-001.02, implemented).
+  - `meta/values.als` — value objects: `Quantity` (amount+unit), `PhysicalLocator`; `Money`/`Duration` still opaque (QUDT bridge deferred, DT-002).
   - `meta/std/{bfo,iof,qudt}.als` — **vendored boundary stubs** copied from the OWL standards (MIREOT: only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. OWL stays system-of-record.
   - `meta/x731_state/` — the ITU-T X.731 state machinery (state vectors + abstract `Resource`); `state.als` today, room for transition/attribute files + `tests/` as it grows.
-- Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` and `resources` have content; the rest are stubbed (`.gitkeep`).
+- Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` (Item/ItemSupply/BusinessAffiliate/BusinessRole) and `resources` (KanbanCard) have content; the rest are stubbed (`.gitkeep`).
+- The original throwaway X.731 behavioral spike (Loop/Station/Operator/Job/InventoryLot + 8-state lifecycle) was archived to `../alloy-sample/kanban_sim/` when the real code-faithful `KanbanCard` landed (DT-001.08). It is not in the `make check-alloy` set; see its README.
 
 ## ⚠️ Naming: snake_case, never `-` or `.`
 
@@ -75,5 +77,8 @@ Interpreting: `run` SAT = instance found; `check` UNSAT = assertion holds.
 Canonical structure spec + rationale: workbook notebook `domain-ontology` →
 `alloy-repository-structure.md`, `threads/dt-001-alloy-directory-structure.md`
 (layout, DT-001.01 decided), `threads/dt-002-bridging-owl-standard-models.md`
-(vendoring). Current state is a **relocation** of the original model; redesign to
-the documented domain + populating `meta/kernel`/`meta/std` is next.
+(vendoring), `modeling-conventions.md` (DAG/aggregation/refs/tight-by-default),
+`reference-data-entities.md` + `kanban-cards-entities.md` (code-authoritative entity
+inventories). `meta/kernel` is implemented; the reference_data slice and the
+code-faithful `KanbanCard` are modeled. Next: populate `meta/std` (DT-002), enrich
+fields, and decide the event-history/bitemporal depth (DT-001.03).
