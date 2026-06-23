@@ -85,6 +85,11 @@ and the workbook `modeling-conventions.md` (the *why* behind each convention).
   prefix the diagram lines with `*` — a leading `*` corrupts the PlantUML the plugin
   extracts; keep the `@startuml…@enduml` lines flush. Validate via the PlantUML MCP tool
   before committing (workspace convention).
+- **Express invariants/constraints OCL-style: `//{ expr }//`** — braces (the UML
+  constraint notation) in creole italic, attached to the constrained element(s).
+  **Stay dependency-free:** do NOT use `<latex>`/`<math>` — math-to-SVG needs Apache
+  Batik, which the stock local `plantuml.jar` lacks (it fails in the VS Code preview).
+  Plain creole (`//italic//`, `<b></b>`, `{ }`) renders everywhere with no extra setup.
 - **Definition of done for new `meta` machinery: it ships with an example here.** That
   rule keeps the cookbook from going stale — framework and tutorial move together.
 

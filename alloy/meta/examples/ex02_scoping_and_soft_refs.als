@@ -28,7 +28,7 @@ Reservation ..> Guest : guestRef (soft ref, resolve)
 Guest --> Hotel : tenantId
 Reservation --> Hotel : tenantId
 note as C
-<latex>\mathit{Guest}.\mathit{tenantId} = \mathit{Reservation}.\mathit{tenantId}</latex>
+//{ Guest.tenantId = Reservation.tenantId }//
 end note
 C .> (Guest, Hotel)
 (Reservation, Hotel) <. C
