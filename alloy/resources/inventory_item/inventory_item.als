@@ -149,9 +149,9 @@ fact NoOrphanText           { all x: Text           | x in InventoryItem.(notes 
 fact ConeNonNegative {
   all ii: InventoryItem |
     classify[ii.actualQuantity.byUnit] in (ZERO + POSITIVE)
-    and classify[ii.minQuantity.byUnit] in (ZERO + POSITIVE)
-    and (some ii.maxQuantity  implies classify[ii.maxQuantity.byUnit]  in (ZERO + POSITIVE))
-    and (some ii.degradedQty  implies classify[ii.degradedQty.byUnit]  in (ZERO + POSITIVE))
+    and classify[ii.minQuantity.byUnit] in (ZERO + POSITIVE)          // min: ≥ 0 (Zero = no threshold)
+    and (some ii.maxQuantity  implies classify[ii.maxQuantity.byUnit] = POSITIVE)   // max (if present): strictly > 0 (a zero capacity is degenerate)
+    and (some ii.degradedQty  implies classify[ii.degradedQty.byUnit] in (ZERO + POSITIVE))
 }
 
 // G4 — degradedQty (when present): strictly positive and ≤ actual (component-wise), so

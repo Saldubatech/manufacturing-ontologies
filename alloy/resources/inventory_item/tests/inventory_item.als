@@ -132,3 +132,8 @@ run unit_inventoryItem_serialDupImpossible {
   some disj a, b: InventoryItem |
     a.tenantId = b.tenantId and a.itemRef = b.itemRef and some a.serialNumber and a.serialNumber = b.serialNumber
 } for 6 but 3 Scalar
+
+// No zero-capacity item: maxQuantity, when present, is strictly positive (a zero capacity is degenerate).
+run unit_inventoryItem_zeroMaxImpossible {
+  some ii: InventoryItem | some ii.maxQuantity and isZero[ii.maxQuantity.byUnit]
+} for 5 but 3 Scalar
