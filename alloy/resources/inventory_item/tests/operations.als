@@ -13,6 +13,26 @@ fact ScalarPremises { ringAxioms and orderAxioms }
 
 // ── operation firings (expect SAT) ────────────────────────────────────────────────────
 run unit_op_create_fires { some ii: InventoryItem, q: Quantity | create[ii, q] } for 6 but 3 Scalar
+
+// D15 Fill state machine — created FULL; touched → PARTIAL; rePack/Move preserve FULL; split-off born FULL.
+run unit_op_create_isFull {
+  some ii: InventoryItem, q: Quantity | create[ii, q] and after ii.fillState = FULL
+} for 6 but 3 Scalar
+run unit_op_consume_demotesFull {
+  some ii: InventoryItem, q: Quantity |
+    ii.fillState = FULL and consume[ii, q] and after (ii.fillState = PARTIAL)   // partial draw leaves PARTIAL
+} for 6 but 3 Scalar
+run unit_op_rePack_preservesFull {
+  some ii: InventoryItem, g: Quantity |
+    ii.fillState = FULL and rePack[ii, g, none] and after ii.fillState = FULL   // re-expression keeps FULL
+} for 6 but 3 Scalar
+run unit_op_move_preservesFull {
+  some ii: InventoryItem, loc: PhysicalLocator |
+    ii.fillState = FULL and move[ii, loc] and after ii.fillState = FULL
+} for 6 but 3 Scalar
+run unit_op_split_bornFull {
+  some o, n: InventoryItem, q: Quantity | split[o, n, q, none] and after n.fillState = FULL
+} for 6 but 3 Scalar
 run unit_op_delete_fires { some ii: InventoryItem | delete[ii] } for 6 but 3 Scalar
 run unit_op_writeOff_fires { some ii: InventoryItem | writeOff[ii] and ii.fillState != EMPTY } for 6 but 3 Scalar
 

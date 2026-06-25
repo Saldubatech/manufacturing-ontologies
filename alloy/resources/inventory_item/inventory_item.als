@@ -18,8 +18,10 @@ open reference_data/item/item     // Item — the primary classifier
  * replay) is workbook modeling-conventions.md §3.1.
  *
  * STORED vs DERIVED (D14, option (a) — the worthiness axis is stored ONLY as `degradedQty`,
- * always quantified). The X.731 Usage region was dropped (D2 revision); Fill is a domain
- * region; Operational/AvailabilityStatus/Fill are DERIVED total functions of the stored fields.
+ * always quantified). The X.731 Usage region was dropped (D2 revision); Fill is a domain region.
+ * Operational/AvailabilityStatus are DERIVED from `degradedQty`. Fill is STORED (D15): with
+ * `maxQuantity` dropped (until the UoM-conversions algebra returns), FULL = born-and-untouched and
+ * is a one-shot state machine driven by the operations, not a function of the quantities.
  *
  * NON-NEGATIVE CONE (D12): all stored quantities are ZERO or all-positive — `ConeNonNegative`.
  * That (and the order-dependent derived funs) need the `keyed_order` premise; the TEST ROOT
@@ -51,7 +53,11 @@ enum OperationalState { ENABLED, DISABLED }
 /** AvailabilityStatus — X.731 availability-status qualifier (DERIVED): DEGRADED = ENABLED but a
     non-empty portion is unavailable. `FAILED`/`IN_TEST`/… reserved (not in v1). */
 enum AvailabilityStatus { DEGRADED }
-/** FillState — stock-fill level (DERIVED, D14): FULL (= maxQty) / PARTIAL / EMPTY (= zero). */
+/** FillState — stock-fill level (STORED state machine, D15 — supersedes the capacity-based FULL of
+    D2/D14 until the UoM-conversions algebra lands): FULL = born/received at its as-intended quantity
+    and UNTOUCHED; PARTIAL = its real quantity has since changed; EMPTY = zero. FULL is minted only by
+    Create (and Split's new split-off — "specified as intended") and, once left, is NEVER re-entered.
+    EMPTY ⟺ actual = 0. `maxQuantity`/capacity dropped for now — see D15. */
 enum FillState { FULL, PARTIAL, EMPTY }
 /** AdministrativeState — authorization / hold (STORED; set by Lock/Unlock): UNLOCKED / LOCKED.
     `SHUTTING_DOWN` reserved for the reservations era — not modeled in v1. */
@@ -59,16 +65,17 @@ enum AdministrativeState { UNLOCKED, LOCKED }
 
 // ── the entity ──────────────────────────────────────────────────────────────────────
 /** InventoryItem — a discrete, homogeneous, non-overlapping amount of goods under a tenant,
-    classified by an Item (DT-004). Worthiness stored as `degradedQty`; Operational/Fill derived.
-    Identity fields immutable; state fields `var` (the effective timeline). */
+    classified by an Item (DT-004). Worthiness stored as `degradedQty` (Operational/availability
+    derived from it); Fill is STORED (D15). Identity fields immutable; state fields `var`. */
 sig InventoryItem extends Scoped {
   // identity & classification (IMMUTABLE — constant across the trace)
   itemRef:             one EntityId,          // → Item (required, immutable — D1/G7)
   licensePlate:        one LicensePlate,      // handling-unit identity (D9); immutable, globally unique
   serialNumber:        lone SerialNumber,     // D10 individualizer; immutable, persists (even through empty)
   minQuantity:         one Quantity,          // reorder threshold (default zero); not used by Fill
-  maxQuantity:         lone Quantity,         // capacity; drives FULL
   individualizers:     set Individualizer,    // D3 placeholder
+  // fill region (STATE — D15: stored, not derived; FULL=as-created-untouched, never re-entered)
+  var fillState:           one FillState,
   // administrative region (STATE)
   var administrativeState: one AdministrativeState,
   // worthiness (STATE): the UNAVAILABLE portion; absent ⇒ fully available (option (a), D14)
@@ -119,13 +126,9 @@ fun InventoryItem.availabilityStatus: set AvailabilityStatus {
   (some this.degradedQty and not isZero[this.availableQty]) => DEGRADED else none
 }
 
-/** fillState — EMPTY iff actual is zero; FULL iff maxQty present and actual resolvably-equals it;
-    else PARTIAL. */
-fun InventoryItem.fillState: one FillState {
-  isZero[this.actualQuantity.byUnit] => EMPTY
-  else (some this.maxQuantity and semanticEq[this.actualQuantity.byUnit, this.maxQuantity.byUnit] = EQUAL) => FULL
-  else PARTIAL
-}
+// fillState is now a STORED `var` field (D15), not derived — FULL is history-dependent
+// (born-and-untouched), which no function of the current quantities can express. Its EMPTY arm
+// stays pinned to actual=0 by `FillEmptyConsistency`; FULL/PARTIAL is driven by the operations.
 
 /** isSerialized — the item carries a serial number (D10). */
 pred isSerialized[ii: InventoryItem] { some ii.serialNumber }
@@ -165,14 +168,18 @@ fact NoOrphanText           { all x: Text      | eventually some (notes + colorC
 // ── per-state domain invariants — bind LIVE items at EVERY state (`always`) ───────────────────
 // Meaningful under the keyed_order premise (ringAxioms + orderAxioms), which the test root
 // assumes. As `always` facts, every Live InventoryItem is in the cone in every state by construction.
-// G1 / D12 — every stored quantity is ZERO or all-positive (the non-negative cone); `maxQuantity`,
-// when present, is strictly positive (a zero capacity is degenerate — would collide EMPTY/FULL).
+// G1 / D12 — every stored quantity is ZERO or all-positive (the non-negative cone).
 fact ConeNonNegative {
   always all ii: Live |
     classify[ii.actualQuantity.byUnit] in (ZERO + POSITIVE)
     and classify[ii.minQuantity.byUnit] in (ZERO + POSITIVE)          // min: ≥ 0 (Zero = no threshold)
-    and (some ii.maxQuantity  implies classify[ii.maxQuantity.byUnit] = POSITIVE)   // max (if present): strictly > 0
     and (some ii.degradedQty  implies classify[ii.degradedQty.byUnit] in (ZERO + POSITIVE))
+}
+
+// D6 / D15 — the stored Fill state's EMPTY arm is pinned to actual = 0 (so FULL/PARTIAL ⟹ actual > 0).
+// The FULL-vs-PARTIAL distinction is history-driven by the operations, not derivable here.
+fact FillEmptyConsistency {
+  always all ii: Live | ii.fillState = EMPTY iff isZero[ii.actualQuantity.byUnit]
 }
 
 // G3 — EMPTY ⟹ no degradedQty and no lotNumbers (so derived operational is ENABLED, no DEGRADED).

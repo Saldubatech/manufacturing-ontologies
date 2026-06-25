@@ -9,9 +9,10 @@ open resources/inventory_item/inventory_item
  * a not-yet-created / retired atom is outside the world and intentionally unconstrained.
  *
  * Illustrate decisions D1–D14: the stored/derived split, the non-negative cone, the worthiness
- * derivation (ENABLED/DEGRADED/DISABLED from degradedQty), Fill, EMPTY⟹ENABLED, LPN/serial
- * uniqueness, commingled lots, and the forbidden (negative / EMPTY×degraded / degraded>actual /
- * serial-dup / zero-max) states. Operation/transition tests live in tests/operations.als.
+ * derivation (ENABLED/DEGRADED/DISABLED from degradedQty), the stored Fill state (D15), EMPTY⟹
+ * ENABLED, LPN/serial uniqueness, commingled lots, and the forbidden (negative / EMPTY×degraded /
+ * degraded>actual / serial-dup / EMPTY-fill-mismatch) states. Operation/transition tests live in
+ * tests/operations.als.
  */
 
 // The keyed_order premise — a commutative-ring Scalar with a posited total order. Under it the
@@ -48,8 +49,8 @@ run unit_inventoryItem_locked {
   some ii: Live | ii.administrativeState = LOCKED and not isZero[ii.actualQuantity.byUnit]
 } for 5 but 3 Scalar
 
-// FULL: actual resolvably-equals maxQty.
-run unit_inventoryItem_full { some ii: Live | ii.fillState = FULL } for 5 but 3 Scalar
+// FULL: a born-and-untouched item (D15 — stored, no longer a capacity comparison).
+run unit_inventoryItem_full { some ii: Live | ii.fillState = FULL and not isZero[ii.actualQuantity.byUnit] } for 5 but 3 Scalar
 
 // Commingled lots: an item holding ≥ 2 lot numbers (D11).
 run unit_inventoryItem_commingledLots { some ii: Live | gt[#ii.lotNumbers, 1] } for 5 but 3 Scalar
@@ -91,16 +92,13 @@ assert unit_inventoryItem_worthinessDerivation {
 }
 check unit_inventoryItem_worthinessDerivation for 6 but 3 Scalar
 
-// FULL ⟺ non-empty ∧ maxQty present ∧ actual resolvably-equals it. (The non-empty guard
-// matters: an EMPTY item whose maxQty is also the zero-Quantity is EMPTY, not FULL.)
-assert unit_inventoryItem_fullDefinition {
-  always all ii: Live |
-    ii.fillState = FULL iff
-      (not isZero[ii.actualQuantity.byUnit]
-       and some ii.maxQuantity
-       and semanticEq[ii.actualQuantity.byUnit, ii.maxQuantity.byUnit] = EQUAL)
+// Fill/EMPTY consistency (D6/D15): the stored Fill state's EMPTY arm tracks actual = 0 exactly,
+// so FULL and PARTIAL both imply on-hand > 0. (FULL-vs-PARTIAL is history-driven by the ops, not
+// statically definable — see tests/lifecycle.als.)
+assert unit_inventoryItem_fillEmptyConsistency {
+  always all ii: Live | ii.fillState = EMPTY iff isZero[ii.actualQuantity.byUnit]
 }
-check unit_inventoryItem_fullDefinition for 6 but 3 Scalar
+check unit_inventoryItem_fillEmptyConsistency for 6 but 3 Scalar
 
 // License plates are unique across items (D9) — immutable, so this is a whole-trace property.
 assert unit_inventoryItem_lpnUnique { all disj a, b: InventoryItem | a.licensePlate != b.licensePlate }
@@ -135,7 +133,7 @@ run unit_inventoryItem_serialDupImpossible {
     a.tenantId = b.tenantId and a.itemRef = b.itemRef and some a.serialNumber and a.serialNumber = b.serialNumber
 } for 6 but 3 Scalar
 
-// No zero-capacity item: maxQuantity, when present, is strictly positive (a zero capacity is degenerate).
-run unit_inventoryItem_zeroMaxImpossible {
-  some ii: Live | some ii.maxQuantity and isZero[ii.maxQuantity.byUnit]
+// EMPTY item cannot be FULL or PARTIAL, and vice-versa (the EMPTY⟺actual=0 pin, D15).
+run unit_inventoryItem_emptyFillMismatchImpossible {
+  some ii: Live | not (ii.fillState = EMPTY iff isZero[ii.actualQuantity.byUnit])
 } for 5 but 3 Scalar

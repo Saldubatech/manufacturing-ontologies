@@ -6,7 +6,7 @@ open resources/inventory_item/inventory_item
  * InventoryItem operations (v1) as TRANSITION PREDICATES over the effective timeline (Phase B,
  * DT-004 / DT-006). Each predicate relates the current state to the next (`'` = next-state value):
  * guards read the current state, postconditions constrain the next. Identity is preserved for free
- * (the immutable fields — eId, itemRef, licensePlate, serialNumber, min/maxQuantity — are constant
+ * (the immutable fields — eId, itemRef, licensePlate, serialNumber, minQuantity — are constant
  * across the trace); Create/Delete/WriteOff/Merge move atoms in and out of `Live`.
  *
  * The companion design spec is workbook resources/inventory_item/operations.md (parameters,
@@ -32,25 +32,52 @@ pred sameLoc[ii: InventoryItem]   { ii.locator' = ii.locator }
 pred sameAdmin[ii: InventoryItem] { ii.administrativeState' = ii.administrativeState }
 /** sameDesc — descriptive notes/colorCode unchanged. */
 pred sameDesc[ii: InventoryItem]  { ii.notes' = ii.notes and ii.colorCode' = ii.colorCode }
+/** sameFill — fill state unchanged (D15: FULL survives ops that don't change the real quantity). */
+pred sameFill[ii: InventoryItem]  { ii.fillState' = ii.fillState }
+/** demoteFill — leave FULL: PARTIAL, or EMPTY when the new on-hand is zero (D15). */
+pred demoteFill[ii: InventoryItem] { ii.fillState' = (isZero[ii.actualQuantity'.byUnit] => EMPTY else PARTIAL) }
 /** sameState — every mutable field unchanged (a fully-framed item). */
-pred sameState[ii: InventoryItem] { sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] }
+pred sameState[ii: InventoryItem] { sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] }
 /** othersUnchanged — every OTHER live item is fully framed (the operation touches only `xs`). */
 pred othersUnchanged[xs: set InventoryItem] { all jj: Live - xs | sameState[jj] }
 
+// ── the legal-transition relation ────────────────────────────────────────────────────────
+/** someOp — SOME operation fires this step (a representative instantiation of each). The legal-
+    transition relation; trace-level lifecycle checks condition on it (`always (someOp implies …)`)
+    so they constrain only real operation steps, not the arbitrary var changes Alloy otherwise allows. */
+pred someOp {
+  (some ii: InventoryItem, q: Quantity | create[ii, q])
+  or (some ii: InventoryItem | delete[ii])
+  or (some ii: InventoryItem | writeOff[ii])
+  or (some ii: InventoryItem, q: Quantity | replenish[ii, q, none])
+  or (some ii: InventoryItem, q: Quantity | consume[ii, q])
+  or (some ii: InventoryItem, loc: PhysicalLocator | move[ii, loc])
+  or (some ii: InventoryItem, loc: PhysicalLocator | forceMove[ii, loc])
+  or (some ii: InventoryItem | lock[ii])
+  or (some ii: InventoryItem | unlock[ii])
+  or (some ii: InventoryItem, d: Quantity | inspect[ii, d])
+  or (some ii: InventoryItem | inspect[ii, none])
+  or (some ii: InventoryItem, g: Quantity | adjustQuantity[ii, g, none])
+  or (some ii: InventoryItem, t: Text | adjustProperties[ii, t, none])
+  or (some ii: InventoryItem, g: Quantity | rePack[ii, g, none])
+  or (some o, n: InventoryItem, q: Quantity | split[o, n, q, none])
+  or (some s, a: InventoryItem | merge[s, a])
+}
+
 // ── lifecycle ─────────────────────────────────────────────────────────────────────────
 /** Create — bring a fresh item into existence with a strictly positive initial quantity, UNLOCKED,
-    no degraded/lots/locator/descriptors. Identity (itemRef, licensePlate, serial, min/max) is the
-    atom's eternal value; `qty ≤ maxQuantity` if a capacity is set. */
+    no degraded/lots/locator/descriptors, fill = FULL (D15). Identity (itemRef, licensePlate, serial,
+    minQuantity) is the atom's eternal value. */
 pred create[ii: InventoryItem, qty: Quantity] {
   ii not in Live and ii not in Retired                            // pre: a genuinely fresh atom (never lived)
   classify[qty.byUnit] = POSITIVE                                 // strictly positive (no empty placeholders)
-  some ii.maxQuantity implies lte[qty.byUnit, ii.maxQuantity.byUnit]   // qty ≤ max (else Rejected:MaxExceeded)
   // post
   Live' = Live + ii
   Retired' = Retired
   ii.actualQuantity' = qty
   no ii.degradedQty'
   no ii.lotNumbers'
+  ii.fillState' = FULL                                            // D15: born FULL (received as intended)
   ii.administrativeState' = UNLOCKED
   no ii.locator'
   no ii.notes' and no ii.colorCode'
@@ -84,12 +111,12 @@ pred replenish[ii: InventoryItem, delta: Quantity, lots: set LotNumber] {
   ii.administrativeState = UNLOCKED                               // else Rejected:Locked
   ii.operationalState != DISABLED                                 // else Rejected:Unfit
   classify[delta.byUnit] = POSITIVE                               // else Rejected:NonPositive
-  some ii.maxQuantity implies lte[add[ii.actualQuantity.byUnit, delta.byUnit], ii.maxQuantity.byUnit]  // Rejected:MaxExceeded
   isSerialized[ii] implies isZero[ii.actualQuantity.byUnit]       // serialized: only from Zero (D10)
   // post
   ii.actualQuantity'.byUnit = add[ii.actualQuantity.byUnit, delta.byUnit]
   ii.lotNumbers' = ii.lotNumbers + lots
   ii.degradedQty' = ii.degradedQty
+  ii.fillState' = PARTIAL                                         // D15: real quantity changed (actual' > 0)
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -112,6 +139,7 @@ pred consume[ii: InventoryItem, amount: Quantity] {
   (isZero[ii.actualQuantity'.byUnit])
      => (no ii.degradedQty' and no ii.lotNumbers')                // consume-to-zero: husk
      else (ii.degradedQty' = ii.degradedQty and ii.lotNumbers' = ii.lotNumbers)
+  demoteFill[ii]                                                  // D15: → EMPTY (to zero) or PARTIAL
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -124,7 +152,7 @@ pred move[ii: InventoryItem, loc: PhysicalLocator] {
   ii in Live
   ii.administrativeState = UNLOCKED                               // else Rejected:Locked (use ForceMove)
   ii.locator' = loc
-  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D15: locator change preserves FULL
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -135,7 +163,7 @@ pred move[ii: InventoryItem, loc: PhysicalLocator] {
 pred forceMove[ii: InventoryItem, loc: PhysicalLocator] {
   ii in Live
   ii.locator' = loc
-  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D15: locator change preserves FULL
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -162,6 +190,7 @@ pred split[orig, nu: InventoryItem, splitOff: lone Quantity, degSplit: lone Quan
     nu.actualQuantity'.byUnit = soTot
     (isZero[soDeg]) => no nu.degradedQty' else nu.degradedQty'.byUnit = soDeg
     nu.lotNumbers' = orig.lotNumbers                              // full lot copy (D11)
+    nu.fillState' = FULL                                          // D15: born FULL ("specified as intended")
     nu.administrativeState' = orig.administrativeState
     nu.locator' = orig.locator
     nu.notes' = orig.notes and nu.colorCode' = orig.colorCode
@@ -171,6 +200,7 @@ pred split[orig, nu: InventoryItem, splitOff: lone Quantity, degSplit: lone Quan
       => (no orig.degradedQty' and no orig.lotNumbers')           // husk
       else { (isZero[remDeg]) => no orig.degradedQty' else orig.degradedQty'.byUnit = remDeg
              orig.lotNumbers' = orig.lotNumbers }
+    demoteFill[orig]                                              // D15: remainder's real quantity changed
     sameLoc[orig] and sameAdmin[orig] and sameDesc[orig]
   }
   Live' = Live + nu
@@ -190,6 +220,7 @@ pred merge[surv, absorbed: InventoryItem] {
   let dsum = add[surv.degradedQty.byUnit, absorbed.degradedQty.byUnit] |
     (isZero[dsum]) => no surv.degradedQty' else surv.degradedQty'.byUnit = dsum
   surv.lotNumbers' = surv.lotNumbers + absorbed.lotNumbers
+  demoteFill[surv]                                                // D15: survivor's real quantity changed (→ PARTIAL)
   sameLoc[surv] and sameAdmin[surv] and sameDesc[surv]
   Live' = Live - absorbed
   Retired' = Retired + absorbed
@@ -199,7 +230,8 @@ pred merge[surv, absorbed: InventoryItem] {
 // ── re-expression / correction / property ─────────────────────────────────────────────────
 /** rePack — re-express the good and/or degraded portion in a new UoM basis (caller-asserted, no
     correctness claim). Non-serialized, non-empty, emptiness-preserving (post non-empty); degraded ≤
-    actual; ≤ maxQuantity in the new basis; lots unchanged. */
+    actual; lots unchanged. PRESERVES Fill (D15): re-expressing units is NOT a change in the real
+    quantity, so a FULL item rePacked stays FULL. */
 pred rePack[ii: InventoryItem, newGood: lone Quantity, newDeg: lone Quantity] {
   ii in Live
   not isSerialized[ii]                                            // else Rejected:Serialized
@@ -211,12 +243,12 @@ pred rePack[ii: InventoryItem, newGood: lone Quantity, newDeg: lone Quantity] {
   let gmap = (some newGood => newGood.byUnit else ii.availableQty) |
   let amap = add[gmap, dmap] {
     lte[dmap, amap]                                               // degraded ≤ actual (else Rejected:Incompatible)
-    some ii.maxQuantity implies lte[amap, ii.maxQuantity.byUnit]  // else Rejected:MaxExceeded
     not isZero[amap]                                              // emptiness-preserving (non-zero stays non-zero)
     ii.actualQuantity'.byUnit = amap
     (isZero[dmap]) => no ii.degradedQty' else ii.degradedQty'.byUnit = dmap
   }
   ii.lotNumbers' = ii.lotNumbers
+  sameFill[ii]                                                    // D15: re-expression preserves FULL
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -238,6 +270,7 @@ pred adjustQuantity[ii: InventoryItem, observedGood: Quantity, observedDeg: lone
       else { (isZero[dmap]) => no ii.degradedQty' else ii.degradedQty'.byUnit = dmap
              ii.lotNumbers' = ii.lotNumbers }
   }
+  demoteFill[ii]                                                  // D15: a count is a real-quantity write
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -251,7 +284,7 @@ pred adjustProperties[ii: InventoryItem, newNotes: lone Text, newColor: lone Tex
   some newNotes or some newColor                                 // non-empty updates (else Rejected:NotApplicable)
   (some newNotes => ii.notes'     = newNotes else ii.notes'     = ii.notes)
   (some newColor => ii.colorCode' = newColor else ii.colorCode' = ii.colorCode)
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameFill[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -268,7 +301,7 @@ pred inspect[ii: InventoryItem, deg: lone Quantity] {
   // post
   ii.actualQuantity' = ii.actualQuantity
   (no deg or isZero[deg.byUnit]) => no ii.degradedQty' else ii.degradedQty' = deg
-  sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D15: inspection preserves FULL
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -279,7 +312,7 @@ pred lock[ii: InventoryItem] {
   ii in Live
   ii.administrativeState = UNLOCKED                              // else Rejected:NotApplicable
   ii.administrativeState' = LOCKED
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -290,7 +323,7 @@ pred unlock[ii: InventoryItem] {
   ii in Live
   ii.administrativeState = LOCKED                                // else Rejected:NotApplicable
   ii.administrativeState' = UNLOCKED
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]

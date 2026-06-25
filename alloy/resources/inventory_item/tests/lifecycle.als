@@ -44,6 +44,27 @@ assert unit_lc_lpnNeverReused {
 }
 check unit_lc_lpnNeverReused for 6 but 3 Scalar
 
+// ── D15 Fill: FULL is one-shot (created/born FULL, never re-entered) ──────────────────────
+
+// Once a live item is not FULL, no operation makes it FULL again (FULL is minted only on a fresh
+// atom — by Create, or Split's new split-off). Conditioned on `someOp` so it ranges over real
+// operation steps (without it, Alloy's free var-changes could flip fillState spuriously).
+assert unit_lc_neverReturnsToFull {
+  always (someOp implies all ii: InventoryItem |
+    (ii in Live and ii.fillState != FULL) implies after (ii not in Live or ii.fillState != FULL))
+}
+check unit_lc_neverReturnsToFull for 6 but 3 Scalar
+
+// FULL → (consume) PARTIAL → (consume-to-zero) EMPTY → (replenish) PARTIAL — and never FULL again.
+run unit_lc_fullToPartialPermanent {
+  some ii: InventoryItem, a1, a2, r: Quantity |
+    ii.fillState = FULL
+    and consume[ii, a1]
+    and after (ii.fillState = PARTIAL and consume[ii, a2])
+    and after after (ii.fillState = EMPTY and replenish[ii, r, none])
+    and after after after (ii.fillState = PARTIAL)            // revived to PARTIAL, NOT FULL
+} for 6 but 3 Scalar
+
 // ── representative end-to-end lifecycle (expect SAT) ──────────────────────────────────────
 
 // Create → Lock → Unlock → Consume-to-zero → Delete: a full birth-to-retirement path.
