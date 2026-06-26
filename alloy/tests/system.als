@@ -4,7 +4,7 @@ module tests/system
 // (The X.731 behavioral spike was archived to alloy-sample/kanban_sim/.)
 open meta/kernel
 open reference_data/item/item       // transitively: item_supply, business_affiliate, business_role
-open resources/kanban_card/kanban_card
+open resources/kanban_card/baseline/kanban_card   // proven baseline; re-point to the new model when it matures (KC-MH-9)
 
 // Smoke: the union of the live modules admits a consistent instance.
 pred sys_modelLoads {}

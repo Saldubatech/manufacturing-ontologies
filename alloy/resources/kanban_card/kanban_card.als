@@ -1,78 +1,28 @@
 module resources/kanban_card/kanban_card
 
-open meta/kernel
-open meta/values                 // Quantity, PhysicalLocator
-open meta/state_machine/machine  // State, Signal, StateMachine, firedInto, …
-open reference_data/item/item         // Item (soft-ref target); transitively ItemSupply for the shared-Quantity rule
+open meta/kernel                                  // Scoped, EntityId, resolve
+open meta/values                                  // Quantity, PhysicalLocator
+open meta/state_machine/machine                   // print StateMachine + firedInto
+open reference_data/item/item                     // Item (soft-ref target)
+open resources/processing_network/processing_network  // Loop (soft-ref target) [KC-MH-5]
+open resources/kanban_card/card_cycle             // CardCycle (the child aggregate)
 
 /*
- * Kanban Card — the demand signal at the heart of replenishment. Tenant-scoped
- * aggregate root. Code-faithful to the operations backend
- * (cards/arda/operations/resources/kanban, KanbanCard.kt); see the published docs:
- * https://arda-cards.github.io  →  Current System / Functional / Resources / Kanban Cards.
+ * KanbanCard — the STATIC container (KD13): identity + durable configuration + the physical/print
+ * artifact, changed only by administrative edits. All dynamic state lives on its CardCycle children
+ * (card_cycle.als). Parent→child aggregation modeled exactly like Item→ItemSupply: `cycles` is a
+ * direct containment relation, `currentCycle` is the distinguished member (≙ Item.defaultSupply),
+ * and the ownership/ordering facts live HERE in the parent (≙ ItemSupplyOwnership in item.als).
  *
- * Two orthogonal state machines (operational + print). Each is a REIFIED
- * StateMachine (meta/state_machine, DT-003), so the generic well-formedness,
- * determinism, reachability and live-signal properties apply uniformly; the
- * snapshot-consistency rule (DT-001.02 (b)) is the generic `firedInto`. No temporal
- * trace / event history — event timestamp/author and the kanban_card_event stream
- * belong to the deferred bitemporal layer (DT-001.03). Loop is documented but
- * unimplemented in code, so it is not modeled here.
+ * DRAFT — tentative hypotheses tagged [KC-MH-n]; see workbook .../kanban_card/model-draft.md.
+ * The baseline code-faithful model is preserved under resources/kanban_card/baseline/ [KC-MH-9].
  */
 
-// ---------------------------------------------------------------------------
-// Operational state machine (KanbanCardStatus / KanbanCardEventType — code names).
-// Enums are the long form (abstract sig + one sigs) so they extend State/Signal.
-// ---------------------------------------------------------------------------
-// (Code's KanbanCardStatus.UNKNOWN is a null/unknown sentinel — an implementation
-// artifact, not a lifecycle state — so it is omitted from the model.)
-/** KanbanCardStatus — the operational lifecycle state of a kanban card. */
-abstract sig KanbanCardStatus extends State {}
-one sig AVAILABLE, REQUESTING, REQUESTED, IN_PROCESS, READY,
-        FULFILLING, FULFILLED, IN_USE, DEPLETED extends KanbanCardStatus {}
-
-/** KanbanCardEventType — an event driving a card's operational lifecycle. */
-abstract sig KanbanCardEventType extends Signal {}
-one sig REQUEST, ACCEPT, SHELVE, START_PROCESSING, COMPLETE_PROCESSING,
-        FULFILL, RECEIVE, USE, DEPLETE, WITHDRAW, NONE, FAILED_ACTION extends KanbanCardEventType {}
-
-one sig KanbanOpMachine extends StateMachine {}
-abstract sig KOpTransition extends Transition {}
-// Code's LifecycleImpl maps event → state regardless of current state, so every
-// transition's `from` is ANY (all states; pinned in the machine fact below).
-one sig KOp_request  extends KOpTransition {} { on = REQUEST             and to = REQUESTING }
-one sig KOp_accept   extends KOpTransition {} { on = ACCEPT              and to = REQUESTED }
-one sig KOp_shelve   extends KOpTransition {} { on = SHELVE              and to = REQUESTING }
-one sig KOp_start    extends KOpTransition {} { on = START_PROCESSING    and to = IN_PROCESS }
-one sig KOp_complete extends KOpTransition {} { on = COMPLETE_PROCESSING and to = READY }
-one sig KOp_fulfill  extends KOpTransition {} { on = FULFILL             and to = FULFILLING }
-one sig KOp_receive  extends KOpTransition {} { on = RECEIVE             and to = FULFILLED }
-one sig KOp_use      extends KOpTransition {} { on = USE                 and to = IN_USE }
-one sig KOp_deplete  extends KOpTransition {} { on = DEPLETE             and to = DEPLETED }
-one sig KOp_withdraw extends KOpTransition {} { on = WITHDRAW            and to = AVAILABLE }
-one sig KOp_none     extends KOpTransition {} { on = NONE                and no to }   // "no change"
-one sig KOp_fail     extends KOpTransition {} { on = FAILED_ACTION       and no to }   // "no change"
-fact KanbanOpMachineDef {
-  KanbanOpMachine.states      = KanbanCardStatus
-  KanbanOpMachine.signals     = KanbanCardEventType
-  KanbanOpMachine.start       = AVAILABLE
-  KanbanOpMachine.transitions = KOpTransition
-  all t: KOpTransition | t.from = KanbanCardStatus and no t.guard   // ANY source, no guards
-}
-
-// ---------------------------------------------------------------------------
-// Print state machine. Alloy enum members are GLOBAL singletons, so print states/
-// signals are PS_/PE_-prefixed to avoid clashing with the operational ones
-// (LOST, NONE). PS_* ↔ NOT_PRINTED/PRINTED/LOST/DEPRECATED/RETIRED;
-// PE_* ↔ PRINT/REPRINT/LOST/DEPRECATE/RETIRE/DESTROY/UNMARK/NONE.
-// (Code's KanbanCardPrintStatus.UNKNOWN is a null sentinel — omitted, as above.)
-// ---------------------------------------------------------------------------
-/** KanbanCardPrintStatus — the print/physical-artifact state of a kanban card. */
+// ── print lifecycle (the durable artifact — KD3; lives on the card) ──────────────────────
+/** KanbanCardPrintStatus — print/physical-artifact state (PS_-prefixed; UNKNOWN omitted). */
 abstract sig KanbanCardPrintStatus extends State {}
-one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED
-        extends KanbanCardPrintStatus {}
-
-/** KanbanCardPrintEventType — an event driving a card's print lifecycle. */
+one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED extends KanbanCardPrintStatus {}
+/** KanbanCardPrintEventType — event driving the print lifecycle (PE_-prefixed). */
 abstract sig KanbanCardPrintEventType extends Signal {}
 one sig PE_PRINT, PE_REPRINT, PE_LOST, PE_DEPRECATE, PE_RETIRE, PE_DESTROY, PE_UNMARK, PE_NONE
         extends KanbanCardPrintEventType {}
@@ -85,8 +35,8 @@ one sig KPr_lost      extends KPrintTransition {} { on = PE_LOST      and to = P
 one sig KPr_deprecate extends KPrintTransition {} { on = PE_DEPRECATE and to = PS_DEPRECATED }
 one sig KPr_retire    extends KPrintTransition {} { on = PE_RETIRE    and to = PS_RETIRED }
 one sig KPr_unmark    extends KPrintTransition {} { on = PE_UNMARK    and to = PS_NOT_PRINTED }
-one sig KPr_destroy   extends KPrintTransition {} { on = PE_DESTROY   and no to }   // clears status → modeled "no change"
-one sig KPr_none      extends KPrintTransition {} { on = PE_NONE      and no to }   // "no change"
+one sig KPr_destroy   extends KPrintTransition {} { on = PE_DESTROY   and no to }
+one sig KPr_none      extends KPrintTransition {} { on = PE_NONE      and no to }
 fact KanbanPrintMachineDef {
   KanbanPrintMachine.states      = KanbanCardPrintStatus
   KanbanPrintMachine.signals     = KanbanCardPrintEventType
@@ -94,73 +44,77 @@ fact KanbanPrintMachineDef {
   KanbanPrintMachine.transitions = KPrintTransition
   all t: KPrintTransition | t.from = KanbanCardPrintStatus and no t.guard
 }
+/** KanbanCardPrintEvent — embedded snapshot of the card's last print event. */
+sig KanbanCardPrintEvent { type: one KanbanCardPrintEventType }
 
-// ---------------------------------------------------------------------------
-// Event value objects (embedded snapshots of the last lifecycle/print event).
-// No identity. Code also carries atTime (TimeCoordinates) + author — deferred to
-// the bitemporal layer, so not modeled here. `type` is the driving Signal.
-// ---------------------------------------------------------------------------
-/** KanbanCardEvent — an embedded snapshot of a card's last operational event (type + from/to locations). */
-sig KanbanCardEvent {
-  type:      one KanbanCardEventType,
-  fromWhere: lone PhysicalLocator,
-  toWhere:   lone PhysicalLocator
-}
-/** KanbanCardPrintEvent — an embedded snapshot of a card's last print event. */
-sig KanbanCardPrintEvent {
-  type: one KanbanCardPrintEventType
-}
-
-/** SerialNumber — a kanban card's natural identifier, unique within a tenant (opaque handle). */
+/** SerialNumber — the card's natural identifier, unique within a tenant (opaque). */
 sig SerialNumber {}
 
-// ---------------------------------------------------------------------------
-// The aggregate root.
-// ---------------------------------------------------------------------------
-/** KanbanCard — a replenishment demand signal: a tenant-scoped card classifying an Item,
-    with orthogonal operational + print state. */
+// ── the static card ──────────────────────────────────────────────────────────────────────
+/** KanbanCard — the static container + the aggregate root of its CardCycles (KD13). */
 sig KanbanCard extends Scoped {
-  serialNumber:   one SerialNumber,
-  itemRef:        one EntityId,            // soft ref → Item (code: ItemReference handle)
-  cardQuantity:   lone Quantity,
-  locator:        lone PhysicalLocator,
-  status:         lone KanbanCardStatus,
-  printStatus:    lone KanbanCardPrintStatus,
-  lastEvent:      lone KanbanCardEvent,
-  lastPrintEvent: lone KanbanCardPrintEvent
+  // identity & durable configuration (administrative edits only)
+  serialNumber:    one SerialNumber,
+  itemRef:         one EntityId,                 // → Item (immutable classifier)
+  nominalQuantity: lone Quantity,                // durable target (overridable per cycle)
+  loopRef:         lone EntityId,                // → Loop [KC-MH-5 / KD11]
+  // the physical/print artifact (durable; spans cycles)
+  printStatus:     lone KanbanCardPrintStatus,
+  lastPrintEvent:  lone KanbanCardPrintEvent,
+  // cycle aggregation (parent→child, ≙ Item.supplies)
+  cycles:          set CardCycle                 // direct containment (no back-ref)
+  // [KC-MH-11] currentCycle is now DERIVED from the health axis (the live cycle) — see the fun
+  // below; no longer a stored soft-ref, so the Item.defaultSupply parallel (KC-MH-1) is dropped.
 }
 
-// Outgoing soft references: just the item handle. (tenantId is added by the kernel's
-// derived `refs`, so cross-tenant isolation already covers the item link.)
-fact KanbanCardRefs { all c: KanbanCard | c.dataRefs = c.itemRef }
+// Outgoing soft references (cycles is a direct relation, kept in-tenant by CardCycleOwnership).
+fact KanbanCardRefs { all k: KanbanCard | k.dataRefs = k.itemRef + k.loopRef }
 
-// Tight by default: a resolved item handle must actually be an Item. (Dangling /
-// cross-Universe refs are still allowed — the soft-reference case.)
-fact ItemRefIntegrity {
-  all c: KanbanCard | let i = resolve[c.itemRef] | some i implies i in Item
-}
+// A resolved item handle is an Item; a resolved loop handle is a Loop (dangling allowed — soft ref).
+fact ItemRefIntegrity { all k: KanbanCard | let i = resolve[k.itemRef] | some i implies i in Item }
+fact LoopRefIntegrity { all k: KanbanCard | let l = resolve[k.loopRef] | some l implies l in Loop }
 
-// Business rule: serial numbers are unique within a tenant (code: KanbanCardService).
+// Serial numbers are unique within a tenant.
 fact SerialNumberUniqueInTenant {
   all disj a, b: KanbanCard | a.tenantId = b.tenantId implies a.serialNumber != b.serialNumber
 }
 
-// DT-001.02 (b), reified: a card's status is consistent with the result of its last
-// operational event (and is forced present when that event is state-changing).
-fact KanbanOpConsistency {
-  all c: KanbanCard | some c.lastEvent implies
-    firedInto[KanbanOpMachine, c.status, c.lastEvent.type]
-}
+// Print snapshot consistency (≙ the operational one on CardCycle).
 fact KanbanPrintConsistency {
-  all c: KanbanCard | some c.lastPrintEvent implies
-    firedInto[KanbanPrintMachine, c.printStatus, c.lastPrintEvent.type]
+  all k: KanbanCard | some k.lastPrintEvent implies
+    firedInto[KanbanPrintMachine, k.printStatus, k.lastPrintEvent.type]
 }
 
-// Tight by default: no orphan value atoms owned by the card. Quantity and
-// PhysicalLocator are SHARED value objects (used across modules) and are therefore
-// orphan-EXEMPT (DT-004 Q8) — only the card-local handles are constrained here.
-fact NoOrphanCardValues {
-  all e: KanbanCardEvent      | e in KanbanCard.lastEvent
-  all e: KanbanCardPrintEvent | e in KanbanCard.lastPrintEvent
-  all s: SerialNumber         | s in KanbanCard.serialNumber
+// ── parent→child aggregation & ordering (≙ ItemSupplyOwnership, lives in the parent) ──────
+// Each cycle belongs to exactly one card; children inherit the tenant.
+fact CardCycleOwnership {
+  all c: CardCycle | one k: KanbanCard | c in k.cycles
+  all k: KanbanCard, c: k.cycles | c.tenantId = k.tenantId
 }
+// [KC-MH-11] the LIVE cycle is the open/current one: at most one per card, and it is the chain TAIL
+// (KC-MH-8 — nothing in the card succeeds it). done/indeterminate cycles are closed/unclear.
+fact LiveCycleIsOpenTail {
+  all k: KanbanCard {
+    lone c: k.cycles | c.executionStatus in liveCycleStatus                     // ≤ 1 live cycle
+    all c: k.cycles | c.executionStatus in liveCycleStatus implies
+      (no s: k.cycles | s.precededBy = c)                                        // the live cycle is the tail
+  }
+}
+// [KC-MH-2] the precededBy chain stays within the card's own cycles (siblings), and each card has a
+// single chain (one head) — so a card's cycles are one totally-ordered, non-overlapping series.
+fact PrecededByWithinCard {
+  all k: KanbanCard, c: k.cycles | some c.precededBy implies c.precededBy in k.cycles
+}
+fact OneChainPerCard { all k: KanbanCard | lone { c: k.cycles | no c.precededBy } }
+
+// Tight by default: no orphan card-local value/handle atoms.
+fact NoOrphanSerialNumber   { all s: SerialNumber          | s in KanbanCard.serialNumber }
+fact NoOrphanPrintEvent     { all e: KanbanCardPrintEvent  | e in KanbanCard.lastPrintEvent }
+
+/** currentCycle — DERIVED [KC-MH-11]: the card's live (open) cycle, if any. `lone` by
+    `LiveCycleIsOpenTail` (≤ 1 live cycle). Supersedes the stored soft-ref of KC-MH-1. */
+fun KanbanCard.currentCycle: lone CardCycle { { c: this.cycles | c.executionStatus in liveCycleStatus } }
+
+/** cardInCirculation — the card has a live cycle. AVAILABLE (KC-MH-6) ⟺ NOT in circulation
+    (no currentCycle); the 8 cycle states never include AVAILABLE. */
+pred cardInCirculation[k: KanbanCard] { some k.currentCycle }

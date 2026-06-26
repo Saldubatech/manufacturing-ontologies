@@ -4,67 +4,109 @@ open meta/kernel
 open meta/values
 open meta/state_machine/machine
 open reference_data/item/item
+open resources/processing_network/processing_network
+open resources/kanban_card/card_cycle
 open resources/kanban_card/kanban_card
 
 /*
- * Unit suite for the Kanban Card. Idiom: SAT scenarios prove coherent cards/machines
- * exist; UNSAT scenarios prove each tight invariant forbids its bad case (§6).
+ * DRAFT unit suite for the split KanbanCard + CardCycle model [KC-MH-*]. `unit_kc_*` names keep it
+ * distinct from the baseline suite. SAT = a coherent structure exists; UNSAT = an invariant forbids
+ * its bad case. NOTE [KC-MH-7]: this is the ATEMPORAL structural draft — it deliberately PERMITS
+ * illegal operational *sequences* (those are closed by the deferred (c)/forward-skip layer, KQ-S1).
  *
- * Scope note (DT-003): the reified one-sig families are exact — 14 State (9 op + 5
- * print), 20 Signal (12 + 8), 20 Transition, 2 StateMachine, 0 Guard — so the
- * commands pin those and leave the variable entity sigs at 6.
+ * Machine scope (DT-003): 14 State (9 op + 5 print), 20 Signal (12 + 8), 20 Transition, 2 StateMachine, 0 Guard.
  */
 
-// SAT: a coherent card whose item handle resolves to an in-scope Item, with a last
-// event and a consistent status.
-pred unit_kanbanCard_coherent {
-  some c: KanbanCard | {
-    some i: Item | resolve[c.itemRef] = i
-    some c.lastEvent
-    some c.status
+// ── SAT: coherent structures ──────────────────────────────────────────────────────────────
+// A card in circulation: a 2-cycle precededBy chain, currentCycle = the tail, item resolves.
+run unit_kc_twoCycleChainCurrent {
+  some k: KanbanCard, disj c1, c2: CardCycle | {
+    k.cycles = c1 + c2
+    no c1.precededBy and c2.precededBy = c1            // chain head c1 → tail c2
+    c1.executionStatus = COMPLETE                       // c1 closed
+    c2.executionStatus = ACTIVE                         // c2 live → the derived currentCycle (the tail)
+    k.currentCycle = c2
+    some i: Item | resolve[k.itemRef] = i
   }
-}
-run unit_kanbanCard_coherent
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
 
-// UNSAT: a card whose status is not a valid result of its last operational event.
-pred unit_kanbanCard_badStatusPairing {
-  some c: KanbanCard | some c.lastEvent and not firedInto[KanbanOpMachine, c.status, c.lastEvent.type]
-}
-run unit_kanbanCard_badStatusPairing
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+// A card OUT of circulation (KC-MH-6): has a cycle (history) but no currentCycle — "AVAILABLE".
+run unit_kc_outOfCirculation {
+  some k: KanbanCard | some k.cycles and no k.currentCycle
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
 
-// UNSAT: a card whose print status is not a valid result of its last print event.
-pred unit_kanbanCard_badPrintPairing {
-  some c: KanbanCard | some c.lastPrintEvent and not firedInto[KanbanPrintMachine, c.printStatus, c.lastPrintEvent.type]
-}
-run unit_kanbanCard_badPrintPairing
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+// A loaded cycle carrying materials, sourced by an order (untyped refs — KC-MH-3/4).
+run unit_kc_loadedCycle {
+  some c: CardCycle | some c.materials and some c.sourcedBy and c.status = IN_USE
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
 
-// UNSAT: a card referencing an Item in a different tenant (kernel cross-tenant isolation).
-pred unit_kanbanCard_crossTenantItem {
-  some c: KanbanCard | let i = resolve[c.itemRef] |
-    some i and i in Item and i.tenantId != c.tenantId
-}
-run unit_kanbanCard_crossTenantItem
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+// A card whose loop resolves to a Loop (KC-MH-5).
+run unit_kc_cardOnLoop {
+  some k: KanbanCard | some l: Loop | resolve[k.loopRef] = l
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
 
-// UNSAT: two cards sharing a serial number within one tenant.
-pred unit_kanbanCard_serialClashInTenant {
+// ── UNSAT: structural invariants forbid the bad case ────────────────────────────────────────
+// KC-MH-6: a CardCycle can never be AVAILABLE (that is card-level).
+run unit_kc_cycleAvailableImpossible {
+  some c: CardCycle | c.status = AVAILABLE
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Ownership: every cycle belongs to exactly one card — no orphan cycle.
+run unit_kc_orphanCycleImpossible {
+  some c: CardCycle | no k: KanbanCard | c in k.cycles
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Ownership: a cycle shared by two cards.
+run unit_kc_sharedCycleImpossible {
+  some disj a, b: KanbanCard | some c: CardCycle | c in a.cycles and c in b.cycles
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Ordering: the precededBy chain is acyclic.
+run unit_kc_precededCycleImpossible {
+  some c: CardCycle | c in c.^precededBy
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Ordering: linear — no two cycles share a predecessor (no fork).
+run unit_kc_forkedChainImpossible {
+  some disj a, b: CardCycle | some a.precededBy and a.precededBy = b.precededBy
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Ordering: precededBy stays within the same card (no cross-card link).
+run unit_kc_crossCardPrecededImpossible {
+  some disj a, b: KanbanCard, c: a.cycles | some c.precededBy and c.precededBy in b.cycles
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// The LIVE (open/current) cycle must be the TAIL (KC-MH-8/11) — not one that has a successor.
+run unit_kc_liveNotTailImpossible {
+  some k: KanbanCard, c: k.cycles | c.executionStatus in liveCycleStatus and (some s: k.cycles | s.precededBy = c)
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// At most one LIVE (open) cycle per card (KC-MH-11).
+run unit_kc_twoLiveCyclesImpossible {
+  some k: KanbanCard | some disj a, b: k.cycles | a.executionStatus in liveCycleStatus and b.executionStatus in liveCycleStatus
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// SAT: a card with an ABANDONED cycle (e.g. withdrawn mid-cycle, SQ-5) — done, so not current.
+run unit_kc_abandonedCycle {
+  some c: CardCycle | c.executionStatus = ABANDONED
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Operational snapshot consistency: status must match the last event's result.
+run unit_kc_badStatusPairingImpossible {
+  some c: CardCycle | some c.lastEvent and not firedInto[KanbanOpMachine, c.status, c.lastEvent.type]
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Print snapshot consistency on the card.
+run unit_kc_badPrintPairingImpossible {
+  some k: KanbanCard | some k.lastPrintEvent and not firedInto[KanbanPrintMachine, k.printStatus, k.lastPrintEvent.type]
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+
+// Serial uniqueness within a tenant.
+run unit_kc_serialClashImpossible {
   some disj a, b: KanbanCard | a.tenantId = b.tenantId and a.serialNumber = b.serialNumber
-}
-run unit_kanbanCard_serialClashInTenant
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
 
-// --- machine-level checks (generic properties on the reified machines) -------
-// Every modeled lifecycle state is reachable from the start, and every signal is
-// live. (The code's UNKNOWN/PS_UNKNOWN sentinels are not modeled, so there is no
-// unreachable carve-out.)
-check unit_kanbanOp_reachable    { allStatesReachable[KanbanOpMachine] }
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard
-check unit_kanbanPrint_reachable { allStatesReachable[KanbanPrintMachine] }
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard
-check unit_kanbanOp_liveSignals    { liveSignals[KanbanOpMachine] }
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard
-check unit_kanbanPrint_liveSignals { liveSignals[KanbanPrintMachine] }
-  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard
+// Cross-tenant item reference (kernel isolation).
+run unit_kc_crossTenantItemImpossible {
+  some k: KanbanCard | let i = resolve[k.itemRef] | some i and i in Item and i.tenantId != k.tenantId
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int
