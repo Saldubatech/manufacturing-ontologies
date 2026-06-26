@@ -3,6 +3,7 @@ module resources/kanban_card/card_cycle
 open meta/kernel                  // Scoped, EntityId
 open meta/values                  // Quantity, PhysicalLocator
 open meta/state_machine/machine   // State, Signal, StateMachine, firedInto
+open resources/inventory_item/inventory_item  // InventoryItem (materials soft-ref target) [KC-MH-12/KQ5]
 
 /*
  * CardCycle — one circuit of a KanbanCard around its loop (KD13). The DYNAMIC per-occurrence
@@ -67,9 +68,11 @@ sig KanbanCardEvent {
 // CYCLE's execution. **The membership of this set is provisional — to be reformulated** (preview:
 // three KINDS — live/operating, done, indeterminate). Unlike the operational axis it has no event
 // machine; its transitions are behavioral ((c) layer): ACTIVE→COMPLETE on rollover, →ABANDONED on
-// withdraw, →FORCED_RESET on a forced/lenient jump (KD9), →UNKNOWN on loss of tracking.
+// withdraw, →FORCED_RESET on a forced/lenient jump (KD9), →UNTRACKED on loss of tracking.
+// (UNTRACKED, not UNKNOWN: avoids the cross-module clash with item_supply's OrderMethod.UNKNOWN now
+// that this tree transitively opens inventory_item → item → item_supply; also reads more precisely.)
 /** CycleExecutionStatus — the cycle's execution/health state (SPECULATIVE — KC-MH-11). */
-enum CycleExecutionStatus { ACTIVE, FORCED_RESET, COMPLETE, ABANDONED, UNKNOWN }
+enum CycleExecutionStatus { ACTIVE, FORCED_RESET, COMPLETE, ABANDONED, UNTRACKED }
 
 // The three KINDS (preview grouping — also speculative). "Live" cycles are the open/current ones.
 /** live/operating — the cycle is open and running (the card is in circulation). */
@@ -77,7 +80,7 @@ fun liveCycleStatus:          set CycleExecutionStatus { ACTIVE + FORCED_RESET }
 /** done — the cycle has finished (normally or not). */
 fun doneCycleStatus:          set CycleExecutionStatus { COMPLETE + ABANDONED }
 /** indeterminate — execution condition is unclear (e.g. lost track). */
-fun indeterminateCycleStatus: set CycleExecutionStatus { UNKNOWN }
+fun indeterminateCycleStatus: set CycleExecutionStatus { UNTRACKED }
 
 // ── the cycle entity ─────────────────────────────────────────────────────────────────────
 /** CardCycle — one circuit of a KanbanCard (KD13). Child of KanbanCard (parent owns it). */
@@ -88,7 +91,7 @@ sig CardCycle extends Scoped {
                                              //   (REQUEST→REQUESTING births the cycle); never "no event yet". Stream → DT-001.03.
   locator:          lone PhysicalLocator,    // current location this cycle
   quantityOverride: lone Quantity,           // overrides KanbanCard.nominalQuantity [overrides]
-  materials:        set EntityId,            // → InventoryItem(s): this round's batch [KC-MH-3: untyped]
+  materials:        lone EntityId,           // → InventoryItem this cycle carries [KC-MH-12: lone, typed via MaterialsRefIntegrity]
   sourcedBy:        lone EntityId,           // → Order/PO that sourced this cycle [KC-MH-4: untyped stub]
   precededBy:       lone CardCycle           // the prior cycle [KC-MH-1: DIRECT ref — flipped from soft for clean acyclicity]
 }
@@ -96,6 +99,13 @@ sig CardCycle extends Scoped {
 // dataRefs = the cycle's outgoing soft references (materials + sourcedBy). The parent→child link is
 // a direct relation held by KanbanCard.cycles, so it is not a dataRef here.
 fact CardCycleRefs { all c: CardCycle | c.dataRefs = c.materials + c.sourcedBy }
+
+// [KC-MH-12 / KQ5] `materials` is a TYPED soft reference: when it resolves to anything, that handle is
+// an InventoryItem (dangling/cross-Universe allowed — soft ref, ≙ ItemClassifierIntegrity). The cycle
+// carries at most one InventoryItem at a time (lone); Split/Merge are the InventoryItem's own concern.
+fact MaterialsRefIntegrity {
+  all c: CardCycle | let m = resolve[c.materials] | some m implies m in InventoryItem
+}
 
 // [KC-MH-6] a CardCycle is always in one of the 8 core states (never AVAILABLE — that is card-level).
 fact CycleStatusIsCore { all c: CardCycle | c.status in coreCycleStatus }

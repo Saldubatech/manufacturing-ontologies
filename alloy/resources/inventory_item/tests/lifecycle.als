@@ -44,25 +44,39 @@ assert unit_lc_lpnNeverReused {
 }
 check unit_lc_lpnNeverReused for 6 but 3 Scalar
 
-// ── D15 Fill: FULL is one-shot (created/born FULL, never re-entered) ──────────────────────
+// ── D16 Fill: born OPEN; SEALED is operator-asserted and RE-ENTERABLE ───────────────────────
 
-// Once a live item is not FULL, no operation makes it FULL again (FULL is minted only on a fresh
-// atom — by Create, or Split's new split-off). Conditioned on `someOp` so it ranges over real
-// operation steps (without it, Alloy's free var-changes could flip fillState spuriously).
-assert unit_lc_neverReturnsToFull {
-  always (someOp implies all ii: InventoryItem |
-    (ii in Live and ii.fillState != FULL) implies after (ii not in Live or ii.fillState != FULL))
+// Born OPEN: a freshly created item is OPEN, never SEALED (creation presumes no operator intent —
+// the D15 born-FULL rule is retired).
+assert unit_lc_bornOpen {
+  always all ii: InventoryItem, q: Quantity | create[ii, q] implies after ii.fillState = OPEN
 }
-check unit_lc_neverReturnsToFull for 6 but 3 Scalar
+check unit_lc_bornOpen for 6 but 3 Scalar
 
-// FULL → (consume) PARTIAL → (consume-to-zero) EMPTY → (replenish) PARTIAL — and never FULL again.
-run unit_lc_fullToPartialPermanent {
+// A quantity-changing op always breaks the seal: SEALED --consume--> OPEN (or EMPTY to zero).
+assert unit_lc_quantityChangeBreaksSeal {
+  always all ii: InventoryItem, q: Quantity |
+    (ii in Live and ii.fillState = SEALED and consume[ii, q]) implies after (ii.fillState != SEALED)
+}
+check unit_lc_quantityChangeBreaksSeal for 6 but 3 Scalar
+
+// SEALED is RE-ENTERABLE (the D15 "never re-entered" rule is gone): seal → unseal → seal again.
+run unit_lc_sealUnsealReseal {
+  some ii: InventoryItem |
+    ii.fillState = OPEN and seal[ii]
+    and after (ii.fillState = SEALED and unseal[ii])
+    and after after (ii.fillState = OPEN and seal[ii])
+    and after after after (ii.fillState = SEALED)
+} for 6 but 3 Scalar
+
+// Full fill cycle: OPEN → (seal) SEALED → (consume) OPEN → (consume-to-zero) EMPTY → (replenish) OPEN.
+run unit_lc_fillCycle {
   some ii: InventoryItem, a1, a2, r: Quantity |
-    ii.fillState = FULL
-    and consume[ii, a1]
-    and after (ii.fillState = PARTIAL and consume[ii, a2])
-    and after after (ii.fillState = EMPTY and replenish[ii, r, none])
-    and after after after (ii.fillState = PARTIAL)            // revived to PARTIAL, NOT FULL
+    ii.fillState = OPEN and seal[ii]
+    and after (ii.fillState = SEALED and consume[ii, a1])
+    and after after (ii.fillState = OPEN and consume[ii, a2])
+    and after after after (ii.fillState = EMPTY and replenish[ii, r, none])
+    and after after after after (ii.fillState = OPEN)
 } for 6 but 3 Scalar
 
 // ── representative end-to-end lifecycle (expect SAT) ──────────────────────────────────────

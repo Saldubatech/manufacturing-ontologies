@@ -14,24 +14,31 @@ fact ScalarPremises { ringAxioms and orderAxioms }
 // ── operation firings (expect SAT) ────────────────────────────────────────────────────
 run unit_op_create_fires { some ii: InventoryItem, q: Quantity | create[ii, q] } for 6 but 3 Scalar
 
-// D15 Fill state machine — created FULL; touched → PARTIAL; rePack/Move preserve FULL; split-off born FULL.
-run unit_op_create_isFull {
-  some ii: InventoryItem, q: Quantity | create[ii, q] and after ii.fillState = FULL
+// D16 Fill state machine — created OPEN; `seal`→SEALED; `unseal`→OPEN; a quantity change demotes
+// SEALED→OPEN; rePack/Move preserve SEALED; split-off born OPEN.
+run unit_op_create_isOpen {
+  some ii: InventoryItem, q: Quantity | create[ii, q] and after ii.fillState = OPEN
 } for 6 but 3 Scalar
-run unit_op_consume_demotesFull {
+run unit_op_seal_sealsOpen {
+  some ii: InventoryItem | ii.fillState = OPEN and seal[ii] and after ii.fillState = SEALED
+} for 6 but 3 Scalar
+run unit_op_unseal_opensSealed {
+  some ii: InventoryItem | ii.fillState = SEALED and unseal[ii] and after ii.fillState = OPEN
+} for 6 but 3 Scalar
+run unit_op_consume_demotesSealed {
   some ii: InventoryItem, q: Quantity |
-    ii.fillState = FULL and consume[ii, q] and after (ii.fillState = PARTIAL)   // partial draw leaves PARTIAL
+    ii.fillState = SEALED and consume[ii, q] and after (ii.fillState = OPEN)   // a real draw breaks the seal
 } for 6 but 3 Scalar
-run unit_op_rePack_preservesFull {
+run unit_op_rePack_preservesSealed {
   some ii: InventoryItem, g: Quantity |
-    ii.fillState = FULL and rePack[ii, g, none] and after ii.fillState = FULL   // re-expression keeps FULL
+    ii.fillState = SEALED and rePack[ii, g, none] and after ii.fillState = SEALED   // re-expression keeps SEALED
 } for 6 but 3 Scalar
-run unit_op_move_preservesFull {
+run unit_op_move_preservesSealed {
   some ii: InventoryItem, loc: PhysicalLocator |
-    ii.fillState = FULL and move[ii, loc] and after ii.fillState = FULL
+    ii.fillState = SEALED and move[ii, loc] and after ii.fillState = SEALED
 } for 6 but 3 Scalar
-run unit_op_split_bornFull {
-  some o, n: InventoryItem, q: Quantity | split[o, n, q, none] and after n.fillState = FULL
+run unit_op_split_bornOpen {
+  some o, n: InventoryItem, q: Quantity | split[o, n, q, none] and after n.fillState = OPEN
 } for 6 but 3 Scalar
 run unit_op_delete_fires { some ii: InventoryItem | delete[ii] } for 6 but 3 Scalar
 run unit_op_writeOff_fires { some ii: InventoryItem | writeOff[ii] and ii.fillState != EMPTY } for 6 but 3 Scalar
@@ -113,3 +120,5 @@ run unit_rej_rePack_serialized { some ii: InventoryItem, g: Quantity | rePack[ii
 run unit_rej_replenish_locked { some ii: InventoryItem, q: Quantity | replenish[ii, q, none] and ii.administrativeState = LOCKED } for 6 but 3 Scalar
 run unit_rej_lock_alreadyLocked { some ii: InventoryItem | lock[ii] and ii.administrativeState = LOCKED } for 6 but 3 Scalar
 run unit_rej_create_reuseRetired { some ii: InventoryItem, q: Quantity | create[ii, q] and ii in Retired } for 6 but 3 Scalar
+run unit_rej_seal_empty { some ii: InventoryItem | seal[ii] and ii.fillState = EMPTY } for 6 but 3 Scalar
+run unit_rej_unseal_notSealed { some ii: InventoryItem | unseal[ii] and ii.fillState != SEALED } for 6 but 3 Scalar

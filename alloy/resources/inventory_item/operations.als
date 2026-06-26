@@ -32,10 +32,10 @@ pred sameLoc[ii: InventoryItem]   { ii.locator' = ii.locator }
 pred sameAdmin[ii: InventoryItem] { ii.administrativeState' = ii.administrativeState }
 /** sameDesc — descriptive notes/colorCode unchanged. */
 pred sameDesc[ii: InventoryItem]  { ii.notes' = ii.notes and ii.colorCode' = ii.colorCode }
-/** sameFill — fill state unchanged (D15: FULL survives ops that don't change the real quantity). */
+/** sameFill — fill state unchanged (D16: SEALED survives ops that don't change the real quantity). */
 pred sameFill[ii: InventoryItem]  { ii.fillState' = ii.fillState }
-/** demoteFill — leave FULL: PARTIAL, or EMPTY when the new on-hand is zero (D15). */
-pred demoteFill[ii: InventoryItem] { ii.fillState' = (isZero[ii.actualQuantity'.byUnit] => EMPTY else PARTIAL) }
+/** demoteFill — any real-quantity change lands in OPEN, or EMPTY when the new on-hand is zero (D16). */
+pred demoteFill[ii: InventoryItem] { ii.fillState' = (isZero[ii.actualQuantity'.byUnit] => EMPTY else OPEN) }
 /** sameState — every mutable field unchanged (a fully-framed item). */
 pred sameState[ii: InventoryItem] { sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] }
 /** othersUnchanged — every OTHER live item is fully framed (the operation touches only `xs`). */
@@ -55,6 +55,8 @@ pred someOp {
   or (some ii: InventoryItem, loc: PhysicalLocator | forceMove[ii, loc])
   or (some ii: InventoryItem | lock[ii])
   or (some ii: InventoryItem | unlock[ii])
+  or (some ii: InventoryItem | seal[ii])
+  or (some ii: InventoryItem | unseal[ii])
   or (some ii: InventoryItem, d: Quantity | inspect[ii, d])
   or (some ii: InventoryItem | inspect[ii, none])
   or (some ii: InventoryItem, g: Quantity | adjustQuantity[ii, g, none])
@@ -66,8 +68,8 @@ pred someOp {
 
 // ── lifecycle ─────────────────────────────────────────────────────────────────────────
 /** Create — bring a fresh item into existence with a strictly positive initial quantity, UNLOCKED,
-    no degraded/lots/locator/descriptors, fill = FULL (D15). Identity (itemRef, licensePlate, serial,
-    minQuantity) is the atom's eternal value. */
+    no degraded/lots/locator/descriptors, fill = OPEN (D16 — creation presumes no operator intent;
+    `seal` asserts SEALED later). Identity (itemRef, licensePlate, serial, minQuantity) is eternal. */
 pred create[ii: InventoryItem, qty: Quantity] {
   ii not in Live and ii not in Retired                            // pre: a genuinely fresh atom (never lived)
   classify[qty.byUnit] = POSITIVE                                 // strictly positive (no empty placeholders)
@@ -77,7 +79,7 @@ pred create[ii: InventoryItem, qty: Quantity] {
   ii.actualQuantity' = qty
   no ii.degradedQty'
   no ii.lotNumbers'
-  ii.fillState' = FULL                                            // D15: born FULL (received as intended)
+  ii.fillState' = OPEN                                            // D16: born OPEN (no intent presumed)
   ii.administrativeState' = UNLOCKED
   no ii.locator'
   no ii.notes' and no ii.colorCode'
@@ -116,7 +118,7 @@ pred replenish[ii: InventoryItem, delta: Quantity, lots: set LotNumber] {
   ii.actualQuantity'.byUnit = add[ii.actualQuantity.byUnit, delta.byUnit]
   ii.lotNumbers' = ii.lotNumbers + lots
   ii.degradedQty' = ii.degradedQty
-  ii.fillState' = PARTIAL                                         // D15: real quantity changed (actual' > 0)
+  ii.fillState' = OPEN                                            // D16: real quantity changed (actual' > 0)
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -139,7 +141,7 @@ pred consume[ii: InventoryItem, amount: Quantity] {
   (isZero[ii.actualQuantity'.byUnit])
      => (no ii.degradedQty' and no ii.lotNumbers')                // consume-to-zero: husk
      else (ii.degradedQty' = ii.degradedQty and ii.lotNumbers' = ii.lotNumbers)
-  demoteFill[ii]                                                  // D15: → EMPTY (to zero) or PARTIAL
+  demoteFill[ii]                                                  // D16: → EMPTY (to zero) or OPEN
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -152,7 +154,7 @@ pred move[ii: InventoryItem, loc: PhysicalLocator] {
   ii in Live
   ii.administrativeState = UNLOCKED                               // else Rejected:Locked (use ForceMove)
   ii.locator' = loc
-  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D15: locator change preserves FULL
+  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D16: locator change preserves SEALED
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -163,7 +165,7 @@ pred move[ii: InventoryItem, loc: PhysicalLocator] {
 pred forceMove[ii: InventoryItem, loc: PhysicalLocator] {
   ii in Live
   ii.locator' = loc
-  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D15: locator change preserves FULL
+  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D16: locator change preserves SEALED
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -190,7 +192,7 @@ pred split[orig, nu: InventoryItem, splitOff: lone Quantity, degSplit: lone Quan
     nu.actualQuantity'.byUnit = soTot
     (isZero[soDeg]) => no nu.degradedQty' else nu.degradedQty'.byUnit = soDeg
     nu.lotNumbers' = orig.lotNumbers                              // full lot copy (D11)
-    nu.fillState' = FULL                                          // D15: born FULL ("specified as intended")
+    nu.fillState' = OPEN                                          // D16: born OPEN (a split-off is a creation)
     nu.administrativeState' = orig.administrativeState
     nu.locator' = orig.locator
     nu.notes' = orig.notes and nu.colorCode' = orig.colorCode
@@ -200,7 +202,7 @@ pred split[orig, nu: InventoryItem, splitOff: lone Quantity, degSplit: lone Quan
       => (no orig.degradedQty' and no orig.lotNumbers')           // husk
       else { (isZero[remDeg]) => no orig.degradedQty' else orig.degradedQty'.byUnit = remDeg
              orig.lotNumbers' = orig.lotNumbers }
-    demoteFill[orig]                                              // D15: remainder's real quantity changed
+    demoteFill[orig]                                              // D16: remainder's real quantity changed
     sameLoc[orig] and sameAdmin[orig] and sameDesc[orig]
   }
   Live' = Live + nu
@@ -220,7 +222,7 @@ pred merge[surv, absorbed: InventoryItem] {
   let dsum = add[surv.degradedQty.byUnit, absorbed.degradedQty.byUnit] |
     (isZero[dsum]) => no surv.degradedQty' else surv.degradedQty'.byUnit = dsum
   surv.lotNumbers' = surv.lotNumbers + absorbed.lotNumbers
-  demoteFill[surv]                                                // D15: survivor's real quantity changed (→ PARTIAL)
+  demoteFill[surv]                                                // D16: survivor's real quantity changed (→ OPEN)
   sameLoc[surv] and sameAdmin[surv] and sameDesc[surv]
   Live' = Live - absorbed
   Retired' = Retired + absorbed
@@ -230,8 +232,8 @@ pred merge[surv, absorbed: InventoryItem] {
 // ── re-expression / correction / property ─────────────────────────────────────────────────
 /** rePack — re-express the good and/or degraded portion in a new UoM basis (caller-asserted, no
     correctness claim). Non-serialized, non-empty, emptiness-preserving (post non-empty); degraded ≤
-    actual; lots unchanged. PRESERVES Fill (D15): re-expressing units is NOT a change in the real
-    quantity, so a FULL item rePacked stays FULL. */
+    actual; lots unchanged. PRESERVES Fill (D16): re-expressing units is NOT a change in the real
+    quantity, so a SEALED item rePacked stays SEALED. */
 pred rePack[ii: InventoryItem, newGood: lone Quantity, newDeg: lone Quantity] {
   ii in Live
   not isSerialized[ii]                                            // else Rejected:Serialized
@@ -248,7 +250,7 @@ pred rePack[ii: InventoryItem, newGood: lone Quantity, newDeg: lone Quantity] {
     (isZero[dmap]) => no ii.degradedQty' else ii.degradedQty'.byUnit = dmap
   }
   ii.lotNumbers' = ii.lotNumbers
-  sameFill[ii]                                                    // D15: re-expression preserves FULL
+  sameFill[ii]                                                    // D16: re-expression preserves SEALED
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -270,7 +272,7 @@ pred adjustQuantity[ii: InventoryItem, observedGood: Quantity, observedDeg: lone
       else { (isZero[dmap]) => no ii.degradedQty' else ii.degradedQty'.byUnit = dmap
              ii.lotNumbers' = ii.lotNumbers }
   }
-  demoteFill[ii]                                                  // D15: a count is a real-quantity write
+  demoteFill[ii]                                                  // D16: a count is a real-quantity write
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -301,7 +303,7 @@ pred inspect[ii: InventoryItem, deg: lone Quantity] {
   // post
   ii.actualQuantity' = ii.actualQuantity
   (no deg or isZero[deg.byUnit]) => no ii.degradedQty' else ii.degradedQty' = deg
-  sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D15: inspection preserves FULL
+  sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D16: inspection preserves SEALED
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -324,6 +326,32 @@ pred unlock[ii: InventoryItem] {
   ii.administrativeState = LOCKED                                // else Rejected:NotApplicable
   ii.administrativeState' = UNLOCKED
   sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii]
+  Live' = Live
+  Retired' = Retired
+  othersUnchanged[ii]
+}
+
+// ── fill intent (operator asserts / releases the "as originally intended" condition — D16) ─────
+/** Seal — the operator asserts the item is in its as-originally-intended condition (→ SEALED). Legal
+    on any non-empty item (OPEN→SEALED; idempotent on SEALED); a later quantity-changing op demotes it
+    back to OPEN. No quantity / identity / admin change. The positive-intent twin of consume-to-zero's
+    EMPTY husk: a recognizable resting state, here an explicit assertion rather than a side effect. */
+pred seal[ii: InventoryItem] {
+  ii in Live
+  ii.fillState != EMPTY                                          // else Rejected:Empty (nothing to seal)
+  ii.fillState' = SEALED
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  Live' = Live
+  Retired' = Retired
+  othersUnchanged[ii]
+}
+
+/** Unseal — release the as-intended assertion (SEALED → OPEN) without touching the quantity. */
+pred unseal[ii: InventoryItem] {
+  ii in Live
+  ii.fillState = SEALED                                          // else Rejected:NotApplicable
+  ii.fillState' = OPEN
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]

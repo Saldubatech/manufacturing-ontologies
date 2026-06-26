@@ -47,14 +47,16 @@ fact KanbanPrintMachineDef {
 /** KanbanCardPrintEvent — embedded snapshot of the card's last print event. */
 sig KanbanCardPrintEvent { type: one KanbanCardPrintEventType }
 
-/** SerialNumber — the card's natural identifier, unique within a tenant (opaque). */
-sig SerialNumber {}
+/** CardSerial — the card's natural identifier, unique within a tenant (opaque). Named distinctly
+    from inventory_item's `SerialNumber` (product-instance individualizer) to avoid a cross-module
+    type clash now that card_cycle opens inventory_item; the field stays `serialNumber`. */
+sig CardSerial {}
 
 // ── the static card ──────────────────────────────────────────────────────────────────────
 /** KanbanCard — the static container + the aggregate root of its CardCycles (KD13). */
 sig KanbanCard extends Scoped {
   // identity & durable configuration (administrative edits only)
-  serialNumber:    one SerialNumber,
+  serialNumber:    one CardSerial,               // CardSerial: distinct from inventory_item's SerialNumber
   itemRef:         one EntityId,                 // → Item (immutable classifier)
   nominalQuantity: lone Quantity,                // durable target (overridable per cycle)
   loopRef:         lone EntityId,                // → Loop [KC-MH-5 / KD11]
@@ -108,7 +110,7 @@ fact PrecededByWithinCard {
 fact OneChainPerCard { all k: KanbanCard | lone { c: k.cycles | no c.precededBy } }
 
 // Tight by default: no orphan card-local value/handle atoms.
-fact NoOrphanSerialNumber   { all s: SerialNumber          | s in KanbanCard.serialNumber }
+fact NoOrphanSerialNumber   { all s: CardSerial         | s in KanbanCard.serialNumber }
 fact NoOrphanPrintEvent     { all e: KanbanCardPrintEvent  | e in KanbanCard.lastPrintEvent }
 
 /** currentCycle — DERIVED [KC-MH-11]: the card's live (open) cycle, if any. `lone` by

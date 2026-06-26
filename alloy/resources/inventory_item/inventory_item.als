@@ -19,9 +19,10 @@ open reference_data/item/item     // Item — the primary classifier
  *
  * STORED vs DERIVED (D14, option (a) — the worthiness axis is stored ONLY as `degradedQty`,
  * always quantified). The X.731 Usage region was dropped (D2 revision); Fill is a domain region.
- * Operational/AvailabilityStatus are DERIVED from `degradedQty`. Fill is STORED (D15): with
- * `maxQuantity` dropped (until the UoM-conversions algebra returns), FULL = born-and-untouched and
- * is a one-shot state machine driven by the operations, not a function of the quantities.
+ * Operational/AvailabilityStatus are DERIVED from `degradedQty`. Fill is STORED (D15→D16): with
+ * `maxQuantity` dropped (until the UoM-conversions algebra returns), the three states are SEALED
+ * (operator-asserted "as originally intended"), OPEN (the working state — Create is born here), and
+ * EMPTY (actual = 0). SEALED is reached ONLY by `seal` and is RE-ENTERABLE; `unseal` returns to OPEN.
  *
  * NON-NEGATIVE CONE (D12): all stored quantities are ZERO or all-positive — `ConeNonNegative`.
  * That (and the order-dependent derived funs) need the `keyed_order` premise; the TEST ROOT
@@ -53,12 +54,14 @@ enum OperationalState { ENABLED, DISABLED }
 /** AvailabilityStatus — X.731 availability-status qualifier (DERIVED): DEGRADED = ENABLED but a
     non-empty portion is unavailable. `FAILED`/`IN_TEST`/… reserved (not in v1). */
 enum AvailabilityStatus { DEGRADED }
-/** FillState — stock-fill level (STORED state machine, D15 — supersedes the capacity-based FULL of
-    D2/D14 until the UoM-conversions algebra lands): FULL = born/received at its as-intended quantity
-    and UNTOUCHED; PARTIAL = its real quantity has since changed; EMPTY = zero. FULL is minted only by
-    Create (and Split's new split-off — "specified as intended") and, once left, is NEVER re-entered.
-    EMPTY ⟺ actual = 0. `maxQuantity`/capacity dropped for now — see D15. */
-enum FillState { FULL, PARTIAL, EMPTY }
+/** FillState — stock-fill level (STORED state machine, D16 — revises D15; supersedes the
+    capacity-based FULL of D2/D14 until the UoM-conversions algebra lands): SEALED = the operator has
+    asserted the item is in its as-originally-intended condition; OPEN = the working state (Create and
+    Split's new split-off are BORN here — creation presumes no operator intent); EMPTY = zero. SEALED
+    is entered ONLY by `seal` (from a non-empty item) and is RE-ENTERABLE; `unseal` returns SEALED→OPEN
+    with no quantity change; any quantity-changing op demotes SEALED→OPEN (or EMPTY). EMPTY ⟺ actual =
+    0. `maxQuantity`/capacity dropped for now — see D16. */
+enum FillState { SEALED, OPEN, EMPTY }
 /** AdministrativeState — authorization / hold (STORED; set by Lock/Unlock): UNLOCKED / LOCKED.
     `SHUTTING_DOWN` reserved for the reservations era — not modeled in v1. */
 enum AdministrativeState { UNLOCKED, LOCKED }
@@ -74,7 +77,7 @@ sig InventoryItem extends Scoped {
   serialNumber:        lone SerialNumber,     // D10 individualizer; immutable, persists (even through empty)
   minQuantity:         one Quantity,          // reorder threshold (default zero); not used by Fill
   individualizers:     set Individualizer,    // D3 placeholder
-  // fill region (STATE — D15: stored, not derived; FULL=as-created-untouched, never re-entered)
+  // fill region (STATE — D16: stored, not derived; born OPEN, SEALED is operator-asserted & re-enterable)
   var fillState:           one FillState,
   // administrative region (STATE)
   var administrativeState: one AdministrativeState,
@@ -126,9 +129,9 @@ fun InventoryItem.availabilityStatus: set AvailabilityStatus {
   (some this.degradedQty and not isZero[this.availableQty]) => DEGRADED else none
 }
 
-// fillState is now a STORED `var` field (D15), not derived — FULL is history-dependent
-// (born-and-untouched), which no function of the current quantities can express. Its EMPTY arm
-// stays pinned to actual=0 by `FillEmptyConsistency`; FULL/PARTIAL is driven by the operations.
+// fillState is now a STORED `var` field (D16), not derived — SEALED is operator intent, which no
+// function of the current quantities can express. Its EMPTY arm stays pinned to actual=0 by
+// `FillEmptyConsistency`; SEALED/OPEN is driven by the operations (`seal`/`unseal` + demote).
 
 /** isSerialized — the item carries a serial number (D10). */
 pred isSerialized[ii: InventoryItem] { some ii.serialNumber }
@@ -176,8 +179,8 @@ fact ConeNonNegative {
     and (some ii.degradedQty  implies classify[ii.degradedQty.byUnit] in (ZERO + POSITIVE))
 }
 
-// D6 / D15 — the stored Fill state's EMPTY arm is pinned to actual = 0 (so FULL/PARTIAL ⟹ actual > 0).
-// The FULL-vs-PARTIAL distinction is history-driven by the operations, not derivable here.
+// D6 / D16 — the stored Fill state's EMPTY arm is pinned to actual = 0 (so SEALED/OPEN ⟹ actual > 0).
+// The SEALED-vs-OPEN distinction is operator-driven by `seal`/`unseal`, not derivable here.
 fact FillEmptyConsistency {
   always all ii: Live | ii.fillState = EMPTY iff isZero[ii.actualQuantity.byUnit]
 }

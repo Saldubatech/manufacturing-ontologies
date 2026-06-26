@@ -9,7 +9,7 @@ open resources/inventory_item/inventory_item
  * a not-yet-created / retired atom is outside the world and intentionally unconstrained.
  *
  * Illustrate decisions D1–D14: the stored/derived split, the non-negative cone, the worthiness
- * derivation (ENABLED/DEGRADED/DISABLED from degradedQty), the stored Fill state (D15), EMPTY⟹
+ * derivation (ENABLED/DEGRADED/DISABLED from degradedQty), the stored Fill state (D16), EMPTY⟹
  * ENABLED, LPN/serial uniqueness, commingled lots, and the forbidden (negative / EMPTY×degraded /
  * degraded>actual / serial-dup / EMPTY-fill-mismatch) states. Operation/transition tests live in
  * tests/operations.als.
@@ -49,8 +49,10 @@ run unit_inventoryItem_locked {
   some ii: Live | ii.administrativeState = LOCKED and not isZero[ii.actualQuantity.byUnit]
 } for 5 but 3 Scalar
 
-// FULL: a born-and-untouched item (D15 — stored, no longer a capacity comparison).
-run unit_inventoryItem_full { some ii: Live | ii.fillState = FULL and not isZero[ii.actualQuantity.byUnit] } for 5 but 3 Scalar
+// SEALED: an item the operator has asserted is in its as-originally-intended condition (D16).
+run unit_inventoryItem_sealed { some ii: Live | ii.fillState = SEALED and not isZero[ii.actualQuantity.byUnit] } for 5 but 3 Scalar
+// OPEN: the working state (the born state — D16).
+run unit_inventoryItem_open { some ii: Live | ii.fillState = OPEN and not isZero[ii.actualQuantity.byUnit] } for 5 but 3 Scalar
 
 // Commingled lots: an item holding ≥ 2 lot numbers (D11).
 run unit_inventoryItem_commingledLots { some ii: Live | gt[#ii.lotNumbers, 1] } for 5 but 3 Scalar
@@ -92,8 +94,8 @@ assert unit_inventoryItem_worthinessDerivation {
 }
 check unit_inventoryItem_worthinessDerivation for 6 but 3 Scalar
 
-// Fill/EMPTY consistency (D6/D15): the stored Fill state's EMPTY arm tracks actual = 0 exactly,
-// so FULL and PARTIAL both imply on-hand > 0. (FULL-vs-PARTIAL is history-driven by the ops, not
+// Fill/EMPTY consistency (D6/D16): the stored Fill state's EMPTY arm tracks actual = 0 exactly,
+// so SEALED and OPEN both imply on-hand > 0. (SEALED-vs-OPEN is operator-driven by seal/unseal, not
 // statically definable — see tests/lifecycle.als.)
 assert unit_inventoryItem_fillEmptyConsistency {
   always all ii: Live | ii.fillState = EMPTY iff isZero[ii.actualQuantity.byUnit]
@@ -133,7 +135,7 @@ run unit_inventoryItem_serialDupImpossible {
     a.tenantId = b.tenantId and a.itemRef = b.itemRef and some a.serialNumber and a.serialNumber = b.serialNumber
 } for 6 but 3 Scalar
 
-// EMPTY item cannot be FULL or PARTIAL, and vice-versa (the EMPTY⟺actual=0 pin, D15).
+// EMPTY item cannot be SEALED or OPEN, and vice-versa (the EMPTY⟺actual=0 pin, D16).
 run unit_inventoryItem_emptyFillMismatchImpossible {
   some ii: Live | not (ii.fillState = EMPTY iff isZero[ii.actualQuantity.byUnit])
 } for 5 but 3 Scalar
