@@ -144,3 +144,7 @@ vite.config.ts.timestamp-*
 
 # Fetched analysis tools — rehydrate with `bash tools/get-tools.sh` (or `make tools`)
 /tools/*.jar
+
+# Alloy Analyzer exec output (receipts + solution dumps); the Makefile writes here via -o.
+# `make clean` wipes it. (`out` is also matched by the Next.js block above — kept explicit here.)
+/out/

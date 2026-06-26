@@ -6,8 +6,11 @@
 
 ALLOY := tools/alloy.jar
 ROBOT := tools/robot.jar
+# Alloy exec output (receipts + solution dumps) goes here — gitignored; never committed.
+# `out/` is in .gitignore; wipe it with `make clean`.
+OUT := out/alloy
 
-.PHONY: tools alloy check-alloy check-examples test-unit test-sys check
+.PHONY: tools alloy check-alloy check-examples test-unit test-sys check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -24,30 +27,30 @@ alloy: $(ALLOY)
 check-alloy: $(ALLOY)
 	@find alloy -path '*/tests/*.als' | sort | while read f; do \
 	  echo "== $$f =="; \
-	  java -jar $(ALLOY) -D info exec -c "*" -o /tmp/alloy-out -f "$$f" 2>&1 \
+	  java -jar $(ALLOY) -D info exec -c "*" -o $(OUT) -f "$$f" 2>&1 \
 	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
-	done; rm -rf /tmp/alloy-out
+	done
 
 ## check-examples: run every command in the modeling cookbook (alloy/meta/examples/*.als)
 check-examples: $(ALLOY)
 	@find alloy/meta/examples -name '*.als' ! -name 'ex00_*' | sort | while read f; do \
 	  echo "== $$f =="; \
-	  java -jar $(ALLOY) -D info exec -c "*" -o /tmp/alloy-out -f "$$f" 2>&1 \
+	  java -jar $(ALLOY) -D info exec -c "*" -o $(OUT) -f "$$f" 2>&1 \
 	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
-	done; rm -rf /tmp/alloy-out
+	done
 
 ## test-unit: run only unit_* commands across all test roots
 test-unit: $(ALLOY)
 	@find alloy -path '*/tests/*.als' | sort | while read f; do \
 	  echo "== $$f =="; \
-	  java -jar $(ALLOY) exec -c "unit_*" -o /tmp/alloy-out -f "$$f" 2>&1 \
+	  java -jar $(ALLOY) exec -c "unit_*" -o $(OUT) -f "$$f" 2>&1 \
 	    | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; \
-	done; rm -rf /tmp/alloy-out
+	done
 
 ## test-sys: run the whole-system suite (sys_* in alloy/tests/system.als)
 test-sys: $(ALLOY)
-	@java -jar $(ALLOY) exec -c "sys_*" -o /tmp/alloy-out -f alloy/tests/system.als 2>&1 \
-	  | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; rm -rf /tmp/alloy-out
+	@java -jar $(ALLOY) exec -c "sys_*" -o $(OUT) -f alloy/tests/system.als 2>&1 \
+	  | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'
 
 # NOTE: the former `check-owl` target validated the authored owl/kanban.ttl, which has been
 # removed (we no longer maintain an authored ontology). ROBOT is retained (`make tools`) for
@@ -55,3 +58,7 @@ test-sys: $(ALLOY)
 
 ## check: run all checks
 check: check-alloy check-examples
+
+## clean: remove generated Alloy exec output
+clean:
+	@rm -rf out
