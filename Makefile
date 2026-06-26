@@ -7,7 +7,7 @@
 ALLOY := tools/alloy.jar
 ROBOT := tools/robot.jar
 
-.PHONY: tools alloy check-alloy check-examples test-unit test-sys check-owl check
+.PHONY: tools alloy check-alloy check-examples test-unit test-sys check
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -49,11 +49,9 @@ test-sys: $(ALLOY)
 	@java -jar $(ALLOY) exec -c "sys_*" -o /tmp/alloy-out -f alloy/tests/system.als 2>&1 \
 	  | grep -iE 'SAT|UNSAT|error' | grep -ivE 'symmetr|kodkod|cnf|translat|solving'; rm -rf /tmp/alloy-out
 
-## check-owl: validate owl/kanban.ttl loads its full import closure (ROBOT/OWLAPI)
-check-owl: $(ROBOT)
-	@java -jar $(ROBOT) merge --input owl/kanban.ttl --output /tmp/owl-merge.ttl 2>/tmp/owl.err || true; \
-	  n=$$(grep -c 'error#Error' /tmp/owl.err 2>/dev/null || true); \
-	  echo "owl/kanban.ttl: loaded, $$n unresolved-entity (Error#) warnings"
+# NOTE: the former `check-owl` target validated the authored owl/kanban.ttl, which has been
+# removed (we no longer maintain an authored ontology). ROBOT is retained (`make tools`) for
+# ad-hoc consultation of the vendored public standards under owl/imports/ — see owl/README.md.
 
 ## check: run all checks
-check: check-alloy check-examples check-owl
+check: check-alloy check-examples

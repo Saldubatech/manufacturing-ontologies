@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <catalog prefer="public" xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
-    <!-- Vendored external ontologies: import-IRI -> local file (relative to owl/).
-         Add owl:imports in kanban.ttl referencing these IRIs to pull them in. -->
+    <!-- Vendored public-standard ontologies: import-IRI -> local file (relative to owl/).
+         Offline resolution for consulting these references in Protégé / ROBOT. -->
     <uri name="http://purl.obolibrary.org/obo/bfo/2020/bfo.owl" uri="imports/bfo.owl"/>
     <uri name="http://qudt.org/collection/usertest" uri="imports/qudt-org-collection-usertest.ttl"/>
     <uri name="http://qudt.org/schema/coordinateSystems" uri="imports/qudt-org-schema-coordinatesystems.ttl"/>

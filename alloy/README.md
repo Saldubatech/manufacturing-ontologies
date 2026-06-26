@@ -1,7 +1,8 @@
 # Manufacturing Domain Model — `alloy/`
 
-Alloy model of the manufacturing domain — the behavioral / model-finding
-counterpart to the OWL ontology in `../owl/`. The directory tree mirrors the
+Alloy model of the manufacturing domain — the behavioral / model-finding model,
+grounded in the public standard ontologies cached for reference in `../owl/`
+(BFO/IOF/QUDT — source-of-truth, not maintained here). The directory tree mirrors the
 system's **functional decomposition** (domain → directory, module → file), with a
 non-domain `meta/` for modeling machinery. See `CLAUDE.md` for the full
 conventions.

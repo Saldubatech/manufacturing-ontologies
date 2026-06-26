@@ -1,7 +1,8 @@
 # Working with the Alloy model — `alloy/`
 
 Agent + contributor guide for the Alloy side of the project. The model is the
-**behavioral / model-finding** counterpart to the OWL ontology in `../owl/`. The
+**behavioral / model-finding** model, grounded in the public standard ontologies cached
+for reference in `../owl/` (BFO/IOF/QUDT — source-of-truth, not maintained here). The
 tree mirrors the system's **functional decomposition**.
 
 ## Structure & filing rule
@@ -20,7 +21,7 @@ tree mirrors the system's **functional decomposition**.
 - **`meta/` is not a domain.** It holds modeling machinery:
   - `meta/kernel.als` — identity + the `Entity`/`Scoped` bound, `EntityId`, soft-ref `resolve`, cross-tenant isolation (DT-001.02, implemented).
   - `meta/values.als` — value objects: `Money` (Currency-keyed) and `Quantity` (Unit-keyed) are **instances of the keyed monoid** (`byCurrency`/`byUnit` normal-form maps, DT-005); `PhysicalLocator` (9-level); `Duration` opaque (QUDT bridge deferred, DT-002).
-  - `meta/std/{bfo,iof,qudt}.als` — **vendored boundary stubs** copied from the OWL standards (MIREOT: only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. OWL stays system-of-record.
+  - `meta/std/{bfo,iof,qudt}.als` — **boundary stubs** MIREOT'd from the public standards (only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. The standards (BFO/IOF/QUDT) stay source-of-truth as a **read-only reference cache** under `../owl/imports/` (consult via ROBOT) — we no longer maintain an authored OWL ontology; harvested mappings are in the workbook `domain-ontology/additional-info.md`.
   - `meta/state_machine/machine.als` — generic FSM framework reifying common-module's `StateEngine` (DT-003): `State`/`Signal`/`Guard`/`Transition`/`StateMachine` + once-stated well-formedness/determinism FACTS + checkable `allStatesReachable`/`liveSignals`/`firedInto`. Concrete machines extend `State`/`Signal` and pin a `StateMachine` atom.
   - `meta/algebra/keyed_monoid.als` — keyed additive ℤ-module reifying common-module's `MultiMoney` (DT-005): a value is a normal-form map `key -> lone Scalar` (`add`/`scale`/`negate`/`zero`); add same-key sums, different keys widen, zero-nets collapse. `Scalar` is an abstract decimal (ring axioms = the `ringAxioms` PREMISE, not a global fact). Instantiate `MultiMoney = Currency -> lone Scalar`, `MultiQuantity = Unit -> lone Scalar`.
   - `meta/algebra/keyed_order.als` — optional order/sign/equality extension (DT-005): a posited linear order on `Scalar` (`orderAxioms` premise — a true order can't be finite + ring-compatible, so it's assumed) gives the component-wise partial order `lte`, sign `classify` (ZERO/POSITIVE/NEGATIVE/INDETERMINATE), and `semanticEq` (EQUAL/UNEQUAL/UNDETERMINED). Heavily commented for teaching.

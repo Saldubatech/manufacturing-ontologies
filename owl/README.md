@@ -1,45 +1,37 @@
-# Manufacturing Kanban Ontology — `owl/`
+# `owl/` — vendored public standards (reference cache, not a maintained ontology)
 
-OWL ontology authored in **Turtle (`.ttl`)** and opened with **Protégé**.
+This project **no longer maintains an authored OWL ontology.** The former
+`kanban.ttl` + `WIRING.md` were removed; their useful content was harvested into the
+workbook note **`domain-ontology/additional-info.md`** (class alignments, open issues,
+and the public-standard IRIs).
 
-## How to open
+What remains here is a **read-only reference cache** of the **public standard ontologies**
+that stay our **source-of-truth** for modeling — consulted when grounding the Alloy
+`meta/std/{bfo,iof,qudt}` boundary stubs (DT-002). We do **not** edit or re-publish them.
 
-Open **`kanban.ttl`** in Protégé. `catalog-v001.xml` (same directory) maps each
-imported ontology IRI to its local file under `imports/`, so the vendored
-reference ontologies load offline.
-
-## Layout
+## Contents
 
 ```
 owl/
-├── kanban.ttl              # the ontology — open/edit this
-├── catalog-v001.xml        # import-IRI → local-file map (vendored externals)
-└── imports/                # vendored reference ontologies (BFO 2020, IOF Core + AV, full QUDT)
+├── catalog-v001.xml   # import-IRI → local-file map (offline resolution for Protégé/ROBOT)
+└── imports/           # vendored public standards: BFO 2020, IOF Core + Annotation Vocab, full QUDT
 ```
 
-## Content
+See `imports/.vendor-map.json` for the IRI → file mapping, or
+`domain-ontology/additional-info.md` §1 for the same table with versions.
 
-`kanban.ttl` models pull-based shop-floor execution: Kanban cards and their
-8-state lifecycle, Jobs, Stations (source/sink/processing), Resources
-(atomic/composite, equipment/personnel/loop), and an ITU-T X.731 three-vector
-resource state model (operational / usage / administrative). See the companion
-document for the full conceptual walkthrough.
+## How to consult
 
-Ontology IRI: `http://manufacturing.ontology/kanban` · entity namespace
-`http://manufacturing.ontology/kanban#`.
+- **Protégé (offline):** open any file under `imports/`; `catalog-v001.xml` resolves
+  cross-imports to the local copies.
+- **ROBOT (CLI):** `java -jar tools/robot.jar …` from the repo root — `extract --method MIREOT`
+  to pull a boundary module, `query` for SPARQL lookups, `merge` to inspect a closure.
+  `make tools` fetches ROBOT (pinned, checksum-verified).
 
-## Alignment to the vendored ontologies
+## Posture
 
-The ontology is intended to align to **IOF Core** (which transitively imports
-**BFO 2020**) and may use **QUDT** for capacity quantities. The vendored closure
-lives under `imports/` and resolves via `catalog-v001.xml`. See
-`imports/README.md` for the vendored inventory and `WIRING.md` (if present) for
-the alignment plan and its status.
-
-## Adding an external ontology
-
-See `imports/README.md`: vendor the file under `imports/`, map its IRI in
-`catalog-v001.xml`, then add an `owl:imports` to `kanban.ttl`.
+These standards are **references**, not a deliverable. Any **departure** from them in the
+Alloy model must be **justified and documented** in the relevant decision/thread (DT-002).
 
 ---
 

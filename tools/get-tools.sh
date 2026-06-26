@@ -3,7 +3,7 @@
 # Fetch pinned analysis tools into this repo's gitignored tools/ directory.
 #
 #   - Alloy Analyzer (used by ../alloy/*.als)
-#   - ROBOT          (used to validate ../owl/*.ttl)
+#   - ROBOT          (consult the vendored public standards under ../owl/imports/)
 #
 # Resolution order per tool (idempotent, SHA-256 verified):
 #   1. tools/<name>.jar already present & matching  -> done
