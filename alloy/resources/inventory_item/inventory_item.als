@@ -91,7 +91,11 @@ sig InventoryItem extends Scoped {
   var locator:             lone PhysicalLocator,
   // descriptive, AdjustProperties-editable (STATE)
   var notes:               lone Text,
-  var colorCode:           lone Text
+  var colorCode:           lone Text,
+  // expiry (STATE, D17): absent ⇒ "never". PLACEHOLDER — modeled as an Int timestamp until the
+  // timeline/clock (DT-001.03) lands, at which point re-base on the real Instant type. Only ever
+  // SHORTENED (min) by Merge/Replenish — see operations.als.
+  var expirationDate:      lone Int
 }
 
 /** Live — the InventoryItems that currently EXIST (the existence axis, varying over the trace):

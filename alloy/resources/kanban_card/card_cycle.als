@@ -91,7 +91,9 @@ sig CardCycle extends Scoped {
                                              //   (REQUEST→REQUESTING births the cycle); never "no event yet". Stream → DT-001.03.
   locator:          lone PhysicalLocator,    // current location this cycle
   quantityOverride: lone Quantity,           // overrides KanbanCard.nominalQuantity [overrides]
-  materials:        lone EntityId,           // → InventoryItem this cycle carries [KC-MH-12: lone, typed via MaterialsRefIntegrity]
+  materials:        set EntityId,            // → InventoryItem(s) this cycle carries [KC-MH-12: SET, typed via MaterialsRefIntegrity]
+                                             //   a SET (not lone) so a cycle can carry several holdings WITHOUT forcing a Merge —
+                                             //   e.g. distinct lots/expirations kept separate; consolidated total via materialsItems below.
   sourcedBy:        lone EntityId,           // → Order/PO that sourced this cycle [KC-MH-4: untyped stub]
   precededBy:       lone CardCycle           // the prior cycle [KC-MH-1: DIRECT ref — flipped from soft for clean acyclicity]
 }
@@ -100,12 +102,23 @@ sig CardCycle extends Scoped {
 // a direct relation held by KanbanCard.cycles, so it is not a dataRef here.
 fact CardCycleRefs { all c: CardCycle | c.dataRefs = c.materials + c.sourcedBy }
 
-// [KC-MH-12 / KQ5] `materials` is a TYPED soft reference: when it resolves to anything, that handle is
-// an InventoryItem (dangling/cross-Universe allowed — soft ref, ≙ ItemClassifierIntegrity). The cycle
-// carries at most one InventoryItem at a time (lone); Split/Merge are the InventoryItem's own concern.
+// [KC-MH-12 / KQ5] `materials` is a TYPED soft reference SET: whatever any element resolves to is an
+// InventoryItem (dangling/cross-Universe allowed — soft ref, ≙ ItemClassifierIntegrity). The cycle may
+// carry SEVERAL holdings at once (relaxed from `lone`) so it need not force a Merge to co-mingle lots;
+// Split/Merge remain the InventoryItem's own concern.
 fact MaterialsRefIntegrity {
-  all c: CardCycle | let m = resolve[c.materials] | some m implies m in InventoryItem
+  all c: CardCycle | resolve[c.materials] in InventoryItem
 }
+
+/** materialsItems — the InventoryItem holdings this cycle currently carries (the resolved, in-universe
+    members of `materials`). */
+fun CardCycle.materialsItems: set InventoryItem { resolve[this.materials] & InventoryItem }
+
+// consolidatedActual — the cycle's total on-hand across its holdings = the keyed Σ of
+// `materialsItems.actualQuantity`. The keyed sum-over-a-set (Σ / fold of meta/algebra add) is the SAME
+// capability deferred for the inventory-count metrics (workbook DT-007); until it lands, the set of
+// contributing quantities is `this.materialsItems.actualQuantity` and the fold is computed downstream.
+// (Multi-unit, no cross-unit conversion — a consolidated total may span units, exactly like DT-007.)
 
 // [KC-MH-6] a CardCycle is always in one of the 8 core states (never AVAILABLE — that is card-level).
 fact CycleStatusIsCore { all c: CardCycle | c.status in coreCycleStatus }

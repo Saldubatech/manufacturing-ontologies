@@ -32,12 +32,17 @@ pred sameLoc[ii: InventoryItem]   { ii.locator' = ii.locator }
 pred sameAdmin[ii: InventoryItem] { ii.administrativeState' = ii.administrativeState }
 /** sameDesc — descriptive notes/colorCode unchanged. */
 pred sameDesc[ii: InventoryItem]  { ii.notes' = ii.notes and ii.colorCode' = ii.colorCode }
+/** sameExp — expiration unchanged (D17). */
+pred sameExp[ii: InventoryItem]   { ii.expirationDate' = ii.expirationDate }
+/** minExp — the earlier of two expirations (D17), with ABSENT = "never" = +∞: absent loses to any
+    present date; both absent ⇒ absent. (Int timestamp placeholder; native `<` comparison.) */
+fun minExp[a, b: lone Int]: lone Int { no a => b else (no b => a else (a < b => a else b)) }
 /** sameFill — fill state unchanged (D16: SEALED survives ops that don't change the real quantity). */
 pred sameFill[ii: InventoryItem]  { ii.fillState' = ii.fillState }
 /** demoteFill — any real-quantity change lands in OPEN, or EMPTY when the new on-hand is zero (D16). */
 pred demoteFill[ii: InventoryItem] { ii.fillState' = (isZero[ii.actualQuantity'.byUnit] => EMPTY else OPEN) }
 /** sameState — every mutable field unchanged (a fully-framed item). */
-pred sameState[ii: InventoryItem] { sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] }
+pred sameState[ii: InventoryItem] { sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] and sameExp[ii] }
 /** othersUnchanged — every OTHER live item is fully framed (the operation touches only `xs`). */
 pred othersUnchanged[xs: set InventoryItem] { all jj: Live - xs | sameState[jj] }
 
@@ -46,10 +51,10 @@ pred othersUnchanged[xs: set InventoryItem] { all jj: Live - xs | sameState[jj] 
     transition relation; trace-level lifecycle checks condition on it (`always (someOp implies …)`)
     so they constrain only real operation steps, not the arbitrary var changes Alloy otherwise allows. */
 pred someOp {
-  (some ii: InventoryItem, q: Quantity | create[ii, q])
+  (some ii: InventoryItem, q: Quantity | create[ii, q, none])
   or (some ii: InventoryItem | delete[ii])
   or (some ii: InventoryItem | writeOff[ii])
-  or (some ii: InventoryItem, q: Quantity | replenish[ii, q, none])
+  or (some ii: InventoryItem, q: Quantity | replenish[ii, q, none, none])
   or (some ii: InventoryItem, q: Quantity | consume[ii, q])
   or (some ii: InventoryItem, loc: PhysicalLocator | move[ii, loc])
   or (some ii: InventoryItem, loc: PhysicalLocator | forceMove[ii, loc])
@@ -70,7 +75,7 @@ pred someOp {
 /** Create — bring a fresh item into existence with a strictly positive initial quantity, UNLOCKED,
     no degraded/lots/locator/descriptors, fill = OPEN (D16 — creation presumes no operator intent;
     `seal` asserts SEALED later). Identity (itemRef, licensePlate, serial, minQuantity) is eternal. */
-pred create[ii: InventoryItem, qty: Quantity] {
+pred create[ii: InventoryItem, qty: Quantity, expiration: lone Int] {
   ii not in Live and ii not in Retired                            // pre: a genuinely fresh atom (never lived)
   classify[qty.byUnit] = POSITIVE                                 // strictly positive (no empty placeholders)
   // post
@@ -83,6 +88,7 @@ pred create[ii: InventoryItem, qty: Quantity] {
   ii.administrativeState' = UNLOCKED
   no ii.locator'
   no ii.notes' and no ii.colorCode'
+  ii.expirationDate' = expiration                                 // D17: born with the given expiry (none ⇒ never)
   othersUnchanged[ii]
 }
 
@@ -108,7 +114,7 @@ pred writeOff[ii: InventoryItem] {
 // ── boundary flows ──────────────────────────────────────────────────────────────────────
 /** Replenish — add a strictly positive delta from outside; may revive an EMPTY item. UNLOCKED and
     not DISABLED; lots unioned; serialized ⇒ only from Zero. */
-pred replenish[ii: InventoryItem, delta: Quantity, lots: set LotNumber] {
+pred replenish[ii: InventoryItem, delta: Quantity, lots: set LotNumber, expiration: lone Int] {
   ii in Live
   ii.administrativeState = UNLOCKED                               // else Rejected:Locked
   ii.operationalState != DISABLED                                 // else Rejected:Unfit
@@ -119,6 +125,7 @@ pred replenish[ii: InventoryItem, delta: Quantity, lots: set LotNumber] {
   ii.lotNumbers' = ii.lotNumbers + lots
   ii.degradedQty' = ii.degradedQty
   ii.fillState' = OPEN                                            // D16: real quantity changed (actual' > 0)
+  ii.expirationDate' = minExp[ii.expirationDate, expiration]      // D17: incoming stock can only SHORTEN expiry
   sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
   Live' = Live
   Retired' = Retired
@@ -142,7 +149,7 @@ pred consume[ii: InventoryItem, amount: Quantity] {
      => (no ii.degradedQty' and no ii.lotNumbers')                // consume-to-zero: husk
      else (ii.degradedQty' = ii.degradedQty and ii.lotNumbers' = ii.lotNumbers)
   demoteFill[ii]                                                  // D16: → EMPTY (to zero) or OPEN
-  sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameExp[ii]   // D17: removing stock doesn't change expiry
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -154,7 +161,7 @@ pred move[ii: InventoryItem, loc: PhysicalLocator] {
   ii in Live
   ii.administrativeState = UNLOCKED                               // else Rejected:Locked (use ForceMove)
   ii.locator' = loc
-  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D16: locator change preserves SEALED
+  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] and sameExp[ii]   // D16: locator change preserves SEALED; D17 expiry
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -165,7 +172,7 @@ pred move[ii: InventoryItem, loc: PhysicalLocator] {
 pred forceMove[ii: InventoryItem, loc: PhysicalLocator] {
   ii in Live
   ii.locator' = loc
-  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D16: locator change preserves SEALED
+  sameQty[ii] and sameLots[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] and sameExp[ii]   // D16: locator change preserves SEALED; D17 expiry
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -196,6 +203,7 @@ pred split[orig, nu: InventoryItem, splitOff: lone Quantity, degSplit: lone Quan
     nu.administrativeState' = orig.administrativeState
     nu.locator' = orig.locator
     nu.notes' = orig.notes and nu.colorCode' = orig.colorCode
+    nu.expirationDate' = orig.expirationDate                      // D17: split-off inherits the same expiry
     // original remainder
     orig.actualQuantity'.byUnit = add[orig.actualQuantity.byUnit, negate[soTot]]
     (isZero[orig.actualQuantity'.byUnit])
@@ -203,7 +211,7 @@ pred split[orig, nu: InventoryItem, splitOff: lone Quantity, degSplit: lone Quan
       else { (isZero[remDeg]) => no orig.degradedQty' else orig.degradedQty'.byUnit = remDeg
              orig.lotNumbers' = orig.lotNumbers }
     demoteFill[orig]                                              // D16: remainder's real quantity changed
-    sameLoc[orig] and sameAdmin[orig] and sameDesc[orig]
+    sameLoc[orig] and sameAdmin[orig] and sameDesc[orig] and sameExp[orig]   // D17: remainder keeps its expiry
   }
   Live' = Live + nu
   Retired' = Retired
@@ -222,6 +230,7 @@ pred merge[surv, absorbed: InventoryItem] {
   let dsum = add[surv.degradedQty.byUnit, absorbed.degradedQty.byUnit] |
     (isZero[dsum]) => no surv.degradedQty' else surv.degradedQty'.byUnit = dsum
   surv.lotNumbers' = surv.lotNumbers + absorbed.lotNumbers
+  surv.expirationDate' = minExp[surv.expirationDate, absorbed.expirationDate]   // D17: earliest of the two
   demoteFill[surv]                                                // D16: survivor's real quantity changed (→ OPEN)
   sameLoc[surv] and sameAdmin[surv] and sameDesc[surv]
   Live' = Live - absorbed
@@ -251,7 +260,7 @@ pred rePack[ii: InventoryItem, newGood: lone Quantity, newDeg: lone Quantity] {
   }
   ii.lotNumbers' = ii.lotNumbers
   sameFill[ii]                                                    // D16: re-expression preserves SEALED
-  sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameExp[ii]   // D17: re-expression preserves expiry
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -273,7 +282,7 @@ pred adjustQuantity[ii: InventoryItem, observedGood: Quantity, observedDeg: lone
              ii.lotNumbers' = ii.lotNumbers }
   }
   demoteFill[ii]                                                  // D16: a count is a real-quantity write
-  sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameExp[ii]   // D17: a count doesn't change expiry
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -286,7 +295,7 @@ pred adjustProperties[ii: InventoryItem, newNotes: lone Text, newColor: lone Tex
   some newNotes or some newColor                                 // non-empty updates (else Rejected:NotApplicable)
   (some newNotes => ii.notes'     = newNotes else ii.notes'     = ii.notes)
   (some newColor => ii.colorCode' = newColor else ii.colorCode' = ii.colorCode)
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameFill[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameFill[ii] and sameExp[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -303,7 +312,7 @@ pred inspect[ii: InventoryItem, deg: lone Quantity] {
   // post
   ii.actualQuantity' = ii.actualQuantity
   (no deg or isZero[deg.byUnit]) => no ii.degradedQty' else ii.degradedQty' = deg
-  sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii]   // D16: inspection preserves SEALED
+  sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameFill[ii] and sameExp[ii]   // D16: inspection preserves SEALED; D17 expiry
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -314,7 +323,7 @@ pred lock[ii: InventoryItem] {
   ii in Live
   ii.administrativeState = UNLOCKED                              // else Rejected:NotApplicable
   ii.administrativeState' = LOCKED
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii] and sameExp[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -325,7 +334,7 @@ pred unlock[ii: InventoryItem] {
   ii in Live
   ii.administrativeState = LOCKED                                // else Rejected:NotApplicable
   ii.administrativeState' = UNLOCKED
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameDesc[ii] and sameFill[ii] and sameExp[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -340,7 +349,7 @@ pred seal[ii: InventoryItem] {
   ii in Live
   ii.fillState != EMPTY                                          // else Rejected:Empty (nothing to seal)
   ii.fillState' = SEALED
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameExp[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]
@@ -351,7 +360,7 @@ pred unseal[ii: InventoryItem] {
   ii in Live
   ii.fillState = SEALED                                          // else Rejected:NotApplicable
   ii.fillState' = OPEN
-  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii]
+  sameQty[ii] and sameLots[ii] and sameLoc[ii] and sameAdmin[ii] and sameDesc[ii] and sameExp[ii]
   Live' = Live
   Retired' = Retired
   othersUnchanged[ii]

@@ -56,6 +56,11 @@ run unit_kc_materialsResolveII {
   some c: CardCycle, ii: InventoryItem | resolve[c.materials] = ii
 } for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar
 
+// A cycle carrying TWO distinct holdings at once (KC-MH-12 SET — e.g. two lots kept separate, no Merge).
+run unit_kc_multiMaterials {
+  some c: CardCycle | some disj a, b: InventoryItem | (a + b) in c.materialsItems
+} for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar
+
 // ── UNSAT: structural invariants forbid the bad case ────────────────────────────────────────
 // KC-MH-12: `materials` is typed — it can never resolve to a non-InventoryItem entity.
 run unit_kc_materialsNonIIImpossible {

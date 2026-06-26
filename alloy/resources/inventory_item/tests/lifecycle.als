@@ -21,7 +21,7 @@ run unit_lc_depletionRevivable {
     and consume[ii, amt]
     and after (ii in Live and ii.fillState = EMPTY            // depleted, still Live (not retired)
                and ii not in Retired
-               and replenish[ii, delta, none])
+               and replenish[ii, delta, none, none])
     and after after (ii in Live and ii.fillState != EMPTY)    // revived
 } for 6 but 3 Scalar
 
@@ -49,7 +49,7 @@ check unit_lc_lpnNeverReused for 6 but 3 Scalar
 // Born OPEN: a freshly created item is OPEN, never SEALED (creation presumes no operator intent —
 // the D15 born-FULL rule is retired).
 assert unit_lc_bornOpen {
-  always all ii: InventoryItem, q: Quantity | create[ii, q] implies after ii.fillState = OPEN
+  always all ii: InventoryItem, q: Quantity | create[ii, q, none] implies after ii.fillState = OPEN
 }
 check unit_lc_bornOpen for 6 but 3 Scalar
 
@@ -75,16 +75,24 @@ run unit_lc_fillCycle {
     ii.fillState = OPEN and seal[ii]
     and after (ii.fillState = SEALED and consume[ii, a1])
     and after after (ii.fillState = OPEN and consume[ii, a2])
-    and after after after (ii.fillState = EMPTY and replenish[ii, r, none])
+    and after after after (ii.fillState = EMPTY and replenish[ii, r, none, none])
     and after after after after (ii.fillState = OPEN)
 } for 6 but 3 Scalar
+
+// D17: expiration never increases — Merge/Replenish can only shorten it; all other ops preserve it.
+assert unit_lc_expirationNeverIncreases {
+  always (someOp implies all ii: InventoryItem |
+    (ii in Live and ii in Live' and some ii.expirationDate and some ii.expirationDate')
+      implies (ii.expirationDate' = ii.expirationDate or ii.expirationDate' < ii.expirationDate))
+}
+check unit_lc_expirationNeverIncreases for 6 but 3 Scalar
 
 // ── representative end-to-end lifecycle (expect SAT) ──────────────────────────────────────
 
 // Create → Lock → Unlock → Consume-to-zero → Delete: a full birth-to-retirement path.
 run unit_lc_fullLifecycle {
   some ii: InventoryItem, q, amt: Quantity |
-    create[ii, q]
+    create[ii, q, none]
     and after (ii in Live and lock[ii])
     and after after (ii.administrativeState = LOCKED and unlock[ii])
     and after after after (ii.administrativeState = UNLOCKED and consume[ii, amt])
