@@ -3,6 +3,7 @@
     <!-- Vendored public-standard ontologies: import-IRI -> local file (relative to owl/).
          Offline resolution for consulting these references in Protégé / ROBOT. -->
     <uri name="http://purl.obolibrary.org/obo/bfo/2020/bfo.owl" uri="imports/bfo.owl"/>
+    <uri name="http://www.w3.org/2006/time" uri="imports/www-w3-org-2006-time.ttl"/>
     <uri name="http://qudt.org/collection/usertest" uri="imports/qudt-org-collection-usertest.ttl"/>
     <uri name="http://qudt.org/schema/coordinateSystems" uri="imports/qudt-org-schema-coordinatesystems.ttl"/>
     <uri name="http://qudt.org/schema/datatype" uri="imports/qudt-org-schema-datatype.ttl"/>

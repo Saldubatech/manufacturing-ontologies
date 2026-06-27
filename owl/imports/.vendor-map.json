@@ -15,5 +15,6 @@
   "http://qudt.org/schema/datatype": "qudt-org-schema-datatype.ttl",
   "http://www.linkedmodel.org/schema/dtype": "www-linkedmodel-org-schema-dtype.rdf",
   "http://www.linkedmodel.org/schema/vaem": "www-linkedmodel-org-schema-vaem.rdf",
-  "http://www.w3.org/2004/02/skos/core": "www-w3-org-2004-02-skos-core.rdf"
+  "http://www.w3.org/2004/02/skos/core": "www-w3-org-2004-02-skos-core.rdf",
+  "http://www.w3.org/2006/time": "www-w3-org-2006-time.ttl"
 }
