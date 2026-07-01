@@ -1,4 +1,4 @@
-module meta/time
+module meta/time/time
 
 /*
  * Abstract time — an `Instant` with an intrinsic total order, plus a closed `TimeInterval`.
@@ -6,7 +6,7 @@ module meta/time
  * to time-stamp measurements and bound calculation/reporting periods (see meta/measurement),
  * independent of the Alloy 6 `var`/trace machinery.
  *
- * The order is a global FACT (not a premise like `meta/algebra/keyed_order`'s `orderAxioms`): a
+ * The order is a global FACT (not a premise like `meta/keyed_value_algebra/keyed_order`'s `orderAxioms`): a
  * finite total order is ALWAYS satisfiable — unlike a ring-compatible order on `Scalar`, which
  * keyed_order must posit as a premise — and anyone who `open`s meta/time wants time ordered, so
  * the cost is localized to time-users by the module boundary.
@@ -14,6 +14,8 @@ module meta/time
  * When DT-001.03 lands, `Instant` re-bases onto the real (bi)temporal clock; the order + interval
  * API here is the contract that survives.
  */
+
+open meta/time/duration                          // Duration, ZeroDuration, dAtOrBefore — for the elapsed-time metric
 
 /** Instant — a point in time (opaque); `lte` is the ≤ relation (a.lte = the instants ≥ a). */
 sig Instant { lte: set Instant }
@@ -89,4 +91,22 @@ pred calendarAxioms {
   }
   all ps: PeriodSpec, a, b: Instant |                      // monotone: later never closes earlier
     atOrBefore[a, b] implies atOrBefore[ps.closes[a], ps.closes[b]]
+}
+
+// ── Instant → Duration bridge: the elapsed-time metric (DT-010). `Duration` itself (the ordered value
+//    type) lives in `meta/duration`, opened above; only the arity-4 metric over instants lives here. ──
+
+/** the elapsed-time metric: `span[a][b]` = the Duration from `a` to `b`. */
+one sig TimeMetric { span: Instant -> Instant -> lone Duration }
+/** durationBetween — the elapsed Duration from `a` to `b` (present iff a ≤ b, under `durationAxioms`). */
+fun durationBetween[a, b: Instant]: lone Duration { TimeMetric.span[a][b] }
+
+/** durationAxioms — the elapsed-time laws, a PREMISE (assume it where staleness/elapsed reasoning is
+    needed; other models pay nothing). Abstract: no arithmetic, just a monotone metric. */
+pred durationAxioms {
+  all a: Instant | durationBetween[a, a] = ZeroDuration                       // no time at a point
+  all a, b: Instant | some durationBetween[a, b] iff atOrBefore[a, b]         // defined for a ≤ b
+  all a, b, c: Instant |                                                       // monotone: extend the end ⇒ ≥
+    (atOrBefore[a, b] and atOrBefore[b, c]) implies
+      dAtOrBefore[durationBetween[a, b], durationBetween[a, c]]
 }

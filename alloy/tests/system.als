@@ -8,8 +8,8 @@ open resources/kanban_card/baseline/kanban_card   // proven baseline; re-point t
 
 // Smoke: the union of the live modules admits a consistent instance.
 pred sys_modelLoads {}
-run sys_modelLoads for 6 but 5 Int
+run sys_modelLoads for 6 but 5 Int expect 1
 
 // Cross-domain: a card references an Item — and by kernel isolation they share a tenant.
 pred sys_cardReferencesItem { some c: KanbanCard, i: Item | resolve[c.itemRef] = i }
-run sys_cardReferencesItem for 6 but 5 Int
+run sys_cardReferencesItem for 6 but 5 Int expect 1

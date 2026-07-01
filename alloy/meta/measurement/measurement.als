@@ -18,7 +18,7 @@ module meta/measurement/measurement[V]
  * `meta/measurement/quantity` binds V = Quantity and supplies the keyed statistics.
  */
 
-open meta/time            // Instant, TimeInterval, PeriodUnit, TimeZone, endOfPeriod, within, …
+open meta/time/time            // Instant, TimeInterval, PeriodUnit, TimeZone, endOfPeriod, within, …
                           // NB: deliberately does NOT open meta/values, so Quantity stays single-path
                           // for the [Quantity] instantiation (avoids parameterized-open ambiguity);
                           // and so meta/time's cost stays confined to measurement-users.

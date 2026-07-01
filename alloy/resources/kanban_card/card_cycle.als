@@ -115,7 +115,7 @@ fact MaterialsRefIntegrity {
 fun CardCycle.materialsItems: set InventoryItem { resolve[this.materials] & InventoryItem }
 
 // consolidatedActual — the cycle's total on-hand across its holdings = the keyed Σ of
-// `materialsItems.actualQuantity`. The keyed sum-over-a-set (Σ / fold of meta/algebra add) is the SAME
+// `materialsItems.actualQuantity`. The keyed sum-over-a-set (Σ / fold of meta/keyed_value_algebra add) is the SAME
 // capability deferred for the inventory-count metrics (workbook DT-007); until it lands, the set of
 // contributing quantities is `this.materialsItems.actualQuantity` and the fold is computed downstream.
 // (Multi-unit, no cross-unit conversion — a consolidated total may span units, exactly like DT-007.)

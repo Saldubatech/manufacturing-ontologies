@@ -10,7 +10,7 @@ module meta/examples/ex13_keyed_value_algebra
  *           exchange/conversion table is available.
  * AVOID:     forcing everything to one key (a silent wrong conversion), or failing on
  *           mixed keys. The algebra is total — it widens instead.
- * SEE ALSO:  meta/algebra/keyed_monoid; common-module Money.kt; DT-005 / money-quantity-algebra.md.
+ * SEE ALSO:  meta/keyed_value_algebra/keyed_monoid; common-module Money.kt; DT-005 / money-quantity-algebra.md.
  *
  * A value is a normal-form map  key -> lone Scalar  (no zero entries). Choosing the key
  * type instantiates the algebra:  MultiMoney = Currency -> lone Scalar ;
@@ -18,7 +18,7 @@ module meta/examples/ex13_keyed_value_algebra
  * reals), so amounts and scalar factors are both decimals.
  */
 
-open meta/algebra/keyed_monoid
+open meta/keyed_value_algebra/keyed_monoid
 
 // Two independent key types — currencies (money) and units of measure (quantity).
 sig Currency {}   // e.g. USD, EUR
@@ -32,24 +32,24 @@ run multiCurrencyTotal {
   ringAxioms and
   (some usd, eur: Currency -> lone Scalar |
     isSingle[usd] and isSingle[eur] and usd.Scalar != eur.Scalar and isMulti[add[usd, eur]])
-} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit expect 1
 
 // Quantities in different units likewise cannot be added into one number (widen).
 run multiUnitQuantity {
   ringAxioms and
   (some kg, each: Unit -> lone Scalar |
     isSingle[kg] and isSingle[each] and kg.Scalar != each.Scalar and isMulti[add[kg, each]])
-} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit expect 1
 
 // A booking and its reversal net to zero (collapse).
 run reversalCollapses {
   ringAxioms and (some m: Currency -> lone Scalar | isSingle[m] and isZero[add[m, negate[m]]])
-} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit expect 1
 
 // Scaling by the zero decimal annihilates; by one is the identity.
 run scaleByZero {
   ringAxioms and (some m: Currency -> lone Scalar | isSingle[m] and isZero[scale[SZero, m]])
-} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit expect 1
 run scaleByOne {
   ringAxioms and (some m: Currency -> lone Scalar | isSingle[m] and scale[SOne, m] = m)
-} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit
+} for 3 but exactly 3 Scalar, exactly 2 Currency, exactly 2 Unit expect 1

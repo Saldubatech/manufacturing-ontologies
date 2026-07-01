@@ -1,8 +1,8 @@
-module meta/algebra/keyed_order
+module meta/keyed_value_algebra/keyed_order
 
 /*
  * ORDER, SIGN CLASSIFICATION, and (partial) EQUALITY for the keyed monoid
- * (meta/algebra/keyed_monoid). This is an OPTIONAL extension — open it only where you
+ * (meta/keyed_value_algebra/keyed_monoid). This is an OPTIONAL extension — open it only where you
  * need to compare values; the base monoid (add / scale) does not depend on it.
  *
  * ──────────────────────── The concepts (abstract algebra, plainly) ────────────────────
@@ -45,7 +45,7 @@ module meta/algebra/keyed_order
  * as we assume the ring axioms.
  */
 
-open meta/algebra/keyed_monoid
+open meta/keyed_value_algebra/keyed_monoid
 
 // ── The posited order on Scalar ───────────────────────────────────────────────────────
 // `le` is a binary relation read as "≤": the tuple `a->b` being `in le` means a ≤ b.

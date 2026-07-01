@@ -109,12 +109,12 @@ fact RoomInterlock {
 
 // SAT: a room with a coherent combination of region states exists.
 run someRoom { some Room }
-  for 4 but 8 State, 8 Signal, 8 Transition, 3 StateMachine, 0 Guard
+  for 4 but 8 State, 8 Signal, 8 Transition, 3 StateMachine, 0 Guard expect 1
 
 // UNSAT: the interlock forbids an out-of-service, occupied room.
 run interlockForbidsBadRoom {
   some r: Room | r.maintenance = OUT_OF_SERVICE and r.occupancy = OCCUPIED
-} for 4 but 8 State, 8 Signal, 8 Transition, 3 StateMachine, 0 Guard
+} for 4 but 8 State, 8 Signal, 8 Transition, 3 StateMachine, 0 Guard expect 0
 
 // Each region machine is well-formed: every state reachable, every signal live.
 check regionsWellFormed {
@@ -124,4 +124,4 @@ check regionsWellFormed {
   liveSignals[OccupancyMachine]
   liveSignals[HousekeepingMachine]
   liveSignals[MaintenanceMachine]
-} for 4 but 8 State, 8 Signal, 8 Transition, 3 StateMachine, 0 Guard
+} for 4 but 8 State, 8 Signal, 8 Transition, 3 StateMachine, 0 Guard expect 0

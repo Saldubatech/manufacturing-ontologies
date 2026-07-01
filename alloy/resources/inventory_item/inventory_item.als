@@ -2,7 +2,7 @@ module resources/inventory_item/inventory_item
 
 open meta/kernel                  // Entity/Scoped, EntityId, resolve, refs
 open meta/values                  // Quantity (byUnit), PhysicalLocator, Unit
-open meta/algebra/keyed_order     // classify/Sign, semanticEq/EqVerdict, lte; (→ keyed_monoid: isZero, add, negate, zero, Scalar, SZero)
+open meta/keyed_value_algebra/keyed_order     // classify/Sign, semanticEq/EqVerdict, lte; (→ keyed_monoid: isZero, add, negate, zero, Scalar, SZero)
 open reference_data/item/item     // Item — the primary classifier
 
 /*

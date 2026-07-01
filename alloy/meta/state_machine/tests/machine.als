@@ -23,13 +23,13 @@ fact MDef {
 }
 
 // SAT: the framework + synthetic machine admit an instance.
-run unit_sm_loads {} for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard
+run unit_sm_loads {} for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard expect 1
 
 // Holds: every state reachable from the start; every signal labels a transition.
 check unit_sm_allReachable { allStatesReachable[M] }
-  for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard
+  for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard expect 0
 check unit_sm_liveSignals  { liveSignals[M] }
-  for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard
+  for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard expect 0
 
 // firedInto agrees with the edges: Go can land at either S1 (T_go) or S0 (T_back);
 // Stay (self-loop) holds either state.
@@ -38,4 +38,4 @@ check unit_sm_firedInto {
   firedInto[M, S0, Go]
   firedInto[M, S0, Stay]
   firedInto[M, S1, Stay]
-} for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard
+} for 4 but exactly 2 State, exactly 2 Signal, exactly 3 Transition, exactly 1 StateMachine, 0 Guard expect 0

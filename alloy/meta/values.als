@@ -2,16 +2,17 @@ module meta/values
 
 /*
  * Universal value objects (no identity; equal-by-content). Money and Quantity are
- * INSTANCES of the keyed monoid (meta/algebra/keyed_monoid): a value is a normal-form
+ * INSTANCES of the keyed monoid (meta/keyed_value_algebra/keyed_monoid): a value is a normal-form
  * map  key -> lone Scalar  with the monoid's add / scale / negate / zero.
  *   Money    = the Currency-keyed instance  (MultiMoney)
  *   Quantity = the Unit-keyed instance       (MultiQuantity)
  * Alloy has no type aliases, so each is a thin sig wrapping its normal-form map; the
  * monoid operations apply to that map (e.g. `add[m1.byCurrency, m2.byCurrency]`).
- * Amounts are decimals (abstract Scalar). Duration stays opaque for now (a future
- * time-unit monoid); the QUDT bridge for Unit/Currency is deferred (DT-002, DT-005).
+ * Amounts are decimals (abstract Scalar). `Duration` now lives in `meta/time/duration` (the ordered
+ * elapsed-time type); the QUDT bridge for Unit/Currency is deferred (DT-002, DT-005).
  */
-open meta/algebra/keyed_monoid   // Scalar, nf, add, scale, negate, zero, isZero/isSingle/isMulti
+open meta/keyed_value_algebra/keyed_monoid   // Scalar, nf, add, scale, negate, zero, isZero/isSingle/isMulti
+open meta/time/duration                           // Duration (re-exported for value-object users, e.g. lead time)
 
 // --- monoid key types -------------------------------------------------------
 /** Currency — the key of the Money monoid; a currency. Real values: common-module Currency.kt (USD, EUR, …). */
@@ -32,9 +33,7 @@ fact MoneyExtensional { all disj a, b: Money | a.byCurrency != b.byCurrency }
 sig Quantity { byUnit: Unit -> lone Scalar } { nf[byUnit] }
 fact QuantityExtensional { all disj a, b: Quantity | a.byUnit != b.byUnit }
 
-// --- still opaque -----------------------------------------------------------
-/** Duration — a length of time (opaque; a future time-unit monoid, QUDT bridge DT-002). */
-sig Duration {}
+// --- Duration now lives in meta/duration (ordered elapsed-time; re-exported via the open above) -------
 
 // --- PhysicalLocator: a containment hierarchy of physical space ------------
 // Nine nesting levels, outermost → innermost. All optional opaque labels (code: String);

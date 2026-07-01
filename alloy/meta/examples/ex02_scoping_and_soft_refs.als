@@ -60,11 +60,11 @@ fact GuestRefIntegrity { all r: Reservation | let g = resolve[r.guestRef] | some
 run scoping_ok {
   some h: Hotel, r: Reservation, g: Guest |
     r.tenantId = h.eId and resolve[r.guestRef] = g
-} for 5
+} for 5 expect 1
 
 // UNSAT: a reservation cannot reference a guest in a DIFFERENT hotel
 // (kernel CrossTenantIsolation forbids it — stated once, in meta/kernel).
 run crossTenantGuest {
   some r: Reservation | let g = resolve[r.guestRef] |
     some g and g in Guest and g.tenantId != r.tenantId
-} for 5
+} for 5 expect 0

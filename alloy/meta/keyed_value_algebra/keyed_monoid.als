@@ -1,4 +1,4 @@
-module meta/algebra/keyed_monoid
+module meta/keyed_value_algebra/keyed_monoid
 
 /*
  * Keyed additive group with scalar multiplication — the algebra behind common-module's
@@ -12,39 +12,13 @@ module meta/algebra/keyed_monoid
  * Instantiate by choosing the key type:  MultiMoney = Currency -> lone Scalar ;
  * MultiQuantity = Unit -> lone Scalar.
  *
- * `Scalar` abstracts a DECIMAL/REAL — amounts AND scalar factors are both decimals
- * (e.g. 0.5 * money). Alloy has no reals, so Scalar is uninterpreted and its arithmetic
- * is given by the operations + assumed commutative-ring axioms below; the model verifies
- * the KEYED structure (widen / collapse / normal form), not decimal arithmetic itself.
- * Reference: Money.kt. See DT-004 / money-quantity-algebra.md.
+ * `Scalar` (the decimal/real carrier + its reified ring ops + `ringAxioms`) is the foundational numeric
+ * primitive, now its own module `meta/scalar/scalar` (opened below). This module is the KEYED structure
+ * over it (widen / collapse / normal form); it verifies that, not decimal arithmetic itself.
+ * Reference: Money.kt. See DT-004 / DT-005; design/meta/kernel/scalar.md.
  */
 
-/** Scalar — a decimal/real value: an amount or a scalar factor. Uninterpreted (Alloy has
-    no reals); its arithmetic is the reified ring operations below. */
-sig Scalar {
-  splus: Scalar -> one Scalar,    // a.splus[b] = a + b
-  smul:  Scalar -> one Scalar,    // a.smul[b]  = a * b
-  sneg:  one Scalar               // additive inverse, −a
-}
-one sig SZero in Scalar {}        // additive identity (0)
-one sig SOne  in Scalar {}        // multiplicative identity (1)
-
-// (Scalar, splus, smul) is a non-trivial commutative ring with unit. Stated as a
-// PREMISE predicate, NOT a global fact: the keyed-algebra law checks assume it
-// (`ringAxioms implies <law>`), but modules that merely CARRY Scalar-valued maps
-// (meta/values' Money/Quantity, and their users) do not pay to solve a ring.
-pred ringAxioms {
-  SZero != SOne
-  all a, b: Scalar      | a.splus[b] = b.splus[a]
-  all a, b, c: Scalar   | (a.splus[b]).splus[c] = a.splus[b.splus[c]]
-  all a: Scalar         | a.splus[SZero] = a
-  all a: Scalar         | a.splus[a.sneg] = SZero
-  all a, b: Scalar      | a.smul[b] = b.smul[a]
-  all a, b, c: Scalar   | (a.smul[b]).smul[c] = a.smul[b.smul[c]]
-  all a: Scalar         | a.smul[SOne] = a
-  all a: Scalar         | a.smul[SZero] = SZero
-  all a, b, c: Scalar   | a.smul[b.splus[c]] = (a.smul[b]).splus[a.smul[c]]
-}
+open meta/scalar/scalar   // Scalar, splus/smul/sneg, SZero, SOne, ringAxioms
 
 // The additive identity value — the empty (key-less) map (common-module's `ZeroMoney`).
 fun zero: univ -> lone Scalar { none -> none }

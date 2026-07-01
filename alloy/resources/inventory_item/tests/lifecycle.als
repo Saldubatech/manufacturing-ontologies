@@ -23,26 +23,26 @@ run unit_lc_depletionRevivable {
                and ii not in Retired
                and replenish[ii, delta, none, none])
     and after after (ii in Live and ii.fillState != EMPTY)    // revived
-} for 6 but 3 Scalar
+} for 6 but 3 Scalar expect 1
 
 // Consume-to-zero NEVER retires the item — it stays Live (distinguishes deplete from Delete).
 assert unit_lc_depletionDoesNotRetire {
   always all ii: InventoryItem, q: Quantity |
     (ii in Live and consume[ii, q]) implies after (ii in Live and ii not in Retired)
 }
-check unit_lc_depletionDoesNotRetire for 6 but 3 Scalar
+check unit_lc_depletionDoesNotRetire for 6 but 3 Scalar expect 0
 
 // Delete IS terminal: once retired, an item is never Live again (D9/G5 non-reusability across time).
 assert unit_lc_deleteTerminal {
   always all ii: InventoryItem | ii in Retired implies always ii not in Live
 }
-check unit_lc_deleteTerminal for 6 but 3 Scalar
+check unit_lc_deleteTerminal for 6 but 3 Scalar expect 0
 
 // A deleted item's license plate is never taken by any other item (immutable + global uniqueness).
 assert unit_lc_lpnNeverReused {
   always all disj a, b: InventoryItem | a.licensePlate != b.licensePlate
 }
-check unit_lc_lpnNeverReused for 6 but 3 Scalar
+check unit_lc_lpnNeverReused for 6 but 3 Scalar expect 0
 
 // ── D16 Fill: born OPEN; SEALED is operator-asserted and RE-ENTERABLE ───────────────────────
 
@@ -51,14 +51,14 @@ check unit_lc_lpnNeverReused for 6 but 3 Scalar
 assert unit_lc_bornOpen {
   always all ii: InventoryItem, q: Quantity | create[ii, q, none] implies after ii.fillState = OPEN
 }
-check unit_lc_bornOpen for 6 but 3 Scalar
+check unit_lc_bornOpen for 6 but 3 Scalar expect 0
 
 // A quantity-changing op always breaks the seal: SEALED --consume--> OPEN (or EMPTY to zero).
 assert unit_lc_quantityChangeBreaksSeal {
   always all ii: InventoryItem, q: Quantity |
     (ii in Live and ii.fillState = SEALED and consume[ii, q]) implies after (ii.fillState != SEALED)
 }
-check unit_lc_quantityChangeBreaksSeal for 6 but 3 Scalar
+check unit_lc_quantityChangeBreaksSeal for 6 but 3 Scalar expect 0
 
 // SEALED is RE-ENTERABLE (the D15 "never re-entered" rule is gone): seal → unseal → seal again.
 run unit_lc_sealUnsealReseal {
@@ -67,7 +67,7 @@ run unit_lc_sealUnsealReseal {
     and after (ii.fillState = SEALED and unseal[ii])
     and after after (ii.fillState = OPEN and seal[ii])
     and after after after (ii.fillState = SEALED)
-} for 6 but 3 Scalar
+} for 6 but 3 Scalar expect 1
 
 // Full fill cycle: OPEN → (seal) SEALED → (consume) OPEN → (consume-to-zero) EMPTY → (replenish) OPEN.
 run unit_lc_fillCycle {
@@ -77,7 +77,7 @@ run unit_lc_fillCycle {
     and after after (ii.fillState = OPEN and consume[ii, a2])
     and after after after (ii.fillState = EMPTY and replenish[ii, r, none, none])
     and after after after after (ii.fillState = OPEN)
-} for 6 but 3 Scalar
+} for 6 but 3 Scalar expect 1
 
 // D17: expiration never increases — Merge/Replenish can only shorten it; all other ops preserve it.
 assert unit_lc_expirationNeverIncreases {
@@ -85,7 +85,7 @@ assert unit_lc_expirationNeverIncreases {
     (ii in Live and ii in Live' and some ii.expirationDate and some ii.expirationDate')
       implies (ii.expirationDate' = ii.expirationDate or ii.expirationDate' < ii.expirationDate))
 }
-check unit_lc_expirationNeverIncreases for 6 but 3 Scalar
+check unit_lc_expirationNeverIncreases for 6 but 3 Scalar expect 0
 
 // ── representative end-to-end lifecycle (expect SAT) ──────────────────────────────────────
 
@@ -98,7 +98,7 @@ run unit_lc_fullLifecycle {
     and after after after (ii.administrativeState = UNLOCKED and consume[ii, amt])
     and after after after after (ii.fillState = EMPTY and delete[ii])
     and after after after after after (ii in Retired and ii not in Live)
-} for 6 but 3 Scalar
+} for 6 but 3 Scalar expect 1
 
 // Split then the husk (emptied original) is Deletable while the split-off lives on.
 run unit_lc_splitThenDeleteHusk {
@@ -106,4 +106,4 @@ run unit_lc_splitThenDeleteHusk {
     no o.degradedQty and split[o, n, g, none]                  // split off the whole good portion → husk
     and after (o.fillState = EMPTY and n in Live and delete[o])
     and after after (o in Retired and n in Live)
-} for 6 but 3 Scalar
+} for 6 but 3 Scalar expect 1

@@ -11,19 +11,19 @@ open meta/x731_state/state
  */
 
 check X731Consistency
-  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard expect 0
 
 run someResource { some Resource }
-  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard expect 1
 
 check x731_op_reachable    { allStatesReachable[OperationalMachine] }
-  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard expect 0
 check x731_usage_reachable { allStatesReachable[UsageMachine] }
-  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard expect 0
 check x731_admin_reachable { allStatesReachable[AdministrativeMachine] }
-  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+  for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard expect 0
 check x731_liveSignals {
   liveSignals[OperationalMachine]
   liveSignals[UsageMachine]
   liveSignals[AdministrativeMachine]
-} for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard
+} for 4 but 8 State, 10 Signal, 10 Transition, 3 StateMachine, 0 Guard expect 0

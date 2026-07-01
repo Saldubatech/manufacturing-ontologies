@@ -51,15 +51,15 @@ fact RoomTypeIntegrity {
 // SAT: a room classified by a room type in the same hotel.
 run typeInstance_ok {
   some r: Room | some rt: RoomType | resolve[r.roomTypeRef] = rt
-} for 5
+} for 5 expect 1
 
 // SAT: the catalog is EXTENSIBLE — several room types coexist (Suite, King, Beach View …).
 // (This is the contrast with a closed enum: kinds are atoms you can add freely.)
-run extensibleCatalog { #RoomType >= 3 } for 6
+run extensibleCatalog { #RoomType >= 3 } for 6 expect 1
 
 // UNSAT: a room cannot be classified by a room type from another hotel
 // (kernel cross-tenant isolation).
 run crossTenantType {
   some r: Room | let rt = resolve[r.roomTypeRef] |
     some rt and rt in RoomType and rt.tenantId != r.tenantId
-} for 5
+} for 5 expect 0

@@ -18,7 +18,7 @@ module meta/examples/ex14_event_sourced_signal
  * LEVEL signal; the StayEvent log is the reified, timestamped operation history.
  */
 
-open meta/time                              // Instant, atOrBefore, earlierThan, PeriodSpec, endOfPeriod, calendarAxioms
+open meta/time/time                              // Instant, atOrBefore, earlierThan, PeriodSpec, endOfPeriod, calendarAxioms
 open meta/measurement/measurement[Int]      // Signal, Measurement, valueAt (LOCF), … over Int-valued signals
 
 // ── the one tracked signal: hotel occupancy (a LEVEL signal) ────────────────────────────────
@@ -52,12 +52,12 @@ run unit_ex14_occupancyTrace {
     earlierThan[e1.at, e2.at] and earlierThan[e2.at, e3.at]
     and e1.delta = 1 and e2.delta = 1 and e3.delta = -1
     and occupancyAt[e3.at] = 1
-} for 6
+} for 6 expect 1
 
 // An end-of-period (e.g. end-of-day) occupancy reading exists.
 run unit_ex14_endOfPeriod {
   calendarAxioms and (some ps: PeriodSpec, t: Instant | some endOfPeriodLevel[ps, t])
-} for 5
+} for 5 expect 1
 
 // ── the pressure test (check; UNSAT = holds) ─────────────────────────────────────────────────
 // THE CLAIM: meta/measurement's LOCF read over the emitted samples EQUALS the event-sourced
@@ -66,7 +66,7 @@ run unit_ex14_endOfPeriod {
 assert unit_ex14_frameworkMatchesEventSource {
   all t: Instant | (some e: StayEvent | atOrBefore[e.at, t]) implies valueAt[occupancy, t] = occupancyAt[t]
 }
-check unit_ex14_frameworkMatchesEventSource for 6
+check unit_ex14_frameworkMatchesEventSource for 6 expect 0
 
 // The level is a STEP/LOCF signal: with no event in (s, t], occupancy is unchanged across [s, t].
 assert unit_ex14_changesOnlyAtEvents {
@@ -74,4 +74,4 @@ assert unit_ex14_changesOnlyAtEvents {
     (atOrBefore[s, t] and (no e: StayEvent | earlierThan[s, e.at] and atOrBefore[e.at, t]))
       implies occupancyAt[s] = occupancyAt[t]
 }
-check unit_ex14_changesOnlyAtEvents for 6
+check unit_ex14_changesOnlyAtEvents for 6 expect 0
