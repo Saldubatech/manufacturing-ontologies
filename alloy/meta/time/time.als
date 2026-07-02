@@ -15,34 +15,15 @@ module meta/time/time
  * API here is the contract that survives.
  */
 
+open meta/time/instant                           // the bare axis: Instant + order + TimeInterval (split 2026-07-02)
 open meta/time/duration                          // Duration, ZeroDuration, dAtOrBefore — for the elapsed-time metric
 
-/** Instant — a point in time (opaque); `lte` is the ≤ relation (a.lte = the instants ≥ a). */
-sig Instant { lte: set Instant }
-
-fact InstantIsTotalOrder {
-  all a: Instant | a in a.lte                                            // reflexive
-  all a, b: Instant | (b in a.lte and a in b.lte) implies a = b          // antisymmetric
-  all a, b, c: Instant | (b in a.lte and c in b.lte) implies c in a.lte  // transitive
-  all a, b: Instant | b in a.lte or a in b.lte                           // total
-}
-
-/** atOrBefore — a ≤ b. */
-pred atOrBefore[a, b: Instant] { b in a.lte }
-/** earlierThan — a < b (strictly earlier). NB: `before` is a reserved LTL keyword in Alloy 6. */
-pred earlierThan[a, b: Instant] { b in a.lte and a != b }
-
-/** earliest — the minimum of a set of instants (`lone`; present iff `ts` is non-empty). */
-fun earliest[ts: set Instant]: lone Instant { { t: ts | all u: ts | u in t.lte } }
-/** latest — the maximum of a set of instants (`lone`). */
-fun latest[ts: set Instant]: lone Instant { { t: ts | all u: ts | t in u.lte } }
-
-/** TimeInterval — a closed window [from, to] (from ≤ to). */
-sig TimeInterval { from: one Instant, to: one Instant }
-fact IntervalWellFormed { all i: TimeInterval | atOrBefore[i.from, i.to] }
-
-/** within — instant `t` falls inside interval `i` (inclusive of both ends). */
-pred within[t: Instant, i: TimeInterval] { atOrBefore[i.from, t] and atOrBefore[t, i.to] }
+// `Instant`, its total order + comparison vocabulary (atOrBefore, earlierThan, earliest/latest) and
+// `TimeInterval`/`within` now live in meta/time/instant — split out so AXIS-ONLY consumers
+// (meta/occurrence, and through it the whole action/log cone) do not carry the ARITY-4 metric below:
+// Kodkod cannot represent an arity-4 relation once the universe exceeds ~215 atoms (2^31 tuple
+// indices), and domain occurrence-log universes routinely do. This module keeps the calendar and the
+// metric, re-exporting the axis to its openers.
 
 // ── standard period units, time zones & period boundaries (OWL-Time-aligned) ──────────────────
 // Grounded on W3C OWL-Time (http://www.w3.org/2006/time#): PeriodUnit ≈ the time:TemporalUnit

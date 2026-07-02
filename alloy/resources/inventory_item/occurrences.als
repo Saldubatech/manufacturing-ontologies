@@ -1,0 +1,255 @@
+module resources/inventory_item/occurrences
+
+/*
+ * The InventoryItem OCCURRENCE LOG (DT-006 domain build): each staged operation is a
+ * StatefulAction kind carrying typed bindings + the state records it read (`pre`) and produced
+ * (`post`); guards are REASON-PRECISE witnessed (admission = Accepted iff no violations; a
+ * rejection carries EXACTLY the violated reasons); Effects are witnessed against the shared
+ * transition cores (transitions.als); chaining is UNCONDITIONAL per touched item (a refused
+ * occurrence still read the real state); state-at-t is LOCF of records (stateAt), existence is the
+ * separate liveAt projection. Multi-item kinds (Split/Merge) carry per-role record fields beyond
+ * pre/post; a retiring occurrence's "post role" for the retired item is its read state (TOMBSTONE
+ * — satisfies PostOnlyIfCommitted; liveAt is what readers consult).
+ *
+ * Staged per DT-006 #4: quantity/degraded writers (Create, Delete, WriteOff, Replenish, Consume,
+ * AdjustQuantity, Inspect, RePack, Split, Merge). Pure state/descriptive writers follow later.
+ * Authorization (WriteOff privileged, ABAC over `by`) is the deferred commit-guard hook.
+ */
+
+open meta/action/stateful                        // StatefulAction (pre/post), committed, committedUpTo, …
+open resources/inventory_item/item_state         // InventoryItemState + intra-snapshot facts + derived
+open resources/inventory_item/transitions        // the value-parameterized cores + g* guard checks
+
+// ── Reason taxonomy (the "else Rejected:*" comments of operations.als, reified) ──────────────────
+one sig RNotLive, RAlreadyExists, RLocked, RUnfit, REmpty, RNonPositive, ROverdraw,
+        RSerialized, RNotApplicable, RIncompatible extends Reason {}
+
+// ── the kinds ─────────────────────────────────────────────────────────────────────────────────────
+/** IIOcc — an InventoryItem operation occurrence; `target` is the primary subject (pre/post are its
+    records). */
+abstract sig IIOcc extends StatefulAction { target: one InventoryItem }
+
+sig CreateOcc extends IIOcc { qty: one Quantity, exp: lone Int } { bindings = target + qty }
+sig DeleteOcc extends IIOcc {} { bindings = target }
+sig WriteOffOcc extends IIOcc {} { bindings = target }
+sig ReplenishOcc extends IIOcc { delta: one Quantity, lots: set LotNumber, exp: lone Int }
+  { bindings = target + delta + lots }
+sig ConsumeOcc extends IIOcc { amount: one Quantity } { bindings = target + amount }
+sig AdjustQuantityOcc extends IIOcc { good: one Quantity, degObs: lone Quantity }
+  { bindings = target + good + degObs }
+sig InspectOcc extends IIOcc { degObs: lone Quantity } { bindings = target + degObs }
+sig RePackOcc extends IIOcc { gNew: lone Quantity, dNew: lone Quantity }
+  { bindings = target + gNew + dNew }
+sig SplitOcc extends IIOcc {
+  nu: one InventoryItem, soGood: lone Quantity, soDeg: lone Quantity,
+  nuPost: lone InventoryItemState                 // the new item's born record — present iff committed
+} { bindings = target + nu + soGood + soDeg and nu != target }
+sig MergeOcc extends IIOcc {
+  absorbed: one InventoryItem,
+  absPre: lone InventoryItemState                 // the absorbed's READ state (its tombstone if committed)
+} { bindings = target + absorbed and absorbed != target }
+
+fact NuPostIffCommitted { all o: SplitOcc | some o.nuPost iff committed[o] }
+
+// ── touched items and their per-role records ─────────────────────────────────────────────────────
+fun touches[o: IIOcc]: set InventoryItem { o.target + (o & SplitOcc).nu + (o & MergeOcc).absorbed }
+
+/** retiringFor — o (if committed) ends ii's existence interval. */
+pred retiringFor[o: IIOcc, ii: InventoryItem] {
+  (o in DeleteOcc + WriteOffOcc and ii = o.target) or (o in MergeOcc and ii = (o & MergeOcc).absorbed)
+}
+
+/** postFor — the record o produced FOR ii (tombstone = the read state, for retired roles). */
+fun postFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
+  (ii = o.target) => o.post
+  else (ii = (o & SplitOcc).nu) => (o & SplitOcc).nuPost
+  else (ii = (o & MergeOcc).absorbed) => (o & MergeOcc).absPre
+  else none
+}
+/** preFor — the record o read FOR ii (none for Split's `nu` — a fresh subject has no prior state). */
+fun preFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
+  (ii = o.target) => o.pre
+  else (ii = (o & MergeOcc).absorbed) => (o & MergeOcc).absPre
+  else none
+}
+
+// ── UNCONDITIONAL chaining: every occurrence read the real prior state of every item it touches ──
+fun priorOn[o: IIOcc, ii: InventoryItem]: lone IIOcc {
+  { b: IIOcc | committed[b] and ii in touches[b] and precedes[b.tick, o.tick]
+      and (no c: IIOcc | committed[c] and ii in touches[c]
+             and precedes[b.tick, c.tick] and precedes[c.tick, o.tick]) }
+}
+fact IIChaining {
+  all o: IIOcc, ii: touches[o] - (o & SplitOcc).nu | preFor[o, ii] = postFor[priorOn[o, ii], ii]
+}
+
+/** liveBefore — ii exists just before o's tick: some committed history whose last touch didn't retire it. */
+pred liveBefore[o: IIOcc, ii: InventoryItem] {
+  let p = priorOn[o, ii] | some p and not retiringFor[p, ii]
+}
+
+// ── reason-precise admission guards (violation sets; Accepted ⟺ ∅; because = EXACTLY the set) ────
+fun createViol[o: CreateOcc]: set Reason {
+  ((some priorOn[o, o.target]) => RAlreadyExists else none)      // incl. tombstones: LPN never resurrects
+  + ((not gPositive[o.qty.byUnit]) => RNonPositive else none)
+}
+fun deleteViol[o: DeleteOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sFill != EMPTY) => RNotApplicable else none)   // use WriteOff
+}
+fun writeOffViol[o: WriteOffOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)          // privileged: no fill guard
+}
+fun replenishViol[o: ReplenishOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sAdmin != UNLOCKED) => RLocked else none)
+  + ((liveBefore[o, o.target] and o.pre.sOperationalState = DISABLED) => RUnfit else none)
+  + ((not gPositive[o.delta.byUnit]) => RNonPositive else none)
+  + ((liveBefore[o, o.target] and isSerialized[o.target] and not isZero[o.pre.sActual.byUnit])
+       => RSerialized else none)
+}
+fun consumeViol[o: ConsumeOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sAdmin != UNLOCKED) => RLocked else none)
+  + ((liveBefore[o, o.target] and o.pre.sOperationalState = DISABLED) => RUnfit else none)
+  + ((liveBefore[o, o.target] and o.pre.sFill = EMPTY) => REmpty else none)
+  + ((not gPositive[o.amount.byUnit]) => RNonPositive else none)
+  + ((liveBefore[o, o.target] and not gWithin[o.amount.byUnit, o.pre.sAvailableQty]) => ROverdraw else none)
+  + ((liveBefore[o, o.target] and isSerialized[o.target]
+        and not gAllOf[o.amount.byUnit, o.pre.sAvailableQty]) => RSerialized else none)
+}
+fun adjustQuantityViol[o: AdjustQuantityOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((not gNonNegative[o.good.byUnit] or (some o.degObs and not gNonNegative[o.degObs.byUnit]))
+       => RNonPositive else none)
+}
+fun inspectViol[o: InspectOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sFill = EMPTY) => REmpty else none)
+  + ((some o.degObs and not gNonNegative[o.degObs.byUnit]) => RNonPositive else none)
+  + ((liveBefore[o, o.target] and some o.degObs
+        and not gWithin[o.degObs.byUnit, o.pre.sActual.byUnit]) => RIncompatible else none)
+  + ((liveBefore[o, o.target] and isSerialized[o.target] and some o.degObs
+        and not isZero[o.degObs.byUnit]
+        and not gAllOf[o.degObs.byUnit, o.pre.sActual.byUnit]) => RSerialized else none)
+}
+fun rePackViol[o: RePackOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((isSerialized[o.target]) => RSerialized else none)
+  + ((liveBefore[o, o.target] and o.pre.sFill = EMPTY) => REmpty else none)
+  + ((no o.gNew and no o.dNew) => RNotApplicable else none)
+  + ((liveBefore[o, o.target] and
+       (let dmap = (some o.dNew => o.dNew.byUnit else o.pre.sDegraded.byUnit) |
+        let gmap = (some o.gNew => o.gNew.byUnit else o.pre.sAvailableQty) |
+        let amap = add[gmap, dmap] |
+          not gWithin[dmap, amap] or isZero[amap] or not gNonNegative[gmap] or not gNonNegative[dmap]))
+       => RIncompatible else none)
+}
+fun splitViol[o: SplitOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((some priorOn[o, o.nu]) => RAlreadyExists else none)                 // nu must be genuinely fresh
+  + ((isSerialized[o.target] or isSerialized[o.nu]) => RSerialized else none)
+  + ((no o.soGood and no o.soDeg) => RNonPositive else none)
+  + (((some o.soGood and not gPositive[o.soGood.byUnit])
+       or (some o.soDeg and not gPositive[o.soDeg.byUnit])) => RNonPositive else none)
+  + ((liveBefore[o, o.target] and
+       ((some o.soGood and not gWithin[o.soGood.byUnit, o.pre.sAvailableQty])
+        or (some o.soDeg and not gWithin[o.soDeg.byUnit, o.pre.sDegraded.byUnit])))
+       => ROverdraw else none)
+  + ((o.nu.itemRef != o.target.itemRef or o.nu.tenantId != o.target.tenantId) => RIncompatible else none)
+}
+fun mergeViol[o: MergeOcc]: set Reason {
+  ((not liveBefore[o, o.target] or not liveBefore[o, o.absorbed]) => RNotLive else none)
+  + ((isSerialized[o.target] or isSerialized[o.absorbed]) => RSerialized else none)
+  + ((o.target.tenantId != o.absorbed.tenantId or o.target.itemRef != o.absorbed.itemRef
+      or (liveBefore[o, o.target] and liveBefore[o, o.absorbed]
+            and o.pre.sLocator != o.absPre.sLocator)) => RIncompatible else none)
+}
+
+// ── witnessing: verdicts ⟺ violation sets; Effects ⟺ the cores; per-kind record frames ───────────
+fact IIAdmissionWitness {
+  all o: CreateOcc         | (o.admission = Accepted iff no createViol[o])         and (o.admission in Rejected implies o.admission.because = createViol[o])
+  all o: DeleteOcc         | (o.admission = Accepted iff no deleteViol[o])         and (o.admission in Rejected implies o.admission.because = deleteViol[o])
+  all o: WriteOffOcc       | (o.admission = Accepted iff no writeOffViol[o])       and (o.admission in Rejected implies o.admission.because = writeOffViol[o])
+  all o: ReplenishOcc      | (o.admission = Accepted iff no replenishViol[o])      and (o.admission in Rejected implies o.admission.because = replenishViol[o])
+  all o: ConsumeOcc        | (o.admission = Accepted iff no consumeViol[o])        and (o.admission in Rejected implies o.admission.because = consumeViol[o])
+  all o: AdjustQuantityOcc | (o.admission = Accepted iff no adjustQuantityViol[o]) and (o.admission in Rejected implies o.admission.because = adjustQuantityViol[o])
+  all o: InspectOcc        | (o.admission = Accepted iff no inspectViol[o])        and (o.admission in Rejected implies o.admission.because = inspectViol[o])
+  all o: RePackOcc         | (o.admission = Accepted iff no rePackViol[o])         and (o.admission in Rejected implies o.admission.because = rePackViol[o])
+  all o: SplitOcc          | (o.admission = Accepted iff no splitViol[o])          and (o.admission in Rejected implies o.admission.because = splitViol[o])
+  all o: MergeOcc          | (o.admission = Accepted iff no mergeViol[o])          and (o.admission in Rejected implies o.admission.because = mergeViol[o])
+}
+// No result policy in v1; the ABAC/authorization commit guard is the deferred hook (DT-006 Layer 2).
+fact IICommitAccepts { all o: IIOcc | some o.commit implies o.commit = Accepted }
+
+// Record-frame helpers (the frame conjuncts relocate to records — they do not disappear).
+pred sameDescriptors[b, a: InventoryItemState] {
+  a.sLocator = b.sLocator and a.sNotes = b.sNotes and a.sColorCode = b.sColorCode
+}
+pred sameAdminExp[b, a: InventoryItemState] { a.sAdmin = b.sAdmin and a.sExpiration = b.sExpiration }
+
+fact IIEffectWitness {
+  all o: CreateOcc | committed[o] implies {
+    createE[o.qty.byUnit, o.exp, o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots,
+            o.post.sFill, o.post.sAdmin, o.post.sExpiration]
+    no o.post.sLocator and no o.post.sNotes and no o.post.sColorCode
+  }
+  all o: DeleteOcc + WriteOffOcc | committed[o] implies o.post = o.pre                    // tombstone
+  all o: ReplenishOcc | committed[o] implies {
+    replenishE[o.delta.byUnit, o.lots, o.exp,
+               o.pre.sActual.byUnit, o.pre.sDegraded.byUnit, o.pre.sLots, o.pre.sExpiration,
+               o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill, o.post.sExpiration]
+    sameDescriptors[o.pre, o.post] and o.post.sAdmin = o.pre.sAdmin
+  }
+  all o: ConsumeOcc | committed[o] implies {
+    consumeE[o.amount.byUnit, o.pre.sActual.byUnit, o.pre.sDegraded.byUnit, o.pre.sLots,
+             o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill]
+    sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+  }
+  all o: AdjustQuantityOcc | committed[o] implies {
+    adjustQuantityE[o.good.byUnit, o.degObs.byUnit, (some o.degObs => 1 else 0),
+                    o.pre.sDegraded.byUnit, o.pre.sLots,
+                    o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill]
+    sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+  }
+  all o: InspectOcc | committed[o] implies {
+    inspectE[o.degObs.byUnit, o.pre.sActual.byUnit, o.pre.sLots,
+             o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill, o.pre.sFill]
+    sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+  }
+  all o: RePackOcc | committed[o] implies {
+    rePackE[o.gNew.byUnit, o.dNew.byUnit, (some o.gNew => 1 else 0), (some o.dNew => 1 else 0),
+            o.pre.sActual.byUnit, o.pre.sDegraded.byUnit, o.pre.sLots, o.pre.sFill,
+            o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill]
+    sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+  }
+  all o: SplitOcc | committed[o] implies {
+    splitE[o.soGood.byUnit, o.soDeg.byUnit,
+           o.pre.sActual.byUnit, o.pre.sDegraded.byUnit, o.pre.sLots,
+           o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill,
+           o.nuPost.sActual.byUnit, o.nuPost.sDegraded.byUnit, o.nuPost.sLots, o.nuPost.sFill]
+    sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+    sameDescriptors[o.pre, o.nuPost] and o.nuPost.sAdmin = o.pre.sAdmin
+    o.nuPost.sExpiration = o.pre.sExpiration
+  }
+  all o: MergeOcc | committed[o] implies {
+    mergeE[o.pre.sActual.byUnit, o.pre.sDegraded.byUnit, o.absPre.sActual.byUnit, o.absPre.sDegraded.byUnit,
+           o.pre.sLots, o.absPre.sLots, o.pre.sExpiration, o.absPre.sExpiration,
+           o.post.sActual.byUnit, o.post.sDegraded.byUnit, o.post.sLots, o.post.sFill, o.post.sExpiration]
+    sameDescriptors[o.pre, o.post] and o.post.sAdmin = o.pre.sAdmin
+  }
+}
+
+// ── the projections ───────────────────────────────────────────────────────────────────────────────
+/** lastTouch — the latest committed occurrence at-or-before `t` that touches `ii`. */
+fun lastTouch[ii: InventoryItem, t: Tick]: lone IIOcc {
+  { o: IIOcc | committed[o] and ii in touches[o] and notAfter[o.tick, t]
+      and (no b: IIOcc | committed[b] and ii in touches[b] and notAfter[b.tick, t]
+             and precedes[o.tick, b.tick]) }
+}
+/** stateAt — LOCF of records: ii's payload as of `t` (its tombstone once retired — check liveAt). */
+fun stateAt[ii: InventoryItem, t: Tick]: lone InventoryItemState { postFor[lastTouch[ii, t], ii] }
+/** liveAt — the existence projection: created, and the last touch did not retire it. */
+pred liveAt[ii: InventoryItem, t: Tick] {
+  let o = lastTouch[ii, t] | some o and not retiringFor[o, ii]
+}

@@ -11,7 +11,7 @@ module meta/occurrence/occurrence
  */
 
 open meta/model_time/model_time   // Tick, precedes, follows, notAfter
-open meta/time/time               // Instant, atOrBefore, earlierThan
+open meta/time/instant             // the bare Instant axis (atOrBefore) — NOT the arity-4 metric
 
 /** Occurrence — something that happens: a model-time position + a domain-time (effective) stamp. */
 abstract sig Occurrence {
