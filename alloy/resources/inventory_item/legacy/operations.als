@@ -1,6 +1,6 @@
-module resources/inventory_item/operations
+module resources/inventory_item/legacy/operations
 
-open resources/inventory_item/inventory_item
+open resources/inventory_item/legacy/inventory_item
 
 /*
  * InventoryItem operations (v1) as TRANSITION PREDICATES over the effective timeline (Phase B,

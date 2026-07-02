@@ -1,6 +1,6 @@
-module resources/inventory_item/tests/lifecycle
+module resources/inventory_item/legacy/tests/lifecycle
 
-open resources/inventory_item/operations
+open resources/inventory_item/legacy/operations
 
 /*
  * Lifecycle / multi-step trace properties for InventoryItem (v1, Phase B). The headline decision

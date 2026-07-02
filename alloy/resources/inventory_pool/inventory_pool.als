@@ -44,10 +44,9 @@ fact PoolMembersInTenant {
   always all p: InventoryPool | all ii: p.items | ii.tenantId = p.tenantId
 }
 
-/** poolIsEmpty — a lightweight DERIVED reading: the pool holds no on-hand quantity (every member is zero).
-    The full inventory count (a keyed Quantity total) is the cross-sectional keyed Σ over `items` — derived,
-    not stored; wired when DT-007 lands. */
-pred poolIsEmpty[p: InventoryPool] { all ii: p.items | isZero[ii.actualQuantity.byUnit] }
+// (The former `poolIsEmpty` stand-in read the entity's var quantity, which moved to the occurrence
+// log's state records (DT-011): the pool-level reading becomes a projection over `stateAt` when the
+// DT-007 count wiring lands.)
 
 /** addItem — add an InventoryItem (of the pool's Item, same tenant, not already held) to the pool. */
 pred addItem[p: InventoryPool, ii: InventoryItem] {

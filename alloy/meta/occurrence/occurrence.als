@@ -1,22 +1,20 @@
 module meta/occurrence/occurrence
 
 /*
- * The BRIDGE between the two clocks (DT-001.03). An `Occurrence` is something that happens: it has a
- * position in MODEL TIME (`tick`) and a stamp in DOMAIN TIME (`at: Instant`).
+ * Occurrence — something that happens: an entry in the LOG, at a position in MODEL TIME (`tick`).
  *
- * This is the ONLY module that names both clocks. Keeping the tie here means neither pure clock module
- * (`meta/time`, `meta/model_time`) references the other, so the two can never be conflated. DT-006's
- * operation occurrences `extend Occurrence`; the op-log fold is `keyed_sum[Occurrence]` ordered by `tick`,
- * with `at` used only for chronological reads (period bucketing, staleness).
+ * MINIMAL BY DESIGN (DT-011, 2026-07-02): the core carries ONLY the causal position. The domain-time
+ * stamp (`at: Instant`) is the OPT-IN subset extension `meta/occurrence/timed` — most log reasoning
+ * (chaining, projections, guards) never needs wall-clock time, and carrying it by default put the
+ * whole Instant family (and the two-clock bridge premise) into every log universe. Open `timed` where
+ * chronological reads (period bucketing, staleness, as-of-wall-time) are actually wanted.
  */
 
 open meta/model_time/model_time   // Tick, precedes, follows, notAfter
-open meta/time/instant             // the bare Instant axis (atOrBefore) — NOT the arity-4 metric
 
-/** Occurrence — something that happens: a model-time position + a domain-time (effective) stamp. */
+/** Occurrence — something that happens: a model-time (causal) position in the log. */
 abstract sig Occurrence {
-  tick: one Tick,        // model time  — WHERE in the causal order
-  at:   one Instant      // domain time — the effective real-world stamp
+  tick: one Tick         // model time — WHERE in the causal order
 }
 
 /** Ticks linearize occurrences — at most one occurrence per tick — so the causal order is a strict
@@ -25,9 +23,3 @@ fact OneOccurrencePerTick { all disj a, b: Occurrence | a.tick != b.tick }
 
 /** occPrecedes — the causal (model-time) order lifted to occurrences. */
 pred occPrecedes[a, b: Occurrence] { precedes[a.tick, b.tick] }
-
-/** clocksAligned — the consistency PREMISE between the two clocks (NOT a global fact): the domain stamp
-    is monotone along the causal order. Forward-monotone by default; NOT assuming it admits BACKDATING
-    (an occurrence late in model time, early in domain time) — the seam toward bitemporality. Assume it
-    where forward-only reasoning is wanted (mirrors `calendarAxioms` / `durationAxioms`). */
-pred clocksAligned { all disj a, b: Occurrence | occPrecedes[a, b] implies atOrBefore[a.at, b.at] }

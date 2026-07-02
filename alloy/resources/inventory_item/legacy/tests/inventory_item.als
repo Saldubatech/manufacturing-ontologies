@@ -1,6 +1,6 @@
-module resources/inventory_item/tests/inventory_item
+module resources/inventory_item/legacy/tests/inventory_item
 
-open resources/inventory_item/inventory_item
+open resources/inventory_item/legacy/inventory_item
 
 /*
  * Static-shape tests for InventoryItem (v1), now over the TEMPORAL model (Phase B). Each run

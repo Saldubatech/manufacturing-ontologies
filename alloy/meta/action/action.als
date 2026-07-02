@@ -12,23 +12,23 @@ module meta/action/action
  *  - `bindings: set univ` — the BINDING ENVIRONMENT: the quantifier prefix of the guarded formula
  *    ("∃ x such that guard(x) then effect(x)"); DERIVED per kind from named, TYPED binding fields.
  *  - Two guards bracket the Effect: `admission` reads the pre-projection (`committedBefore`),
- *    `commit` reads the post-projection (`committedUpTo`); both may read `by` (ABAC).
+ *    `commit` reads the post-projection (`committedUpTo`).
  *  - WITNESSING PATTERN: guards are made evaluable per kind by a fact tying the stored verdict to
  *    a predicate — `all a: K | a.admission = Accepted iff kAdmissible[a]`.
- *  - The EFFECT is not reified here (state-agnostic core); kinds that carry state snapshots open
- *    the OPTIONAL extension `meta/action/stateful` (`before`/`after`), where the Effect has a seat.
+ *  - The core is MINIMAL (DT-011): OPT-IN subset extensions add state snapshots
+ *    (`meta/action/stateful` — where the Effect has its seat), the actor
+ *    (`meta/action/attributed`, `by` — ABAC/provenance), and the domain-time stamp
+ *    (`meta/occurrence/timed`, `at`). Open only what the model actually reads.
  */
 
-open meta/occurrence/occurrence   // Occurrence (tick + effective `at`)
+open meta/occurrence/occurrence   // Occurrence (tick — the causal log position)
 open meta/model_time/model_time   // Tick order vocabulary (precedes, notAfter)
-open meta/principal/principal     // Principal (the "who")
 open meta/action/outcome          // Decision, Accepted, Rejected, Reason
 
 // ── anatomy ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Action — an executed activity, reified as an Occurrence (an entry in the log). */
 abstract sig Action extends Occurrence {
-  by:        one Principal,      // the acting principal (actor) — read by guards/Effect (ABAC); not a binding
   bindings:  set univ,           // the binding environment (quantifier prefix) — DERIVED from per-kind typed fields
   admission: one Decision,       // guard verdict on the pre-projection
   commit:    lone Decision       // guard verdict on the post-projection — present iff admitted

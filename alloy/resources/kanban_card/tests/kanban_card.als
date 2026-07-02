@@ -1,6 +1,7 @@
 module resources/kanban_card/tests/kanban_card
 
 open meta/kernel
+open meta/keyed_value_algebra/keyed_order   // ringAxioms/orderAxioms (no longer re-exported by the slimmed inventory_item — DT-011)
 open shared/values
 open meta/state_machine/machine
 open reference_data/item/item

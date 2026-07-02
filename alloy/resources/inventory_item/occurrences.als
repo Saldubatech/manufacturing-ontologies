@@ -11,9 +11,10 @@ module resources/inventory_item/occurrences
  * pre/post; a retiring occurrence's "post role" for the retired item is its read state (TOMBSTONE
  * — satisfies PostOnlyIfCommitted; liveAt is what readers consult).
  *
- * Staged per DT-006 #4: quantity/degraded writers (Create, Delete, WriteOff, Replenish, Consume,
- * AdjustQuantity, Inspect, RePack, Split, Merge). Pure state/descriptive writers follow later.
- * Authorization (WriteOff privileged, ABAC over `by`) is the deferred commit-guard hook.
+ * Kinds: the quantity/degraded writers (Create, Delete, WriteOff, Replenish, Consume,
+ * AdjustQuantity, Inspect, RePack, Split, Merge) + the state writers (Lock/Unlock, Seal/Unseal).
+ * Move/AdjustProperties follow on demand. Authorization (WriteOff privileged, ABAC via the
+ * `attributed` extension) is the deferred commit-guard hook.
  */
 
 open meta/action/stateful                        // StatefulAction (pre/post), committed, committedUpTo, …
@@ -40,6 +41,10 @@ sig AdjustQuantityOcc extends IIOcc { good: one Quantity, degObs: lone Quantity 
 sig InspectOcc extends IIOcc { degObs: lone Quantity } { bindings = target + degObs }
 sig RePackOcc extends IIOcc { gNew: lone Quantity, dNew: lone Quantity }
   { bindings = target + gNew + dNew }
+sig LockOcc extends IIOcc {} { bindings = target }
+sig UnlockOcc extends IIOcc {} { bindings = target }
+sig SealOcc extends IIOcc {} { bindings = target }
+sig UnsealOcc extends IIOcc {} { bindings = target }
 sig SplitOcc extends IIOcc {
   nu: one InventoryItem, soGood: lone Quantity, soDeg: lone Quantity,
   nuPost: lone InventoryItemState                 // the new item's born record — present iff committed
@@ -166,6 +171,23 @@ fun mergeViol[o: MergeOcc]: set Reason {
             and o.pre.sLocator != o.absPre.sLocator)) => RIncompatible else none)
 }
 
+fun lockViol[o: LockOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sAdmin != UNLOCKED) => RNotApplicable else none)
+}
+fun unlockViol[o: UnlockOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sAdmin != LOCKED) => RNotApplicable else none)
+}
+fun sealViol[o: SealOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sFill = EMPTY) => REmpty else none)   // nothing to seal
+}
+fun unsealViol[o: UnsealOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sFill != SEALED) => RNotApplicable else none)
+}
+
 // ── witnessing: verdicts ⟺ violation sets; Effects ⟺ the cores; per-kind record frames ───────────
 fact IIAdmissionWitness {
   all o: CreateOcc         | (o.admission = Accepted iff no createViol[o])         and (o.admission in Rejected implies o.admission.because = createViol[o])
@@ -178,11 +200,18 @@ fact IIAdmissionWitness {
   all o: RePackOcc         | (o.admission = Accepted iff no rePackViol[o])         and (o.admission in Rejected implies o.admission.because = rePackViol[o])
   all o: SplitOcc          | (o.admission = Accepted iff no splitViol[o])          and (o.admission in Rejected implies o.admission.because = splitViol[o])
   all o: MergeOcc          | (o.admission = Accepted iff no mergeViol[o])          and (o.admission in Rejected implies o.admission.because = mergeViol[o])
+  all o: LockOcc           | (o.admission = Accepted iff no lockViol[o])           and (o.admission in Rejected implies o.admission.because = lockViol[o])
+  all o: UnlockOcc         | (o.admission = Accepted iff no unlockViol[o])         and (o.admission in Rejected implies o.admission.because = unlockViol[o])
+  all o: SealOcc           | (o.admission = Accepted iff no sealViol[o])           and (o.admission in Rejected implies o.admission.because = sealViol[o])
+  all o: UnsealOcc         | (o.admission = Accepted iff no unsealViol[o])         and (o.admission in Rejected implies o.admission.because = unsealViol[o])
 }
 // No result policy in v1; the ABAC/authorization commit guard is the deferred hook (DT-006 Layer 2).
 fact IICommitAccepts { all o: IIOcc | some o.commit implies o.commit = Accepted }
 
 // Record-frame helpers (the frame conjuncts relocate to records — they do not disappear).
+pred samePayloadQty[b, a: InventoryItemState] {
+  a.sActual = b.sActual and a.sDegraded = b.sDegraded and a.sLots = b.sLots
+}
 pred sameDescriptors[b, a: InventoryItemState] {
   a.sLocator = b.sLocator and a.sNotes = b.sNotes and a.sColorCode = b.sColorCode
 }
@@ -232,6 +261,24 @@ fact IIEffectWitness {
     sameDescriptors[o.pre, o.nuPost] and o.nuPost.sAdmin = o.pre.sAdmin
     o.nuPost.sExpiration = o.pre.sExpiration
   }
+  all o: LockOcc | committed[o] implies {
+    o.post.sAdmin = LOCKED
+    samePayloadQty[o.pre, o.post] and o.post.sFill = o.pre.sFill
+    sameDescriptors[o.pre, o.post] and o.post.sExpiration = o.pre.sExpiration
+  }
+  all o: UnlockOcc | committed[o] implies {
+    o.post.sAdmin = UNLOCKED
+    samePayloadQty[o.pre, o.post] and o.post.sFill = o.pre.sFill
+    sameDescriptors[o.pre, o.post] and o.post.sExpiration = o.pre.sExpiration
+  }
+  all o: SealOcc | committed[o] implies {
+    o.post.sFill = SEALED
+    samePayloadQty[o.pre, o.post] and sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+  }
+  all o: UnsealOcc | committed[o] implies {
+    o.post.sFill = OPEN
+    samePayloadQty[o.pre, o.post] and sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
+  }
   all o: MergeOcc | committed[o] implies {
     mergeE[o.pre.sActual.byUnit, o.pre.sDegraded.byUnit, o.absPre.sActual.byUnit, o.absPre.sDegraded.byUnit,
            o.pre.sLots, o.absPre.sLots, o.pre.sExpiration, o.absPre.sExpiration,
@@ -239,6 +286,10 @@ fact IIEffectWitness {
     sameDescriptors[o.pre, o.post] and o.post.sAdmin = o.pre.sAdmin
   }
 }
+
+// Tight by default — relocated handle no-orphans (this module is the DAG sink over all users):
+fact NoOrphanLotNumber { all x: LotNumber | x in InventoryItemState.sLots + ReplenishOcc.lots }
+fact NoOrphanText      { all x: Text | x in InventoryItemState.(sNotes + sColorCode) }
 
 // ── the projections ───────────────────────────────────────────────────────────────────────────────
 /** lastTouch — the latest committed occurrence at-or-before `t` that touches `ii`. */

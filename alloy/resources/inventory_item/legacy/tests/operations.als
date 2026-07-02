@@ -1,6 +1,6 @@
-module resources/inventory_item/tests/operations
+module resources/inventory_item/legacy/tests/operations
 
-open resources/inventory_item/operations
+open resources/inventory_item/legacy/operations
 
 /*
  * Operation/transition tests for InventoryItem (v1, Phase B). Each `unit_op_*` run exhibits a

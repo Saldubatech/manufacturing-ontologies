@@ -7,6 +7,7 @@ module tests/system
 // root (var fields); the cross-domain invariants below constrain IMMUTABLE relations only, so they stay
 // bare (modeling-conventions §3.2).
 open meta/kernel
+open meta/keyed_value_algebra/keyed_order   // ringAxioms/orderAxioms (no longer re-exported by the slimmed inventory_item — DT-011)
 open reference_data/item/item                    // transitively: item_supply, business_affiliate, business_role
 open resources/inventory_item/inventory_item
 open resources/inventory_pool/inventory_pool
