@@ -25,12 +25,29 @@ run unit_action_committed { some a: Op | committed[a] } for 4 expect 1
 run unit_action_commitRejected { some a: Op | a.admission = Accepted and a.commit in Rejected } for 4 expect 1
 
 // Every refusal carries at least one reason.
-assert unit_action_refusalHasReason { all a: Action | not committed[a] implies some blockedBy[a] }
+assert unit_action_refusalHasReason { all a: Action | not committed[a] implies some refusalReasons[a] }
 check unit_action_refusalHasReason for 5 expect 0
 
 // A success carries no reasons.
-assert unit_action_successNoReason { all a: Action | committed[a] implies no blockedBy[a] }
+assert unit_action_successNoReason { all a: Action | committed[a] implies no refusalReasons[a] }
 check unit_action_successNoReason for 5 expect 0
+
+// The three named outcomes PARTITION Action: every action satisfies exactly one.
+assert unit_action_outcomesPartition {
+  all a: Action |
+    (committed[a] or refusedAtAdmission[a] or refusedAtCommit[a])
+    and not (committed[a] and refusedAtAdmission[a])
+    and not (committed[a] and refusedAtCommit[a])
+    and not (refusedAtAdmission[a] and refusedAtCommit[a])
+}
+check unit_action_outcomesPartition for 5 expect 0
+
+// Pre vs post projection domain: the inclusive prefix exceeds the strict one by exactly the
+// committed action AT the tick (if any) — the "own contribution visible at own tick" law.
+assert unit_action_prePostDomains {
+  all t: Tick | committedUpTo[t] - committedBefore[t] = { a: Action | committed[a] and a.tick = t }
+}
+check unit_action_prePostDomains for 5 expect 0
 
 // ── state-as-projection: existence folded from the committed Create/Delete log (no `World`) ─────────
 /** Create — brings a new element into existence; bindings = the created element (an output binding). */

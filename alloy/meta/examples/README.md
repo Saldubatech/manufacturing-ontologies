@@ -66,6 +66,8 @@ note bottom #white : every entity is scoped to a Hotel (tenant)
 | 14 | Event-sourced LEVEL signal from a reified op-log (DT-006 spike → DT-008) | **ready** | event store + derived projection; fold/prefix-sum |
 | 15 | Guarded action chain + state-as-projection (meta/action, DT-006) | **ready** | command + guard [precondition]; foldl over a filtered log |
 | 16 | Two time models — `var`/LTL trace vs reified log + projection, with the AGREEMENT theorem (replay ≡ fold) | **ready** | state machine vs event store; State monad run ≡ foldl |
+| 17 | Snapshot-carrying occurrences (`meta/action/stateful`): chaining, value-parameterized cores, invariant-as-THEOREM, LOCF ≡ deltas | **ready** | event store + memento; scan-carrying-state |
+| 18 | The stack on the COMPLETED Action machinery (end of the 16→18 ladder): refusals recorded, `seq`-in-snapshot recovers the structural free ride | **ready** | validated event stream; refusals as retained Lefts |
 
 "Ready" = a runnable file exists. "Planned" = a catalog slot to fill as the pattern is
 needed. "Deferred" = waits on a modeling decision not yet made (the behavioral/temporal
@@ -84,11 +86,14 @@ The catalog above indexes by *pattern* (what you want to model); this table inde
 | Type / instance via classification atoms | 04 |
 | Reified state machines + **exact scopes** for `one sig` families | 09 |
 | Keyed value algebra (normal-form maps, widen/collapse) | 13 |
-| **State-as-projection** (no `World`, no domain `var`; state = fold over the log) | 14, 15, 16 |
-| **Witnessing pattern** (stored verdict ⟺ evaluable guard predicate) | 15 |
-| **Agreement theorem** (two independent encodings proven equal) | 14 (LOCF ≡ cumulative), 16 (replay ≡ fold) |
+| **State-as-projection** (no `World`, no domain `var`; state = fold over the log) | 14–18 |
+| **Witnessing pattern** (stored verdict ⟺ evaluable guard predicate; Effects ⟺ transition cores) | 15, 17, 18 |
+| **Agreement theorem** (two independent encodings proven equal) | 14 (LOCF ≡ cumulative), 16 (replay ≡ fold), 17/18 (LOCF ≡ deltas) |
 | Model time as data (`Tick` order over reified events) vs `var`/LTL traces | 15, 16 (14 orders by `Instant` — deliberate, see its header) |
 | `var`/LTL mechanics: primed transitions, frame obligations, `always` discipline (§3.2) | 16 |
+| **Snapshot-carrying occurrences** (as-of-read): `pre`/`post` records, UNCONDITIONAL chaining, LOCF-of-records | 17, 18 |
+| **Invariant as theorem** (derived from witnessed guards, not stated as a fact) | 17 (balance ≥ 0), 18 (LIFO) |
+| Value-parameterized transition cores (one spec, any carrier) | 17, 18 |
 
 See also: [rosetta-uml.md](rosetta-uml.md) (the full UML/FP ↔ Alloy translation table)
 and the workbook `modeling-conventions.md` (the *why* behind each convention).

@@ -67,7 +67,7 @@ run unit_ex15_chainThenQuery {
 
 // A refusal is RECORDED (with reasons), not absent: a non-committed check-in carries its because.
 run unit_ex15_refusalRecorded {
-  some a: CheckIn | not committed[a] and some blockedBy[a]
+  some a: CheckIn | not committed[a] and some refusalReasons[a]
 } for 5 expect 1
 
 // ── the guard makes illegal chains unrepresentable (check; UNSAT = holds) ────────────────────────────
