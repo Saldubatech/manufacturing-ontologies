@@ -8,7 +8,7 @@ open resources/inventory_item/occurrences
  * every quantitative root. Scope notes: each committed occurrence consumes a Tick + record +
  * Quantity atoms — scopes size those families generously and keep the rest small.
  */
-fact ScalarPremises { ringAxioms and orderAxioms }
+fact ScalarPremises { groupAxioms and orderAxioms }   // group suffices: domain roots do additive arithmetic only (DT-011)
 
 // ── SAT witnesses ─────────────────────────────────────────────────────────────────────────────────
 // A committed Create: read back through the projections — live, with its born record.
@@ -133,3 +133,23 @@ assert unit_occ_sealedOnlyBySeal {
     not (o.post.sFill = SEALED and o.pre.sFill != SEALED)
 }
 check unit_occ_sealedOnlyBySeal for 5 but 3 Scalar, 5 Int expect 0
+
+// ── the Quantity-reframing tranche (2026-07-02): partiality + the valid-UoM rule ──────────────────
+// An INCOMPARABLE consume (amount on a different unit basis) is refused with exactly RIncomparable —
+// the conservative-refusal convention, distinct from a provable overdraw.
+run unit_occ_incomparableRefused {
+  some o: ConsumeOcc | refusedAtAdmission[o] and o.admission.because = RIncomparable
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// DT-009's valid-UoM rule: a TRACKED item's operation using a unit outside its scheme is refused
+// carrying RInvalidUnit.
+run unit_occ_invalidUnitRefused {
+  some o: ConsumeOcc | refusedAtAdmission[o] and RInvalidUnit in o.admission.because
+    and some schemeOf[o.target]
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// The rule as a theorem: committed operations on tracked items use only scheme units.
+assert unit_occ_committedUnitsValid {
+  all o: ConsumeOcc | committed[o] implies unitsOk[o.amount.byUnit, o.target]
+}
+check unit_occ_committedUnitsValid for 5 but 3 Scalar, 5 Int expect 0

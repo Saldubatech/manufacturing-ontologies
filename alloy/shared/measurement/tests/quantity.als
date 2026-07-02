@@ -8,7 +8,7 @@ module shared/measurement/tests/quantity
 
 open shared/measurement/quantity
 
-fact ScalarPremises { ringAxioms and orderAxioms }
+fact ScalarPremises { groupAxioms and orderAxioms }   // group suffices: domain roots do additive arithmetic only (DT-011)
 
 // ── coherence (expect SAT) ────────────────────────────────────────────────────────────────
 // A period with two comparable values: MIN and MAX both exist and are sampled values.

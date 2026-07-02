@@ -23,7 +23,11 @@ open resources/inventory_item/transitions        // the value-parameterized core
 
 // ── Reason taxonomy (the "else Rejected:*" comments of operations.als, reified) ──────────────────
 one sig RNotLive, RAlreadyExists, RLocked, RUnfit, REmpty, RNonPositive, ROverdraw,
-        RSerialized, RNotApplicable, RIncompatible extends Reason {}
+        RSerialized, RNotApplicable, RIncompatible, RIncomparable, RInvalidUnit extends Reason {}
+// RIncomparable — the amounts are on incomparable unit bases (the partial order is silent): the
+//   conservative-refusal convention; distinct from ROverdraw ("provably more than available" —
+//   re-express via rePack and retry, vs. "you don't have enough").
+// RInvalidUnit — a tracked Item's operation used a unit outside its UomScheme (DT-009's valid-UoM rule).
 
 // ── the kinds ─────────────────────────────────────────────────────────────────────────────────────
 /** IIOcc — an InventoryItem operation occurrence; `target` is the primary subject (pre/post are its
@@ -93,10 +97,22 @@ pred liveBefore[o: IIOcc, ii: InventoryItem] {
   let p = priorOn[o, ii] | some p and not retiringFor[p, ii]
 }
 
+/** schemeOf — the target's UomScheme, when its classifier resolves to a TRACKED Item (dangling /
+    cross-Universe classifiers and untracked Items yield none — the valid-UoM rule cannot and does
+    not apply). */
+fun schemeOf[ii: InventoryItem]: lone UomScheme { (resolve[ii.itemRef] & Item).uom }
+
+/** unitsOk — the amount's units are all configured in the target's scheme (vacuously true when the
+    target is untracked or its classifier dangles) — DT-009's valid-UoM rule. */
+pred unitsOk[m: Unit -> lone Scalar, ii: InventoryItem] {
+  let sch = schemeOf[ii] | some sch implies m.univ in sch.units
+}
+
 // ── reason-precise admission guards (violation sets; Accepted ⟺ ∅; because = EXACTLY the set) ────
 fun createViol[o: CreateOcc]: set Reason {
   ((some priorOn[o, o.target]) => RAlreadyExists else none)      // incl. tombstones: LPN never resurrects
   + ((not gPositive[o.qty.byUnit]) => RNonPositive else none)
+  + ((not unitsOk[o.qty.byUnit, o.target]) => RInvalidUnit else none)
 }
 fun deleteViol[o: DeleteOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
@@ -112,6 +128,7 @@ fun replenishViol[o: ReplenishOcc]: set Reason {
   + ((not gPositive[o.delta.byUnit]) => RNonPositive else none)
   + ((liveBefore[o, o.target] and isSerialized[o.target] and not isZero[o.pre.sActual.byUnit])
        => RSerialized else none)
+  + ((not unitsOk[o.delta.byUnit, o.target]) => RInvalidUnit else none)
 }
 fun consumeViol[o: ConsumeOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
@@ -119,7 +136,11 @@ fun consumeViol[o: ConsumeOcc]: set Reason {
   + ((liveBefore[o, o.target] and o.pre.sOperationalState = DISABLED) => RUnfit else none)
   + ((liveBefore[o, o.target] and o.pre.sFill = EMPTY) => REmpty else none)
   + ((not gPositive[o.amount.byUnit]) => RNonPositive else none)
-  + ((liveBefore[o, o.target] and not gWithin[o.amount.byUnit, o.pre.sAvailableQty]) => ROverdraw else none)
+  + ((liveBefore[o, o.target] and gComparable[o.amount.byUnit, o.pre.sAvailableQty]
+        and not gWithin[o.amount.byUnit, o.pre.sAvailableQty]) => ROverdraw else none)
+  + ((liveBefore[o, o.target] and not gComparable[o.amount.byUnit, o.pre.sAvailableQty])
+        => RIncomparable else none)
+  + ((not unitsOk[o.amount.byUnit, o.target]) => RInvalidUnit else none)
   + ((liveBefore[o, o.target] and isSerialized[o.target]
         and not gAllOf[o.amount.byUnit, o.pre.sAvailableQty]) => RSerialized else none)
 }
@@ -127,13 +148,18 @@ fun adjustQuantityViol[o: AdjustQuantityOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
   + ((not gNonNegative[o.good.byUnit] or (some o.degObs and not gNonNegative[o.degObs.byUnit]))
        => RNonPositive else none)
+  + ((not (unitsOk[o.good.byUnit, o.target] and unitsOk[o.degObs.byUnit, o.target]))
+       => RInvalidUnit else none)
 }
 fun inspectViol[o: InspectOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
   + ((liveBefore[o, o.target] and o.pre.sFill = EMPTY) => REmpty else none)
   + ((some o.degObs and not gNonNegative[o.degObs.byUnit]) => RNonPositive else none)
-  + ((liveBefore[o, o.target] and some o.degObs
+  + ((liveBefore[o, o.target] and some o.degObs and gComparable[o.degObs.byUnit, o.pre.sActual.byUnit]
         and not gWithin[o.degObs.byUnit, o.pre.sActual.byUnit]) => RIncompatible else none)
+  + ((liveBefore[o, o.target] and some o.degObs
+        and not gComparable[o.degObs.byUnit, o.pre.sActual.byUnit]) => RIncomparable else none)
+  + ((not unitsOk[o.degObs.byUnit, o.target]) => RInvalidUnit else none)
   + ((liveBefore[o, o.target] and isSerialized[o.target] and some o.degObs
         and not isZero[o.degObs.byUnit]
         and not gAllOf[o.degObs.byUnit, o.pre.sActual.byUnit]) => RSerialized else none)
@@ -149,6 +175,8 @@ fun rePackViol[o: RePackOcc]: set Reason {
         let amap = add[gmap, dmap] |
           not gWithin[dmap, amap] or isZero[amap] or not gNonNegative[gmap] or not gNonNegative[dmap]))
        => RIncompatible else none)
+  + ((not (unitsOk[o.gNew.byUnit, o.target] and unitsOk[o.dNew.byUnit, o.target]))
+       => RInvalidUnit else none)
 }
 fun splitViol[o: SplitOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
@@ -158,9 +186,17 @@ fun splitViol[o: SplitOcc]: set Reason {
   + (((some o.soGood and not gPositive[o.soGood.byUnit])
        or (some o.soDeg and not gPositive[o.soDeg.byUnit])) => RNonPositive else none)
   + ((liveBefore[o, o.target] and
-       ((some o.soGood and not gWithin[o.soGood.byUnit, o.pre.sAvailableQty])
-        or (some o.soDeg and not gWithin[o.soDeg.byUnit, o.pre.sDegraded.byUnit])))
+       ((some o.soGood and gComparable[o.soGood.byUnit, o.pre.sAvailableQty]
+           and not gWithin[o.soGood.byUnit, o.pre.sAvailableQty])
+        or (some o.soDeg and gComparable[o.soDeg.byUnit, o.pre.sDegraded.byUnit]
+           and not gWithin[o.soDeg.byUnit, o.pre.sDegraded.byUnit])))
        => ROverdraw else none)
+  + ((liveBefore[o, o.target] and
+       ((some o.soGood and not gComparable[o.soGood.byUnit, o.pre.sAvailableQty])
+        or (some o.soDeg and not gComparable[o.soDeg.byUnit, o.pre.sDegraded.byUnit])))
+       => RIncomparable else none)
+  + ((not (unitsOk[o.soGood.byUnit, o.target] and unitsOk[o.soDeg.byUnit, o.target]))
+       => RInvalidUnit else none)
   + ((o.nu.itemRef != o.target.itemRef or o.nu.tenantId != o.target.tenantId) => RIncompatible else none)
 }
 fun mergeViol[o: MergeOcc]: set Reason {

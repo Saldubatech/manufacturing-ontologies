@@ -13,7 +13,7 @@ open resources/kanban_card/kanban_card
 // `materials` now resolves to InventoryItem (card_cycle opens inventory_item), so any command that
 // forces an InventoryItem atom needs the keyed_order premise for its cone/derivation facts to be
 // meaningful — exactly as the inventory_item test roots assume it.
-fact ScalarPremises { ringAxioms and orderAxioms }
+fact ScalarPremises { groupAxioms and orderAxioms }   // group suffices: domain roots do additive arithmetic only (DT-011)
 
 /*
  * DRAFT unit suite for the split KanbanCard + CardCycle model [KC-MH-*]. `unit_kc_*` names keep it

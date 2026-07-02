@@ -14,7 +14,7 @@ open resources/inventory_pool/inventory_pool
 open resources/kanban_card/kanban_card           // transitively: card_cycle, processing_network
 
 // The quantitative layers' premises (same assumption the module suites make).
-fact ScalarPremises { ringAxioms and orderAxioms }
+fact ScalarPremises { groupAxioms and orderAxioms }   // group suffices: domain roots do additive arithmetic only (DT-011)
 
 // Machine scope (DT-003): 14 State (9 op + 5 print), 20 Signal, 20 Transition, 2 StateMachine, 0 Guard.
 

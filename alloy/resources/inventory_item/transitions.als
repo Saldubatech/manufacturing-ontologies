@@ -31,6 +31,9 @@ pred gPositive[m: Unit -> lone Scalar]     { classify[m] = POSITIVE }
 pred gNonNegative[m: Unit -> lone Scalar]  { classify[m] in (ZERO + POSITIVE) }
 pred gWithin[m, bound: Unit -> lone Scalar] { lte[m, bound] }
 pred gAllOf[m, whole: Unit -> lone Scalar] { semanticEq[m, whole] = EQUAL }
+/** gComparable — the two amounts are comparable under the partial order (same-basis reasoning is
+    possible). NOT comparable ⇒ conservative refusal with RIncomparable; rePack is the escape hatch. */
+pred gComparable[a, b: Unit -> lone Scalar] { lte[a, b] or lte[b, a] }
 
 // ── effect cores ─────────────────────────────────────────────────────────────────────────────────
 /** createE — born with qty, no qualifiers, OPEN, UNLOCKED, bare descriptors, given expiry. */
