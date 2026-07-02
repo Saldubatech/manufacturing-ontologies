@@ -1,7 +1,7 @@
-module meta/x731_state/tests/state
+module shared/x731_state/tests/state
 
 open meta/state_machine/machine
-open meta/x731_state/state
+open shared/x731_state/state
 
 /*
  * X.731 suite. The interlock holds (relocated check; name kept), a valid resource

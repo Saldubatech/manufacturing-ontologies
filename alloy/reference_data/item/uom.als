@@ -18,7 +18,7 @@ module reference_data/item/uom
  * single-unit `toEach` below is its base case. See design/meta/keyed-value-algebra + DT-009.
  */
 
-open meta/values            // Unit
+open shared/values            // Unit
 open meta/scalar/scalar     // Scalar, SOne, SZero
 
 /** Each — the canonical reference unit (factor 1.0), present in every tracked Item's scheme. */

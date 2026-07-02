@@ -1,4 +1,4 @@
-module meta/std/owl_time
+module shared/std/owl_time
 
 /*
  * STUB — vendored OWL-Time (W3C Time Ontology, http://www.w3.org/2006/time#) boundary terms

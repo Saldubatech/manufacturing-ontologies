@@ -49,7 +49,7 @@ pred within[t: Instant, i: TimeInterval] { atOrBefore[i.from, t] and atOrBefore[
 // individuals (time:unitHour/unitDay/unitWeek); TimeZone ≈ time:TimeZone; `endOfPeriod` is the
 // period close. The actual calendar arithmetic (which Instant *is* a day/week boundary in a given
 // zone) is a time:TRS / clock concern (DT-001.03) — here period boundaries are characterized
-// ABSTRACTLY by their laws, not computed. See meta/std/owl_time for the MIREOT term mapping.
+// ABSTRACTLY by their laws, not computed. See shared/std/owl_time for the MIREOT term mapping.
 
 /** PeriodUnit — a standard calculation-period length (OWL-Time `time:unitHour/unitDay/unitWeek`).
     MONTH/YEAR (variable length) deferred. */

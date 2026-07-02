@@ -1,4 +1,4 @@
-module meta/measurement/tests/quantity
+module shared/measurement/tests/quantity
 
 /*
  * Tests for the V=Quantity instantiation: MIN/MAX (keyed partial order) and the metricResult dispatch.
@@ -6,7 +6,7 @@ module meta/measurement/tests/quantity
  * inventory_item tests. (Temporal SUM is deferred — see quantity.als.)
  */
 
-open meta/measurement/quantity
+open shared/measurement/quantity
 
 fact ScalarPremises { ringAxioms and orderAxioms }
 

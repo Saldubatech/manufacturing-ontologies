@@ -1,4 +1,4 @@
-module meta/std/bfo
+module shared/std/bfo
 
 /*
  * STUB — vendored BFO boundary stubs (MIREOT). Only the BFO terms our entities

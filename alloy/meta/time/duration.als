@@ -5,7 +5,7 @@ module meta/time/duration
  * Alloy has no reals). Ordered so elapsed times compare to thresholds (the staleness metric, DT-010).
  *
  * Deliberately LIGHTWEIGHT and standalone: it carries only the value type + its order, NO instants and NO
- * arity-4 time-metric. Value-object users (e.g. `ItemSupply.averageLeadTime` via `meta/values`) open THIS
+ * arity-4 time-metric. Value-object users (e.g. `ItemSupply.averageLeadTime` via `shared/values`) open THIS
  * module so they do not drag the heavier `meta/time` machinery (`TimeMetric.span` is arity-4 and blows up
  * representation in large-scope roots such as kanban_card / system). The instant→duration bridge
  * (`TimeMetric.span`, `durationBetween`, `durationAxioms`) lives in `meta/time`, which opens this module.

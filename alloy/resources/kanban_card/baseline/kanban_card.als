@@ -1,7 +1,7 @@
 module resources/kanban_card/baseline/kanban_card
 
 open meta/kernel
-open meta/values                 // Quantity, PhysicalLocator
+open shared/values                 // Quantity, PhysicalLocator
 open meta/state_machine/machine  // State, Signal, StateMachine, firedInto, …
 open reference_data/item/item         // Item (soft-ref target); transitively ItemSupply for the shared-Quantity rule
 

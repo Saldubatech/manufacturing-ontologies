@@ -1,4 +1,4 @@
-module meta/values
+module shared/values
 
 /*
  * Universal value objects (no identity; equal-by-content). Money and Quantity are

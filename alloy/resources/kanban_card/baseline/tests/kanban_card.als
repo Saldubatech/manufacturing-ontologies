@@ -1,7 +1,7 @@
 module resources/kanban_card/baseline/tests/kanban_card
 
 open meta/kernel
-open meta/values
+open shared/values
 open meta/state_machine/machine
 open reference_data/item/item
 open resources/kanban_card/baseline/kanban_card

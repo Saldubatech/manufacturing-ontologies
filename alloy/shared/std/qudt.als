@@ -1,4 +1,4 @@
-module meta/std/qudt
+module shared/std/qudt
 
 /*
  * STUB — vendored QUDT boundary stubs (MIREOT). Only the QUDT terms our entities

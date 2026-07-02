@@ -1,7 +1,7 @@
 module resources/kanban_card/kanban_card
 
 open meta/kernel                                  // Scoped, EntityId, resolve
-open meta/values                                  // Quantity, PhysicalLocator
+open shared/values                                  // Quantity, PhysicalLocator
 open meta/state_machine/machine                   // print StateMachine + firedInto
 open reference_data/item/item                     // Item (soft-ref target)
 open resources/processing_network/processing_network  // Loop (soft-ref target) [KC-MH-5]

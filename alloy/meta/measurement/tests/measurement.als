@@ -2,15 +2,18 @@ module meta/measurement/tests/measurement
 
 /*
  * Structure + value-agnostic-selector tests for the generic meta/measurement[V] framework.
- * V is instantiated with an opaque stand-in (`Currency` — an unconstrained value sig) so these
- * tests exercise only what's value-type-independent: the Signal/Measurement/Metric/Report shape
- * and the LAST/FIRST/COUNT/valueAt selectors. Value-dependent stats (MIN/MAX/SUM) are tested in
- * the V=Quantity instantiation (../quantity ... tests).
+ * V is instantiated with a root-LOCAL opaque stand-in (`Reading` — an unconstrained value sig) so
+ * these tests exercise only what's value-type-independent: the Signal/Measurement/Metric/Report
+ * shape and the LAST/FIRST/COUNT/valueAt selectors. Value-dependent stats (MIN/MAX/SUM) are tested
+ * in the V=Quantity instantiation (shared/measurement/tests/quantity — meta never opens shared,
+ * DT-001.12, so the stand-in must not come from shared/values).
  */
 
-open meta/values            // Currency (opaque value stand-in)
 open meta/time/time              // Instant, TimeInterval, earlierThan, within, atOrBefore
-open meta/measurement/measurement[Currency]
+open meta/measurement/measurement[Reading]
+
+/** Reading — a root-local opaque value stand-in for the V parameter. */
+sig Reading {}
 
 // ── coherence (expect SAT) ────────────────────────────────────────────────────────────────
 // Two ordered samples of one signal inside a period: FIRST/LAST pick the endpoints' values.

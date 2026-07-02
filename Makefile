@@ -10,7 +10,7 @@ ROBOT := tools/robot.jar
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
 
-.PHONY: tools alloy check-alloy check-examples test-unit test-sys report report-examples check clean
+.PHONY: tools alloy check-layering check-alloy check-examples test-unit test-sys report report-examples check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -28,8 +28,18 @@ alloy: $(ALLOY)
 # code (a plain pipe would mask it) and fail the target on any mismatch — so a guard-rejection that
 # silently flips to SAT, or a check that develops a counterexample, breaks the build.
 
+## check-layering: enforce the DT-001.12 layer law — meta never opens shared; meta/shared never open a domain
+DOMAIN_DIRS := system|reference_data|resources|procurement|shop_access|fulfillment|operations|receiving|shipping|oam|workflows_and_integrations
+check-layering:
+	@fail=0; \
+	if grep -rn '^open shared/' alloy/meta --include='*.als'; then \
+	  echo "FAIL: meta must not open shared (DT-001.12 layer law)"; fail=1; fi; \
+	if grep -rnE '^open ($(DOMAIN_DIRS))/' alloy/meta alloy/shared --include='*.als'; then \
+	  echo "FAIL: meta/shared must not open a domain (DT-001.12 layer law)"; fail=1; fi; \
+	[ $$fail -eq 0 ] && echo "OK: layering respected (meta -/-> shared -/-> domains)" || exit 1
+
 ## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch
-check-alloy: $(ALLOY)
+check-alloy: $(ALLOY) check-layering
 	@mkdir -p $(OUT); fail=0; \
 	for f in $$(find alloy -path '*/tests/*.als' | sort); do \
 	  echo "== $$f =="; \

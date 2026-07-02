@@ -1,7 +1,7 @@
 module resources/kanban_card/tests/kanban_card
 
 open meta/kernel
-open meta/values
+open shared/values
 open meta/state_machine/machine
 open reference_data/item/item
 open resources/inventory_item/inventory_item   // InventoryItem (materials soft-ref target) [KC-MH-12]

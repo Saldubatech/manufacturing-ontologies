@@ -1,4 +1,4 @@
-module meta/x731_state/state
+module shared/x731_state/state
 
 open meta/state_machine/machine
 

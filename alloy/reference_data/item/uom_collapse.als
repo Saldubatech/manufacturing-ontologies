@@ -16,7 +16,7 @@ module reference_data/item/uom_collapse
  * SEE ALSO: reference_data/item/uom (UomScheme, Each, toEach); meta/keyed_value_algebra/keyed_sum; DT-009.
  */
 
-open meta/values                                    // Quantity, Unit
+open shared/values                                    // Quantity, Unit
 open meta/scalar/scalar                             // Scalar, SZero, SOne, splus, smul, ringAxioms
 open reference_data/item/uom                        // UomScheme, Each, toEach, units
 open meta/keyed_value_algebra/keyed_sum[ConvNode]   // Fold, add, zero, nf, chainSum (forward-refs ConvNode)

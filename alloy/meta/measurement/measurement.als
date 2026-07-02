@@ -15,11 +15,11 @@ module meta/measurement/measurement[V]
  *                  recomputed every Metric Interval (absent = on-demand).
  *
  * Time comes from meta/time (abstract ordered Instant; DT-001.03 seed). Values are opaque here;
- * `meta/measurement/quantity` binds V = Quantity and supplies the keyed statistics.
+ * `shared/measurement/quantity` binds V = Quantity and supplies the keyed statistics.
  */
 
 open meta/time/time            // Instant, TimeInterval, PeriodUnit, TimeZone, endOfPeriod, within, …
-                          // NB: deliberately does NOT open meta/values, so Quantity stays single-path
+                          // NB: deliberately does NOT open shared/values, so Quantity stays single-path
                           // for the [Quantity] instantiation (avoids parameterized-open ambiguity);
                           // and so meta/time's cost stays confined to measurement-users.
 

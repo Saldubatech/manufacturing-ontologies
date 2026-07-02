@@ -1,4 +1,4 @@
-module meta/certainty/certainty
+module shared/certainty/certainty
 
 /*
  * Certainty (confidence) levels and staleness decay (DT-010). An inventory count/level has a confidence

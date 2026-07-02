@@ -1,7 +1,7 @@
 module resources/kanban_card/card_cycle
 
 open meta/kernel                  // Scoped, EntityId
-open meta/values                  // Quantity, PhysicalLocator
+open shared/values                  // Quantity, PhysicalLocator
 open meta/state_machine/machine   // State, Signal, StateMachine, firedInto
 open resources/inventory_item/inventory_item  // InventoryItem (materials soft-ref target) [KC-MH-12/KQ5]
 

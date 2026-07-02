@@ -1,4 +1,4 @@
-module meta/measurement/quantity
+module shared/measurement/quantity
 
 /*
  * V = Quantity instantiation of meta/measurement — the value-dependent statistics that need the
@@ -16,7 +16,7 @@ module meta/measurement/quantity
  * report. This module is the framework-side value-statistics; SUM here is the FLOW-signal temporal total.
  */
 
-open meta/values                              // Quantity
+open shared/values                              // Quantity
 open meta/keyed_value_algebra/keyed_order                 // lte (componentwise partial order), classify; → keyed_monoid add/zero
 open meta/measurement/measurement[Quantity]   // Signal, Measurement, measurementsIn, latestIn/firstIn, lastValueIn, …
 open meta/keyed_value_algebra/keyed_sum[Measurement]      // Fold over Measurement, rangeSum (the Σ-along-order fold)

@@ -1,4 +1,4 @@
-module meta/std/iof
+module shared/std/iof
 
 /*
  * STUB — vendored IOF Core boundary stubs (MIREOT). Only the IOF terms our

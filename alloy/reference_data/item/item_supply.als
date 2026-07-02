@@ -1,7 +1,7 @@
 module reference_data/item/item_supply
 
 open meta/kernel
-open meta/values
+open shared/values
 open reference_data/business_affiliate/business_affiliate   // SupplierReference (+ BusinessRole, transitively, for the integrity fact)
 
 /** OrderMethod — how an item is ordered from a supplier. */

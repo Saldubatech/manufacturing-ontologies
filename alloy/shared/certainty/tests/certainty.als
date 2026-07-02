@@ -1,6 +1,6 @@
-module meta/certainty/tests/certainty
+module shared/certainty/tests/certainty
 
-open meta/certainty/certainty
+open shared/certainty/certainty
 
 // Three ordered levels exist.
 run unit_cert_levels { #CertaintyLevel = 3 } for 3 expect 1

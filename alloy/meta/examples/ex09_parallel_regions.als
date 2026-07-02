@@ -7,7 +7,7 @@ module meta/examples/ex09_parallel_regions
  * USE WHEN:  An entity runs several independent lifecycles at once.
  * AVOID:     Encoding the cross product as one flat enum (combinatorial blow-up;
  *            the interlock becomes unstatable).
- * SEE ALSO:  meta/state_machine/machine.als; meta/x731_state/state.als (real use, X.731).
+ * SEE ALSO:  meta/state_machine/machine.als; shared/x731_state/state.als (real use, X.731).
  *
  * A Room has three regions: occupancy ∥ housekeeping ∥ maintenance — each a reified
  * StateMachine — plus the interlock "out-of-service ⇒ not occupied" (the neutral twin
