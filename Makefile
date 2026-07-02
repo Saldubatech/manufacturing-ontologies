@@ -43,7 +43,7 @@ check-layering:
 ## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch
 check-alloy: $(ALLOY) check-layering
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
@@ -65,7 +65,7 @@ check-examples: $(ALLOY)
 ## test-unit: run only unit_* commands across all test roots
 test-unit: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) exec -c "unit_*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \

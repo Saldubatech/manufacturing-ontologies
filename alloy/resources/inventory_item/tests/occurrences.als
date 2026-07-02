@@ -153,3 +153,128 @@ assert unit_occ_committedUnitsValid {
   all o: ConsumeOcc | committed[o] implies unitsOk[o.amount.byUnit, o.target]
 }
 check unit_occ_committedUnitsValid for 5 but 3 Scalar, 5 Int expect 0
+
+// ── PARITY COMPLETION (2026-07-02) — the legacy checklists, log-side ─────────────────────────────
+// Firings and per-reason refusals not yet witnessed above; the grouped parity map (incl. recorded
+// deviations) is design/resources/inventory-item/verification/occurrences.md §Parity.
+
+// Delete fires: an EMPTY item committed-deleted; not live at the delete's tick.
+run unit_occ_deleteFires {
+  some o: DeleteOcc | committed[o] and o.pre.sFill = EMPTY and not liveAt[o.target, o.tick]
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// WriteOff (privileged) fires on a NON-empty item.
+run unit_occ_writeOffFires {
+  some o: WriteOffOcc | committed[o] and o.pre.sFill != EMPTY and not liveAt[o.target, o.tick]
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// AdjustQuantity to observed zero reconciles to the EMPTY husk (qualifiers cleared).
+run unit_occ_adjustToZero {
+  some o: AdjustQuantityOcc | committed[o] and isZero[o.good.byUnit] and no o.degObs
+    and o.post.sFill = EMPTY and no o.post.sDegraded and no o.post.sLots
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// Inspect sets degraded = actual → derived DISABLED; a clearing inspect → ENABLED.
+run unit_occ_inspectDisables {
+  some o: InspectOcc | committed[o] and some o.degObs
+    and o.post.sOperationalState = DISABLED and not isZero[o.post.sActual.byUnit]
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_inspectClears {
+  some o: InspectOcc | committed[o] and no o.degObs
+    and some o.pre.sDegraded and no o.post.sDegraded and o.post.sOperationalState = ENABLED
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// rePack preserves SEALED (D16: re-expression is not a real-quantity change).
+run unit_occ_rePackPreservesSealed {
+  some o: RePackOcc | committed[o] and o.pre.sFill = SEALED and o.post.sFill = SEALED
+} for 5 but 3 Scalar, 5 Int, 8 Quantity expect 1
+
+// Unlock fires (LOCKED → UNLOCKED).
+run unit_occ_unlockFires {
+  some o: UnlockOcc | committed[o] and o.pre.sAdmin = LOCKED and o.post.sAdmin = UNLOCKED
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// A real draw breaks the seal: consume on a SEALED item demotes to OPEN.
+run unit_occ_consumeDemotesSealed {
+  some o: ConsumeOcc | committed[o] and o.pre.sFill = SEALED and o.post.sFill = OPEN
+} for 5 but 3 Scalar, 5 Int, 8 Quantity expect 1
+
+// Split isolates spoilage: split off ALL the degraded portion → origin ENABLED, new item DISABLED.
+run unit_occ_splitIsolatesDegraded {
+  some o: SplitOcc | committed[o] and no o.soGood and some o.soDeg
+    and o.post.sOperationalState = ENABLED and o.nuPost.sOperationalState = DISABLED
+} for 6 but 3 Scalar, 5 Int, 8 Quantity expect 1
+
+// Consume the available part of a DEGRADED item → the DISABLED husk-of-degraded.
+run unit_occ_consumeToDisabled {
+  some o: ConsumeOcc | committed[o]
+    and some o.pre.sDegraded and not isZero[o.post.sActual.byUnit]
+    and o.post.sOperationalState = DISABLED
+} for 5 but 3 Scalar, 5 Int, 8 Quantity expect 1
+
+// D17 witnesses: create sets the expiry; merge takes the earlier of the two.
+run unit_occ_createWithExpiration {
+  some o: CreateOcc | committed[o] and o.exp = 4 and o.post.sExpiration = 4
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_mergeMinExpiration {
+  some o: MergeOcc | committed[o]
+    and o.pre.sExpiration = 3 and o.absPre.sExpiration = 7 and o.post.sExpiration = 3
+} for 6 but 3 Scalar, 5 Int, 8 Quantity expect 1
+
+// Per-reason refusal witnesses (each recorded with its exact violation set):
+run unit_occ_deleteNonEmptyRefused {
+  some o: DeleteOcc | refusedAtAdmission[o] and o.admission.because = RNotApplicable
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_consumeDisabledRefused {
+  some o: ConsumeOcc | refusedAtAdmission[o] and RUnfit in o.admission.because
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_replenishLockedRefused {
+  some o: ReplenishOcc | refusedAtAdmission[o] and o.admission.because = RLocked
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_splitSerializedRefused {
+  some o: SplitOcc | refusedAtAdmission[o] and RSerialized in o.admission.because
+} for 6 but 3 Scalar, 5 Int expect 1
+run unit_occ_mergeDifferentItemRefused {
+  some o: MergeOcc | refusedAtAdmission[o] and o.admission.because = RIncompatible
+    and o.target.itemRef != o.absorbed.itemRef
+} for 6 but 3 Scalar, 5 Int expect 1
+run unit_occ_sealEmptyRefused {
+  some o: SealOcc | refusedAtAdmission[o] and o.admission.because = REmpty
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_lockAlreadyLockedRefused {
+  some o: LockOcc | refusedAtAdmission[o] and o.admission.because = RNotApplicable
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_nonPositiveRefused {
+  some o: CreateOcc | refusedAtAdmission[o] and o.admission.because = RNonPositive
+} for 5 but 3 Scalar, 5 Int expect 1
+run unit_occ_notLiveRefused {
+  some o: ConsumeOcc | refusedAtAdmission[o] and RNotLive in o.admission.because
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// Structural guards inherited from the legacy structure suite (the entity facts, regression-guarded):
+run unit_occ_lpnClashImpossible {
+  some disj a, b: InventoryItem | a.licensePlate = b.licensePlate
+} for 5 but 3 Scalar, 5 Int expect 0
+run unit_occ_serialClashImpossible {
+  some disj a, b: InventoryItem | a.tenantId = b.tenantId and a.itemRef = b.itemRef
+    and some a.serialNumber and a.serialNumber = b.serialNumber
+} for 5 but 3 Scalar, 5 Int expect 0
+run unit_occ_crossTenantClassifierImpossible {
+  some ii: InventoryItem | let i = resolve[ii.itemRef] |
+    some i and i in Item and i.tenantId != ii.tenantId
+} for 5 but 3 Scalar, 5 Int expect 0
+
+// End-to-end lifecycle (the legacy lifecycle suite's spine): create → consume-to-zero (LIVE husk) →
+// replenish (revived) → consume-to-zero → delete (retired forever).
+run unit_occ_endToEnd {
+  some ii: InventoryItem, c: CreateOcc, k1: ConsumeOcc, r: ReplenishOcc, k2: ConsumeOcc, d: DeleteOcc | {
+    c.target = ii and k1.target = ii and r.target = ii and k2.target = ii and d.target = ii
+    precedes[c.tick, k1.tick] and precedes[k1.tick, r.tick]
+    precedes[r.tick, k2.tick] and precedes[k2.tick, d.tick]
+    committed[c] and committed[k1] and committed[r] and committed[k2] and committed[d]
+    k1.post.sFill = EMPTY and liveAt[ii, k1.tick]
+    r.post.sFill != EMPTY
+    k2.post.sFill = EMPTY
+    not liveAt[ii, d.tick]
+  }
+} for 7 but 3 Scalar, 5 Int, 10 Quantity, 7 Tick expect 1

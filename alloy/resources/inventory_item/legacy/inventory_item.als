@@ -1,5 +1,11 @@
 module resources/inventory_item/legacy/inventory_item
 
+// ═══ RETIRED (2026-07-02, DT-011): the frozen var/LTL carrier, OUT of the make check-alloy gate ═══
+// Parity with the canonical occurrence-log suite is COMPLETE (44 commands; parity map:
+// workbook design/resources/inventory-item/verification/occurrences.md). Kept in-tree, runnable
+// manually, lint-isolated (only legacy/ may open legacy/). The domain design it verified (D1-D17)
+// is unchanged and canonical.
+
 open meta/kernel                  // Entity/Scoped, EntityId, resolve, refs
 open shared/values                  // Quantity (byUnit), PhysicalLocator, Unit
 open meta/keyed_value_algebra/keyed_order     // classify/Sign, semanticEq/EqVerdict, lte; (→ keyed_monoid: isZero, add, negate, zero, Scalar, SZero)
