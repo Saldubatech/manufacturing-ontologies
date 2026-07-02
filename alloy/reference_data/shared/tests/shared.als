@@ -29,9 +29,11 @@ check unit_shared_supplierIsVendor {
 } for 6 expect 0
 
 // Cross-tenant isolation over every resolved reference (kernel CrossTenantIsolation regression) — UNSAT.
+// `some b` guard: an EMPTY resolve satisfies `b in Scoped` (subset), so the unguarded form is
+// falsified by any dangling ref — same empty-set bug as the 2026-07-01 kernel fix.
 check unit_shared_tenantIsolation {
   all a: Scoped, id: a.refs | let b = resolve[id] |
-    b in Scoped implies a.tenantId = b.tenantId
+    (some b and b in Scoped) implies a.tenantId = b.tenantId
 } for 6 expect 0
 
 // Negative: no ItemSupply resolves its vendor ref to a BusinessRole in a different tenant — UNSAT.

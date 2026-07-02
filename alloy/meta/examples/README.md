@@ -63,6 +63,8 @@ note bottom #white : every entity is scoped to a Hotel (tenant)
 | 11 | Change & the frame problem | deferred (DT-001.03) | operation; FP `old→new` |
 | 12 | Bitemporality (versions as data) | deferred (DT-001.03) | temporal/historized data |
 | 13 | Keyed value algebra (MultiMoney / MultiQuantity) | **ready** | free module; finitely-supported map |
+| 14 | Event-sourced LEVEL signal from a reified op-log (DT-006 spike → DT-008) | **ready** | event store + derived projection; fold/prefix-sum |
+| 15 | Guarded action chain + state-as-projection (meta/action, DT-006) | **ready** | command + guard [precondition]; foldl over a filtered log |
 
 "Ready" = a runnable file exists. "Planned" = a catalog slot to fill as the pattern is
 needed. "Deferred" = waits on a modeling decision not yet made (the behavioral/temporal

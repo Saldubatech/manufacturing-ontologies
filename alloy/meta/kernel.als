@@ -35,10 +35,13 @@ fun Entity.refs: set EntityId { this.dataRefs + this.tenantId }
 // Cross-tenant isolation — over the complete `refs` set, restricted to tenant-bearing
 // entities: if a Scoped entity refers to another Scoped entity that resolves in
 // scope, they share a tenant. Refs to non-Scoped/global entities (incl. the scope
-// ref's Tenant), or unresolved refs, are exempt via the `b in Scoped` guard.
+// ref's Tenant), or unresolved refs, are exempt via the `some b and b in Scoped` guard.
+// (`some b` is REQUIRED: `in` is subset, so an EMPTY resolve satisfies `b in Scoped`
+// and would force `a.tenantId = none` — silently banning dangling refs. Bug found and
+// fixed 2026-07-01; unit_kernel_danglingRefAllowed is the regression guard.)
 fact CrossTenantIsolation {
   all a: Scoped, id: a.refs |
-    let b = resolve[id] | b in Scoped implies a.tenantId = b.tenantId
+    let b = resolve[id] | (some b and b in Scoped) implies a.tenantId = b.tenantId
 }
 
 // Tight by default: no orphan identities — every EntityId is either some entity's

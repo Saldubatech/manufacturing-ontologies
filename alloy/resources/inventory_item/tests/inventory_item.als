@@ -107,8 +107,9 @@ assert unit_inventoryItem_lpnUnique { all disj a, b: InventoryItem | a.licensePl
 check unit_inventoryItem_lpnUnique for 6 but 3 Scalar expect 0
 
 // Cross-tenant isolation on the classifier reference (kernel regression).
+// `some i` guard: an EMPTY resolve satisfies `i in Scoped` (subset) — cf. the 2026-07-01 kernel fix.
 assert unit_inventoryItem_tenantIsolation {
-  all ii: InventoryItem | let i = resolve[ii.itemRef] | i in Scoped implies ii.tenantId = i.tenantId
+  all ii: InventoryItem | let i = resolve[ii.itemRef] | (some i and i in Scoped) implies ii.tenantId = i.tenantId
 }
 check unit_inventoryItem_tenantIsolation for 6 but 3 Scalar expect 0
 

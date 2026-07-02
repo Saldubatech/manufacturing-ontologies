@@ -131,3 +131,15 @@ run unit_kc_serialClashImpossible {
 run unit_kc_crossTenantItemImpossible {
   some k: KanbanCard | let i = resolve[k.itemRef] | some i and i in Item and i.tenantId != k.tenantId
 } for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
+
+// ── machine-level checks (generic properties on the reified machines) ───────────────────────
+// Mirrors the baseline suite: every modeled state reachable, every signal live. These were lost
+// in the baseline → split migration; restored so the CURRENT machines are property-checked too.
+check unit_kc_opReachable    { allStatesReachable[KanbanOpMachine] }
+  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
+check unit_kc_printReachable { allStatesReachable[KanbanPrintMachine] }
+  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
+check unit_kc_opLiveSignals    { liveSignals[KanbanOpMachine] }
+  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
+check unit_kc_printLiveSignals { liveSignals[KanbanPrintMachine] }
+  for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0

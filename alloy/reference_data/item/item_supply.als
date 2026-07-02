@@ -43,10 +43,10 @@ fact SupplierRefIntegrity {
 }
 
 // Tight by default: no orphan value/handle atoms. Money/Duration/SupplierReference
-// remain ItemSupply-exclusive, so their no-orphan rules stay here.
-// Quantity became SHARED with KanbanCard — the §6 forcing function fired: its
-// no-orphan rule was relocated up to resources/kanban_card, the lowest module in the
-// open-DAG that sees all Quantity users. (See modeling-conventions §6.)
+// remain ItemSupply-exclusive (within this module's view), so their no-orphan rules stay here.
+// Quantity became SHARED (item_supply, kanban, inventory) — the §6 forcing function fired
+// three times, and the decision (DT-004 Q8) is that ubiquitous value objects are
+// no-orphan-EXEMPT: Quantity carries no no-orphan rule anywhere. (See modeling-conventions §6.)
 fact NoOrphanSupplierReference { all sr: SupplierReference | sr in ItemSupply.supplier }
 fact NoOrphanItemSupplyValues {
   all m: Money    | m in ItemSupply.unitCost
