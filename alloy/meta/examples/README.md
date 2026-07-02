@@ -60,15 +60,35 @@ note bottom #white : every entity is scoped to a Hotel (tenant)
 | 08 | State machine (reified) | planned | UML state machine |
 | 09 | Parallel / orthogonal regions | **ready** | AND-states; the X.731 twin |
 | 10 | Tight by default (no-orphan, forcing function) | planned | (no clean UML analogue) |
-| 11 | Change & the frame problem | deferred (DT-001.03) | operation; FP `old→new` |
+| 11 | Change & the frame problem | **see 16** (the `var` half shows held-state + frame obligations) | operation; FP `old→new` |
 | 12 | Bitemporality (versions as data) | deferred (DT-001.03) | temporal/historized data |
 | 13 | Keyed value algebra (MultiMoney / MultiQuantity) | **ready** | free module; finitely-supported map |
 | 14 | Event-sourced LEVEL signal from a reified op-log (DT-006 spike → DT-008) | **ready** | event store + derived projection; fold/prefix-sum |
 | 15 | Guarded action chain + state-as-projection (meta/action, DT-006) | **ready** | command + guard [precondition]; foldl over a filtered log |
+| 16 | Two time models — `var`/LTL trace vs reified log + projection, with the AGREEMENT theorem (replay ≡ fold) | **ready** | state machine vs event store; State monad run ≡ foldl |
 
 "Ready" = a runnable file exists. "Planned" = a catalog slot to fill as the pattern is
 needed. "Deferred" = waits on a modeling decision not yet made (the behavioral/temporal
 layer, DT-001.03) — we do not pre-decide it here.
+
+## Techniques cross-index
+
+The catalog above indexes by *pattern* (what you want to model); this table indexes by *technique*
+(the Alloy craft you want to see demonstrated). An example may appear under several techniques.
+
+| Technique | Examples |
+|---|---|
+| Premise / fact / **witness** triad (unprovable axioms as `pred`s; SAT witnesses guard vacuity) | 13, 14 (`calendarAxioms`) |
+| Guard-rejection / impossibility idiom (`run <bad> … expect 0`) | 02, 04, 09, 13, 15, 16 |
+| Tenant scoping, soft refs, `resolve`, dangling-allowed | 02 |
+| Type / instance via classification atoms | 04 |
+| Reified state machines + **exact scopes** for `one sig` families | 09 |
+| Keyed value algebra (normal-form maps, widen/collapse) | 13 |
+| **State-as-projection** (no `World`, no domain `var`; state = fold over the log) | 14, 15, 16 |
+| **Witnessing pattern** (stored verdict ⟺ evaluable guard predicate) | 15 |
+| **Agreement theorem** (two independent encodings proven equal) | 14 (LOCF ≡ cumulative), 16 (replay ≡ fold) |
+| Model time as data (`Tick` order over reified events) vs `var`/LTL traces | 15, 16 (14 orders by `Instant` — deliberate, see its header) |
+| `var`/LTL mechanics: primed transitions, frame obligations, `always` discipline (§3.2) | 16 |
 
 See also: [rosetta-uml.md](rosetta-uml.md) (the full UML/FP ↔ Alloy translation table)
 and the workbook `modeling-conventions.md` (the *why* behind each convention).
@@ -98,6 +118,11 @@ and the workbook `modeling-conventions.md` (the *why* behind each convention).
   so they stay unobtrusive against the diagram.
 - **Definition of done for new `meta` machinery: it ships with an example here.** That
   rule keeps the cookbook from going stale — framework and tutorial move together.
+- **Rationale that outgrows a recipe header goes to the workbook's `modeling/` notes — never to
+  `design/`.** The example stays a runnable recipe with its header; deep why/trade-off prose becomes a
+  methodology note cross-linked both ways (e.g. ex16 ↔ `modeling/two-time-models.md`; the scalar
+  examples ↔ `modeling/scalar-arithmetic.md`). `design/` documents the system's model, not the
+  cookbook — and prose mirrors of examples are the drift surface this cookbook exists to avoid.
 
 ## Running
 
