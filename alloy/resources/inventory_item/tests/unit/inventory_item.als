@@ -32,6 +32,12 @@ check unit_ii_contract_bornLive for 5 but 3 Scalar, 5 Int expect 0
 assert unit_ii_contract_closureIsTerminal { closureIsTerminal }
 check unit_ii_contract_closureIsTerminal for 5 but 3 Scalar, 5 Int expect 0
 
+assert unit_ii_contract_touchesLiveness { touchesDetermineLiveness }
+check unit_ii_contract_touchesLiveness for 5 but 3 Scalar, 5 Int expect 0
+
+assert unit_ii_contract_readBack { committedWritesReadBack }
+check unit_ii_contract_readBack for 5 but 3 Scalar, 5 Int, 8 Quantity expect 0
+
 // ── SAT witnesses ─────────────────────────────────────────────────────────────────────────────────
 // A committed Create: read back through the projections — live, with its born record.
 run unit_occ_createReadsBack {

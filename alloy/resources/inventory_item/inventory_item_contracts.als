@@ -2,8 +2,10 @@ module resources/inventory_item/inventory_item_contracts
 
 /*
  * INVENTORY ITEM — CONTRACTS (DT-017). The module's PROMISE to consumers, as named predicates
- * over the TYPES vocabulary only (the reified observables `stateRel`/`liveTicks` and the
- * identity fields) — no occurrence kinds, no guards, no log machinery may appear here.
+ * over the TYPES vocabulary: the reified observables (`stateRel`/`liveTicks`), the identity
+ * fields, and the PUBLIC OPERATION SURFACE (the kinds + per-role read API — types-level since
+ * the MP ruling 2026-07-03). Guard/effect mathematics stays out: per-kind semantic laws are
+ * published here on demand (DT-017 L9 — the promotion rule applies to laws, not the surface).
  *
  * Curated deliberately small (few, strong laws): everything else the implementation proves
  * (conservation across Split/Merge, reason-precise refusals, per-kind frames) is
@@ -53,6 +55,28 @@ pred closureIsTerminal {
       implies t2 not in ii.liveTicks
 }
 
+// ── L5: committed touches determine liveness ─────────────────────────────────────────────────────
+/** A committed occurrence settles the liveness of every item it touches, at its own tick: a
+    retiring role (Delete/WriteOff target, Merge's absorbed) is NOT live from that tick; every
+    other touched role IS. The published connection between STAGING an operation and the
+    existence observable. */
+pred touchesDetermineLiveness {
+  all o: IIOcc, ii: touches[o] | committed[o] implies
+    (retiringFor[o, ii] implies o.tick not in ii.liveTicks)
+    and (not retiringFor[o, ii] implies o.tick in ii.liveTicks)
+}
+
+// ── L6: committed writes read back ───────────────────────────────────────────────────────────────
+/** The record a committed occurrence produced FOR a touched item IS the state observable at the
+    occurrence's tick (read-your-write, per role — tombstones included). The published connection
+    between staging an operation and the state observable. */
+pred committedWritesReadBack {
+  all o: IIOcc, ii: touches[o] | committed[o] implies ii.stateRel[o.tick] = postFor[o, ii]
+}
+
 // ── the promise ──────────────────────────────────────────────────────────────────────────────────
 /** guarantees — the module's full promise: the conjunction of the published laws. */
-pred guarantees { stateIsFunctionOnceStarted and liveHaveState and bornLive and closureIsTerminal }
+pred guarantees {
+  stateIsFunctionOnceStarted and liveHaveState and bornLive and closureIsTerminal
+  and touchesDetermineLiveness and committedWritesReadBack
+}

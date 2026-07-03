@@ -4,10 +4,12 @@ module resources/inventory_item/inventory_item_types
  * INVENTORY ITEM — TYPES (DT-017 four-file architecture: types / contracts / implementation /
  * mock). Everything a consumer may SEE: the identity-only entity, the state record
  * (InventoryItemState), the REIFIED OBSERVABLES (`stateRel`, `liveTicks`) with their read API
- * (`stateAt`/`liveAt` — same signatures as the former occurrence-layer projections), and the
+ * (`stateAt`/`liveAt` — same signatures as the former occurrence-layer projections), the
+ * PUBLIC OPERATION SURFACE (the fifteen Action kinds + Reason taxonomy + per-role read API —
+ * MP ruling 2026-07-03: the Action sigs ARE the behavioral contract surface), and the
  * definitional facts that make the data well-formed. The module's LAWS about observable
- * behavior are named predicates in inventory_item_contracts.als; the log machinery that
- * realizes them (kinds, guards, chaining, LOCF bridge) is inventory_item_implementation.als.
+ * behavior are named predicates in inventory_item_contracts.als; the machinery that realizes
+ * them (guards, witnessing, chaining, effects, LOCF bridge) is inventory_item_implementation.als.
  *
  * Absorbs the former inventory_item.als (entity) + item_state.als (record) — strict renames,
  * 2026-07-03. The entity remains IDENTITY ONLY (DT-011): the observables are relations the
@@ -158,3 +160,82 @@ fact SerialNumberUniquePerItem {
 fact NoOrphanLicensePlate   { all x: LicensePlate   | x in InventoryItem.licensePlate }
 fact NoOrphanSerialNumber   { all x: SerialNumber   | x in InventoryItem.serialNumber }
 fact NoOrphanIndividualizer { all x: Individualizer | x in InventoryItem.individualizers }
+
+// ═══ THE OPERATION SURFACE (public — MP ruling 2026-07-03, DT-017 L9 revised) ════════════════════
+// The Action sigs ARE the behavioral contract surface: the operations exist to be used, so their
+// kinds (name + typed bindings + per-role record fields) are TYPES-level from birth — a consumer
+// may stage and reason about them. What stays in the implementation is their SEMANTICS (guards,
+// witnessing, chaining, effects); per-kind semantic laws are published into the contract on
+// demand (the L9 promotion rule applies to LAWS, not to the surface).
+
+// ── Reason taxonomy (the refusal vocabulary — part of the operations' error channel) ─────────────
+one sig RNotLive, RAlreadyExists, RLocked, RUnfit, REmpty, RNonPositive, ROverdraw,
+        RSerialized, RNotApplicable, RIncompatible, RIncomparable, RInvalidUnit extends Reason {}
+// RIncomparable — the amounts are on incomparable unit bases (the partial order is silent): the
+//   conservative-refusal convention; distinct from ROverdraw ("provably more than available").
+// RInvalidUnit — a tracked Item's operation used a unit outside its UomScheme (DT-009).
+
+// ── the kinds ─────────────────────────────────────────────────────────────────────────────────────
+/** IIOcc — an InventoryItem operation occurrence; `target` is the primary subject (pre/post are its
+    records). */
+abstract sig IIOcc extends StatefulAction { target: one InventoryItem }
+
+sig CreateOcc extends IIOcc { qty: one Quantity, exp: lone Int } { bindings = target + qty }
+sig DeleteOcc extends IIOcc {} { bindings = target }
+sig WriteOffOcc extends IIOcc {} { bindings = target }
+sig ReplenishOcc extends IIOcc { delta: one Quantity, lots: set LotNumber, exp: lone Int }
+  { bindings = target + delta + lots }
+sig ConsumeOcc extends IIOcc { amount: one Quantity } { bindings = target + amount }
+sig AdjustQuantityOcc extends IIOcc { good: one Quantity, degObs: lone Quantity }
+  { bindings = target + good + degObs }
+sig InspectOcc extends IIOcc { degObs: lone Quantity } { bindings = target + degObs }
+sig RePackOcc extends IIOcc { gNew: lone Quantity, dNew: lone Quantity }
+  { bindings = target + gNew + dNew }
+sig MoveOcc extends IIOcc { dest: one PhysicalLocator } { bindings = target + dest }
+sig LockOcc extends IIOcc {} { bindings = target }
+sig UnlockOcc extends IIOcc {} { bindings = target }
+sig SealOcc extends IIOcc {} { bindings = target }
+sig UnsealOcc extends IIOcc {} { bindings = target }
+sig SplitOcc extends IIOcc {
+  nu: one InventoryItem, soGood: lone Quantity, soDeg: lone Quantity,
+  nuPost: lone InventoryItemState                 // the new item's born record — present iff committed
+} { bindings = target + nu + soGood + soDeg and nu != target }
+sig MergeOcc extends IIOcc {
+  absorbed: one InventoryItem,
+  absPre: lone InventoryItemState                 // the absorbed's READ state (its tombstone if committed)
+} { bindings = target + absorbed and absorbed != target }
+
+fact NuPostIffCommitted { all o: SplitOcc | some o.nuPost iff committed[o] }
+
+// ── touched items and their per-role records (read API over the kinds) ───────────────────────────
+fun touches[o: IIOcc]: set InventoryItem { o.target + (o & SplitOcc).nu + (o & MergeOcc).absorbed }
+
+/** retiringFor — o (if committed) ends ii's existence interval. */
+pred retiringFor[o: IIOcc, ii: InventoryItem] {
+  (o in DeleteOcc + WriteOffOcc and ii = o.target) or (o in MergeOcc and ii = (o & MergeOcc).absorbed)
+}
+
+/** postFor — the record o produced FOR ii (tombstone = the read state, for retired roles). */
+fun postFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
+  (ii = o.target) => o.post
+  else (ii = (o & SplitOcc).nu) => (o & SplitOcc).nuPost
+  else (ii = (o & MergeOcc).absorbed) => (o & MergeOcc).absPre
+  else none
+}
+/** preFor — the record o read FOR ii (none for Split's `nu` — a fresh subject has no prior state). */
+fun preFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
+  (ii = o.target) => o.pre
+  else (ii = (o & MergeOcc).absorbed) => (o & MergeOcc).absPre
+  else none
+}
+
+/** schemeOf — the target's UomScheme, when its classifier resolves to a TRACKED Item (dangling /
+    cross-Universe classifiers and untracked Items yield none — the valid-UoM rule cannot and does
+    not apply). */
+fun schemeOf[ii: InventoryItem]: lone UomScheme { (resolve[ii.itemRef] & Item).uom }
+
+/** unitsOk — the amount's units are all configured in the target's scheme (vacuously true when the
+    target is untracked or its classifier dangles) — DT-009's valid-UoM rule. */
+pred unitsOk[m: Unit -> lone Scalar, ii: InventoryItem] {
+  let sch = schemeOf[ii] | some sch implies m.univ in sch.units
+}

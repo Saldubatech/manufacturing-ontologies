@@ -28,67 +28,10 @@ open meta/action/stateful                            // StatefulAction (pre/post
 open resources/inventory_item/inventory_item_types   // entity + record + observables + read API
 open resources/inventory_item/transitions            // the value-parameterized cores + g* guard checks
 
-// ── Reason taxonomy (the "else Rejected:*" comments of operations.als, reified) ──────────────────
-one sig RNotLive, RAlreadyExists, RLocked, RUnfit, REmpty, RNonPositive, ROverdraw,
-        RSerialized, RNotApplicable, RIncompatible, RIncomparable, RInvalidUnit extends Reason {}
-// RIncomparable — the amounts are on incomparable unit bases (the partial order is silent): the
-//   conservative-refusal convention; distinct from ROverdraw ("provably more than available" —
-//   re-express via rePack and retry, vs. "you don't have enough").
-// RInvalidUnit — a tracked Item's operation used a unit outside its UomScheme (DT-009's valid-UoM rule).
-
-// ── the kinds ─────────────────────────────────────────────────────────────────────────────────────
-/** IIOcc — an InventoryItem operation occurrence; `target` is the primary subject (pre/post are its
-    records). */
-abstract sig IIOcc extends StatefulAction { target: one InventoryItem }
-
-sig CreateOcc extends IIOcc { qty: one Quantity, exp: lone Int } { bindings = target + qty }
-sig DeleteOcc extends IIOcc {} { bindings = target }
-sig WriteOffOcc extends IIOcc {} { bindings = target }
-sig ReplenishOcc extends IIOcc { delta: one Quantity, lots: set LotNumber, exp: lone Int }
-  { bindings = target + delta + lots }
-sig ConsumeOcc extends IIOcc { amount: one Quantity } { bindings = target + amount }
-sig AdjustQuantityOcc extends IIOcc { good: one Quantity, degObs: lone Quantity }
-  { bindings = target + good + degObs }
-sig InspectOcc extends IIOcc { degObs: lone Quantity } { bindings = target + degObs }
-sig RePackOcc extends IIOcc { gNew: lone Quantity, dNew: lone Quantity }
-  { bindings = target + gNew + dNew }
-sig MoveOcc extends IIOcc { dest: one PhysicalLocator } { bindings = target + dest }
-sig LockOcc extends IIOcc {} { bindings = target }
-sig UnlockOcc extends IIOcc {} { bindings = target }
-sig SealOcc extends IIOcc {} { bindings = target }
-sig UnsealOcc extends IIOcc {} { bindings = target }
-sig SplitOcc extends IIOcc {
-  nu: one InventoryItem, soGood: lone Quantity, soDeg: lone Quantity,
-  nuPost: lone InventoryItemState                 // the new item's born record — present iff committed
-} { bindings = target + nu + soGood + soDeg and nu != target }
-sig MergeOcc extends IIOcc {
-  absorbed: one InventoryItem,
-  absPre: lone InventoryItemState                 // the absorbed's READ state (its tombstone if committed)
-} { bindings = target + absorbed and absorbed != target }
-
-fact NuPostIffCommitted { all o: SplitOcc | some o.nuPost iff committed[o] }
-
-// ── touched items and their per-role records ─────────────────────────────────────────────────────
-fun touches[o: IIOcc]: set InventoryItem { o.target + (o & SplitOcc).nu + (o & MergeOcc).absorbed }
-
-/** retiringFor — o (if committed) ends ii's existence interval. */
-pred retiringFor[o: IIOcc, ii: InventoryItem] {
-  (o in DeleteOcc + WriteOffOcc and ii = o.target) or (o in MergeOcc and ii = (o & MergeOcc).absorbed)
-}
-
-/** postFor — the record o produced FOR ii (tombstone = the read state, for retired roles). */
-fun postFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
-  (ii = o.target) => o.post
-  else (ii = (o & SplitOcc).nu) => (o & SplitOcc).nuPost
-  else (ii = (o & MergeOcc).absorbed) => (o & MergeOcc).absPre
-  else none
-}
-/** preFor — the record o read FOR ii (none for Split's `nu` — a fresh subject has no prior state). */
-fun preFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
-  (ii = o.target) => o.pre
-  else (ii = (o & MergeOcc).absorbed) => (o & MergeOcc).absPre
-  else none
-}
+// The Reason taxonomy, the kinds (IIOcc + the fifteen operation sigs), and the per-role read API
+// (touches, retiringFor, postFor, preFor, schemeOf, unitsOk) are PUBLIC SURFACE — declared in
+// inventory_item_types.als (MP ruling 2026-07-03: the Action sigs are the behavioral contract
+// surface). This file supplies their SEMANTICS: guards, witnessing, chaining, effects, bridge.
 
 // ── UNCONDITIONAL chaining: every occurrence read the real prior state of every item it touches ──
 fun priorOn[o: IIOcc, ii: InventoryItem]: lone IIOcc {
@@ -103,17 +46,6 @@ fact IIChaining {
 /** liveBefore — ii exists just before o's tick: some committed history whose last touch didn't retire it. */
 pred liveBefore[o: IIOcc, ii: InventoryItem] {
   let p = priorOn[o, ii] | some p and not retiringFor[p, ii]
-}
-
-/** schemeOf — the target's UomScheme, when its classifier resolves to a TRACKED Item (dangling /
-    cross-Universe classifiers and untracked Items yield none — the valid-UoM rule cannot and does
-    not apply). */
-fun schemeOf[ii: InventoryItem]: lone UomScheme { (resolve[ii.itemRef] & Item).uom }
-
-/** unitsOk — the amount's units are all configured in the target's scheme (vacuously true when the
-    target is untracked or its classifier dangles) — DT-009's valid-UoM rule. */
-pred unitsOk[m: Unit -> lone Scalar, ii: InventoryItem] {
-  let sch = schemeOf[ii] | some sch implies m.univ in sch.units
 }
 
 // ── reason-precise admission guards (violation sets; Accepted ⟺ ∅; because = EXACTLY the set) ────
