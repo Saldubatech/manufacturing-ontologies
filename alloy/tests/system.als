@@ -10,7 +10,7 @@ open meta/kernel
 open meta/keyed_value_algebra/keyed_order   // ringAxioms/orderAxioms (no longer re-exported by the slimmed inventory_item — DT-011)
 open reference_data/item/item                    // transitively: item_supply, business_affiliate, business_role
 open resources/inventory_item/inventory_item
-open resources/inventory_pool/inventory_pool
+open resources/inventory_item/inventory_pool
 open resources/kanban_card/kanban_card           // transitively: card_cycle, processing_network
 
 // The quantitative layers' premises (same assumption the module suites make).
@@ -45,9 +45,11 @@ pred sys_crossTenantMaterial {
 run sys_crossTenantMaterial
   for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
 
-// Pools participate in the composed model: a pool holding a member whose Item resolves in-tenant.
+// Pools participate in the composed model: a pool holding a member whose Item resolves in-tenant
+// (membership read via the log projection — the pool is log-carried since 2026-07-02).
 pred sys_poolHoldsClassifiedMember {
-  some p: InventoryPool, ii: p.items, i: Item | resolve[ii.itemRef] = i and p.tenantId = i.tenantId
+  some p: InventoryPool, t: Tick, i: Item |
+    some ii: heldAt[p, t] | resolve[ii.itemRef] = i and p.tenantId = i.tenantId
 }
 run sys_poolHoldsClassifiedMember
   for 6 but 14 State, 20 Signal, 20 Transition, 2 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1

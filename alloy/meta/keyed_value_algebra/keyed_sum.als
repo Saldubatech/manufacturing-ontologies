@@ -1,8 +1,12 @@
 module meta/keyed_value_algebra/keyed_sum[Node]
 
 /*
- * Σ of keyed values along a linear order — the fold the keyed monoid lacks (`keyed_monoid` gives only the
- * BINARY `add`). PARAMETERIZED over the carrier `Node`: each `open keyed_sum[X]` gets its OWN fold state,
+ * WHAT THIS OFFERS A DOMAIN MODELER (DT-013): totalling a COLLECTION of keyed values (a period's
+ * measurements, a cell's members, a scheme's unit contributions) into one keyed value — the Σ the
+ * binary `add` cannot express. NB the surface still requires hand-pinning the fold (val/earlier
+ * facts) — a known ergonomics gap (DT-013 F2); copy the recipe from an existing consumer.
+ *
+ * Implementation: Σ of keyed values along a linear order — the fold the keyed monoid lacks. PARAMETERIZED over the carrier `Node`: each `open keyed_sum[X]` gets its OWN fold state,
  * so multiple independent folds coexist in one model (the measurement temporal SUM over `Measurement`,
  * the cross-sectional Σ over items, the UoM conversion collapse over unit-contributions, …).
  *

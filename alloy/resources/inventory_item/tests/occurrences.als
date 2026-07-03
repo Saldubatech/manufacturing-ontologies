@@ -57,6 +57,23 @@ run unit_occ_mergeRetiresAbsorbed {
     and liveAt[o.target, o.tick] and not liveAt[o.absorbed, o.tick]
 } for 6 but 3 Scalar, 5 Int, 8 Quantity expect 1
 
+// A committed Move relocates: only the locator changes (built ON DEMAND 2026-07-02 — the DT-007
+// locator classification needed a locator writer; legacy parity rows unit_op_move_*).
+run unit_occ_moveRelocates {
+  some o: MoveOcc | committed[o]
+    and stateAt[o.target, o.tick].sLocator = o.dest and o.pre.sLocator != o.dest
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// Moving a SEALED item preserves the seal (D16 — locator change is not a real-quantity change).
+run unit_occ_movePreservesSealed {
+  some o: MoveOcc | committed[o] and o.pre.sFill = SEALED and o.post.sFill = SEALED
+} for 5 but 3 Scalar, 5 Int expect 1
+
+// Move on a LOCKED item is REFUSED with exactly RLocked (ForceMove — the privileged override — on demand).
+run unit_occ_moveLockedRefused {
+  some o: MoveOcc | refusedAtAdmission[o] and o.admission.because = RLocked
+} for 5 but 3 Scalar, 5 Int expect 1
+
 // ── theorems (check; UNSAT = holds) — invariants DERIVED from the witnessed guards ───────────────
 // No committed consume overdraws (the guard, seen from the projection side).
 assert unit_occ_noCommittedOverdraw {

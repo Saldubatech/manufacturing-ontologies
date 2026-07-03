@@ -46,6 +46,7 @@ sig AdjustQuantityOcc extends IIOcc { good: one Quantity, degObs: lone Quantity 
 sig InspectOcc extends IIOcc { degObs: lone Quantity } { bindings = target + degObs }
 sig RePackOcc extends IIOcc { gNew: lone Quantity, dNew: lone Quantity }
   { bindings = target + gNew + dNew }
+sig MoveOcc extends IIOcc { dest: one PhysicalLocator } { bindings = target + dest }
 sig LockOcc extends IIOcc {} { bindings = target }
 sig UnlockOcc extends IIOcc {} { bindings = target }
 sig SealOcc extends IIOcc {} { bindings = target }
@@ -208,6 +209,10 @@ fun mergeViol[o: MergeOcc]: set Reason {
             and o.pre.sLocator != o.absPre.sLocator)) => RIncompatible else none)
 }
 
+fun moveViol[o: MoveOcc]: set Reason {
+  ((not liveBefore[o, o.target]) => RNotLive else none)
+  + ((liveBefore[o, o.target] and o.pre.sAdmin = LOCKED) => RLocked else none)
+}
 fun lockViol[o: LockOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
   + ((liveBefore[o, o.target] and o.pre.sAdmin != UNLOCKED) => RNotApplicable else none)
@@ -237,6 +242,7 @@ fact IIAdmissionWitness {
   all o: RePackOcc         | (o.admission = Accepted iff no rePackViol[o])         and (o.admission in Rejected implies o.admission.because = rePackViol[o])
   all o: SplitOcc          | (o.admission = Accepted iff no splitViol[o])          and (o.admission in Rejected implies o.admission.because = splitViol[o])
   all o: MergeOcc          | (o.admission = Accepted iff no mergeViol[o])          and (o.admission in Rejected implies o.admission.because = mergeViol[o])
+  all o: MoveOcc           | (o.admission = Accepted iff no moveViol[o])           and (o.admission in Rejected implies o.admission.because = moveViol[o])
   all o: LockOcc           | (o.admission = Accepted iff no lockViol[o])           and (o.admission in Rejected implies o.admission.because = lockViol[o])
   all o: UnlockOcc         | (o.admission = Accepted iff no unlockViol[o])         and (o.admission in Rejected implies o.admission.because = unlockViol[o])
   all o: SealOcc           | (o.admission = Accepted iff no sealViol[o])           and (o.admission in Rejected implies o.admission.because = sealViol[o])
@@ -297,6 +303,12 @@ fact IIEffectWitness {
     sameDescriptors[o.pre, o.post] and sameAdminExp[o.pre, o.post]
     sameDescriptors[o.pre, o.nuPost] and o.nuPost.sAdmin = o.pre.sAdmin
     o.nuPost.sExpiration = o.pre.sExpiration
+  }
+  all o: MoveOcc | committed[o] implies {
+    o.post.sLocator = o.dest
+    samePayloadQty[o.pre, o.post] and o.post.sFill = o.pre.sFill
+    o.post.sNotes = o.pre.sNotes and o.post.sColorCode = o.pre.sColorCode
+    sameAdminExp[o.pre, o.post]
   }
   all o: LockOcc | committed[o] implies {
     o.post.sAdmin = LOCKED

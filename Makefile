@@ -6,6 +6,10 @@
 
 ALLOY := tools/alloy.jar
 ROBOT := tools/robot.jar
+# Extra flags for `alloy exec` — e.g. a faster SAT backend: make check-alloy ALLOY_FLAGS='-s glucose'
+# (glucose ships as a JNI native in this jar and loads on darwin/arm64; the default stays SAT4J —
+# pure Java — so the gate works on any machine. Both are sound/complete: only speed differs.)
+ALLOY_FLAGS ?=
 # Alloy exec output (receipts + solution dumps) goes here — gitignored; never committed.
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
@@ -45,7 +49,7 @@ check-alloy: $(ALLOY) check-layering
 	@mkdir -p $(OUT); fail=0; \
 	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
 	  echo "== $$f =="; \
-	  java -jar $(ALLOY) -D info exec -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
+	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
 	done; \
 	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect (see 'against expectation' above)"; exit 1; fi; \
@@ -56,7 +60,7 @@ check-examples: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
 	for f in $$(find alloy/meta/examples -name '*.als' ! -name 'ex00_*' | sort); do \
 	  echo "== $$f =="; \
-	  java -jar $(ALLOY) -D info exec -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
+	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
 	done; \
 	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect (see 'against expectation' above)"; exit 1; fi; \
@@ -67,7 +71,7 @@ test-unit: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
 	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
 	  echo "== $$f =="; \
-	  java -jar $(ALLOY) exec -c "unit_*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
+	  java -jar $(ALLOY) exec $(ALLOY_FLAGS) -c "unit_*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
 	done; \
 	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi; \
@@ -76,7 +80,7 @@ test-unit: $(ALLOY)
 ## test-sys: run the whole-system suite (sys_* in alloy/tests/system.als)
 test-sys: $(ALLOY)
 	@mkdir -p $(OUT); \
-	java -jar $(ALLOY) exec -c "sys_*" -o $(OUT) -f alloy/tests/system.als > out/.run.log 2>&1; rc=$$?; \
+	java -jar $(ALLOY) exec $(ALLOY_FLAGS) -c "sys_*" -o $(OUT) -f alloy/tests/system.als > out/.run.log 2>&1; rc=$$?; \
 	grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
 	if [ $$rc -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi
 

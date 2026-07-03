@@ -1,8 +1,12 @@
 module meta/keyed_value_algebra/keyed_monoid
 
 /*
- * Keyed additive group with scalar multiplication — the algebra behind common-module's
- * GeneralizedMoney / MultiMoney (cards.arda.common.lib.domain.general.Money).
+ * WHAT THIS OFFERS A DOMAIN MODELER (DT-013): a well-defined set of operations (add, scale,
+ * negate, zero) on DISPARATE EXPRESSIONS of the same underlying concept — amounts spread across
+ * currencies (Money) or units (Quantity) — without ever converting between the keys.
+ *
+ * Implementation: a keyed additive group with scalar multiplication — the algebra behind
+ * common-module's GeneralizedMoney / MultiMoney (cards.arda.common.lib.domain.general.Money).
  *
  * A value is a finitely-supported, NORMAL-FORM map  key -> Scalar : the relation
  * `univ -> lone Scalar` carrying no zero-valued entries (each key appears at most once
