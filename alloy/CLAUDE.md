@@ -26,6 +26,7 @@ tree mirrors the system's **functional decomposition**.
   domain-owned — cf. `uom_collapse`). `shared/` is a **per-level pattern**: any directory level may carry
   a `shared/` subdirectory for elements reused across that level's members (e.g. `reference_data/shared/`),
   with a promotion path upward as usefulness widens.
+- **START HERE — `meta/profiles/` (DT-012):** pre-packaged modeling profiles adopted as a unit: `baseline` (P0 — kernel only), **`domain_log` (P1 — THE DEFAULT: stateful log anatomy + `groupAxioms ∧ orderAxioms` as FACTS)**, `timed_log` (P2 — + `Timed`/instant axis). **Opening a profile IS the opt-in** — premises transit to every root in the cone; every domain module opens exactly one profile; markers (`P_*` atoms) show adoption in instances; `make profiles` prints the per-root map. À la carte composition from the base modules is the advanced path (the opt-in catalog: workbook design/meta/index.md).
 - **`meta/` is not a domain.** It holds modeling machinery:
   - `meta/kernel.als` — identity + the `Entity`/`Scoped` bound, `EntityId`, soft-ref `resolve`, cross-tenant isolation (DT-001.02, implemented).
   - `meta/state_machine/machine.als` — generic FSM framework reifying common-module's `StateEngine` (DT-003): `State`/`Signal`/`Guard`/`Transition`/`StateMachine` + once-stated well-formedness/determinism FACTS + checkable `allStatesReachable`/`liveSignals`/`firedInto`. Concrete machines extend `State`/`Signal` and pin a `StateMachine` atom.

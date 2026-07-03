@@ -8,7 +8,8 @@ open resources/inventory_item/occurrences
  * every quantitative root. Scope notes: each committed occurrence consumes a Tick + record +
  * Quantity atoms — scopes size those families generously and keep the rest small.
  */
-fact ScalarPremises { groupAxioms and orderAxioms }   // group suffices: domain roots do additive arithmetic only (DT-011)
+// Premises come with the profile: occurrences.als opens meta/profiles/domain_log (DT-012) —
+// groupAxioms + orderAxioms are FACTS in this cone; no per-root premise assertion needed.
 
 // ── SAT witnesses ─────────────────────────────────────────────────────────────────────────────────
 // A committed Create: read back through the projections — live, with its born record.

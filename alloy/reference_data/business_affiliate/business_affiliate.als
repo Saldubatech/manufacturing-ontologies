@@ -1,5 +1,6 @@
 module reference_data/business_affiliate/business_affiliate
 
+open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel
 open reference_data/business_affiliate/business_role
 

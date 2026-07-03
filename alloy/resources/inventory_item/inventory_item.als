@@ -1,5 +1,6 @@
 module resources/inventory_item/inventory_item
 
+open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel                  // Entity/Scoped, EntityId, resolve, refs
 open shared/values                // Quantity (minQuantity)
 open reference_data/item/item     // Item — the primary classifier

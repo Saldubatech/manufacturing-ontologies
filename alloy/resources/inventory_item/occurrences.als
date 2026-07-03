@@ -17,6 +17,7 @@ module resources/inventory_item/occurrences
  * `attributed` extension) is the deferred commit-guard hook.
  */
 
+open meta/profiles/domain_log          // PROFILE (DT-012): log anatomy + group/order premises IN FORCE for the whole cone
 open meta/action/stateful                        // StatefulAction (pre/post), committed, committedUpTo, …
 open resources/inventory_item/item_state         // InventoryItemState + intra-snapshot facts + derived
 open resources/inventory_item/transitions        // the value-parameterized cores + g* guard checks

@@ -16,6 +16,7 @@ module resources/inventory_pool/inventory_pool
  * lock/unlock the set as a unit; reservations against the set.
  */
 
+open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel                                 // Scoped, Entity, EntityId, resolve
 open reference_data/item/item                    // Item — the membership classifier
 open resources/inventory_item/inventory_item     // InventoryItem (+ transitively keyed algebra, values)

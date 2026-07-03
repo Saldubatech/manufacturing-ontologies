@@ -1,5 +1,6 @@
 module reference_data/item/item
 
+open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel
 open reference_data/item/item_supply
 open reference_data/item/uom            // UomScheme, Each — inventory-tracking mode (DT-009)

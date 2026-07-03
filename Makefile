@@ -80,6 +80,20 @@ test-sys: $(ALLOY)
 	grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
 	if [ $$rc -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi
 
+## profiles: per gate root, print the adopted modeling profiles (transitive open walk — DT-012)
+profiles:
+	@for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	  seen=""; queue="$$f"; \
+	  while [ -n "$$queue" ]; do \
+	    cur=$$(echo "$$queue" | head -1); queue=$$(echo "$$queue" | tail -n +2); \
+	    case " $$seen " in *" $$cur "*) continue;; esac; seen="$$seen $$cur"; \
+	    deps=$$(grep -E '^open [a-z]' "$$cur" 2>/dev/null | awk '{print $$2}' | sed 's|\[.*||; s|$$|.als|; s|^|alloy/|'); \
+	    for d in $$deps; do [ -f "$$d" ] && queue=$$(printf '%s\n%s' "$$queue" "$$d"); done; \
+	  done; \
+	  profs=$$(echo "$$seen" | tr ' ' '\n' | grep 'meta/profiles/' | grep -v 'profile.als' | grep -v '/tests/' | sed 's|.*profiles/||; s|.als||' | sort -u | tr '\n' ' '); \
+	  echo "$$f: $${profs:-<a la carte>}"; \
+	done
+
 ## report: run every test-root command and print its LOGICAL outcome (exists/forall/forbidden, ok/mismatch)
 report: $(ALLOY)
 	@bash tools/alloy-report.sh

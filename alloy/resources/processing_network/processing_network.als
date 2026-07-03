@@ -1,5 +1,6 @@
 module resources/processing_network/processing_network
 
+open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel   // Scoped, EntityId
 
 /*

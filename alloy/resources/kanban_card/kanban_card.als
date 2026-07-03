@@ -1,5 +1,6 @@
 module resources/kanban_card/kanban_card
 
+open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel                                  // Scoped, EntityId, resolve
 open shared/values                                  // Quantity, PhysicalLocator
 open meta/state_machine/machine                   // print StateMachine + firedInto
