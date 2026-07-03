@@ -27,14 +27,16 @@ one sig AVAILABLE, REQUESTING, REQUESTED, IN_PROCESS, READY,
 
 // ── the cycle entity: IDENTITY ONLY (immutable for the cycle's whole existence) ─────────────────
 /** CardCycle — the identity of one circuit of a KanbanCard; child of KanbanCard (the parent owns
-    it); its mutable payload lives on CycleState records in the occurrence log. */
+    it). Its mutable payload is the `CycleState` record (cycle_state.als); the ASSOCIATION between
+    the two is the occurrence log (cycle_occurrences.als: `CycleOcc.cycle` + pre/post records),
+    read back as `stateOfCycleAt[c, t]`. */
 sig CardCycle extends Scoped {
-  sourcedBy:  lone EntityId,     // → Order/PO that sourced this cycle [KC-MH-4: untyped stub; DT-014 rung 3 types it]
+  sourcedBy:  lone EntityId,     // the sourcing document — UNTYPED stub until DT-014 rung 3 (Orders) types it
   precededBy: lone CardCycle     // the prior cycle [KC-MH-1: DIRECT ref — flipped from soft for clean acyclicity]
 }
 
-// dataRefs = the cycle's outgoing soft references. Materials are RECORD-carried (CycleState.sMaterials)
-// — not entity dataRefs; their tenancy integrity is a log-side fact (cycle_occurrences.als).
+// dataRefs = the cycle's outgoing soft references. The BIN is RECORD-carried (CycleState.sPool)
+// — not an entity dataRef; typing lives with the record, tenancy with the attach guard.
 fact CardCycleRefs { all c: CardCycle | c.dataRefs = c.sourcedBy }
 
 // [KC-MH-2] ordering — acyclic and LINEAR (each cycle ≤1 successor; the `lone` field gives ≤1

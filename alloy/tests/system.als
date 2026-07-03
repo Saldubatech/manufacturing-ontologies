@@ -37,11 +37,12 @@ pred sys_cardAndHoldingShareItem {
 run sys_cardAndHoldingShareItem
   for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
-// Cross-domain isolation: a received material can never resolve to an InventoryItem of another
-// tenant (materials are RECORD-carried since DT-015 Phase B — the tenancy law is the log-side
-// ReceivedMaterialsIntegrity fact, exercised here across the composed modules).
+// Cross-domain isolation: a committed bin attach can never bind a pool of another tenant (the
+// RForeignPool attach guard, exercised across the composed modules; materials are pool-mediated
+// since 2026-07-03).
 pred sys_crossTenantMaterial {
-  some o: ReceiveOcc | some m: resolve[o.materials] & InventoryItem | m.tenantId != o.cycle.tenantId
+  some o: StartProcessingOcc | committed[o]
+    and (some p: resolve[o.pool] & InventoryPool | p.tenantId != o.cycle.tenantId)
 }
 run sys_crossTenantMaterial
   for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0

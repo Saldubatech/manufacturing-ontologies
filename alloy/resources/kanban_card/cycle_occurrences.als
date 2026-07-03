@@ -20,8 +20,7 @@ module resources/kanban_card/cycle_occurrences
  */
 
 open meta/profiles/domain_log                 // PROFILE (DT-012): the log anatomy (StatefulAction, Tick, verdicts)
-open resources/kanban_card/cycle_state        // CycleState + the region order (+ card_cycle, shared/values transitively)
-open resources/inventory_item/inventory_item  // InventoryItem — the materials soft-ref target (KD12)
+open resources/kanban_card/cycle_state        // CycleState + region order (+ card_cycle, inventory_pool transitively)
 
 // ── per-deployment lifecycle configuration (KQ-S9 — reified, not hard-coded) ────────────────────
 /** LifecycleConfig — which core statuses this deployment uses; inactive ones are SKIPPED. */
@@ -37,10 +36,10 @@ fact CycleOccRecords { all o: CycleOcc | (o.pre + o.post) in CycleState }
 sig RequestOcc            extends CycleOcc { qtyOverride: lone Quantity } { bindings = cycle + qtyOverride }
 sig AcceptOcc             extends CycleOcc {} { bindings = cycle }
 sig ShelveOcc             extends CycleOcc {} { bindings = cycle }
-sig StartProcessingOcc    extends CycleOcc {} { bindings = cycle }
+sig StartProcessingOcc    extends CycleOcc { pool: one EntityId } { bindings = cycle + pool }   // ATTACHES the (empty) bin
 sig CompleteProcessingOcc extends CycleOcc {} { bindings = cycle }
 sig FulfillOcc            extends CycleOcc {} { bindings = cycle }
-sig ReceiveOcc            extends CycleOcc { materials: set EntityId } { bindings = cycle + materials }
+sig ReceiveOcc            extends CycleOcc {} { bindings = cycle }   // status-only: material arrivals are PoolAddOcc events on the attached bin
 sig UseOcc                extends CycleOcc {} { bindings = cycle }
 sig DepleteOcc            extends CycleOcc {} { bindings = cycle }
 sig WithdrawOcc           extends CycleOcc {} { bindings = cycle }
@@ -54,14 +53,10 @@ fun targetOf[o: CycleOcc]: lone KanbanCardStatus {
   else o in DepleteOcc => DEPLETED else none
 }
 
-// Received materials resolve to InventoryItems (soft refs — dangling allowed; KD12) IN THE CYCLE'S
-// TENANT. NB record-carried refs are not entity dataRefs, so the kernel's CrossTenantIsolation does
-// not reach them — this fact is their tenancy law (Phase B; the old entity field got it from the
-// kernel for free).
-fact ReceivedMaterialsIntegrity {
-  all o: ReceiveOcc | resolve[o.materials] in InventoryItem
-  all o: ReceiveOcc | all m: resolve[o.materials] & InventoryItem | m.tenantId = o.cycle.tenantId
-}
+// (Materials are POOL-mediated since 2026-07-03 — KD12 revised: the record carries `sPool`, typed
+// in cycle_state.als; tenancy + emptiness are the ATTACH guard below. Receiving puts InventoryItems
+// INTO the pool via its own log (PoolAddOcc), interleaved on the shared Tick order — the
+// cross-log coupling law ("adds only during the accrual window") is DT-014 rung 4.)
 
 // ── refusal reasons ─────────────────────────────────────────────────────────────────────────────
 one sig RClosed,            // the cycle is not live (never started, withdrawn, or rolled over)
@@ -70,7 +65,9 @@ one sig RClosed,            // the cycle is not live (never started, withdrawn, 
         RSkippedActive,     // the jump skips a status the deployment DOES use
         RAlreadyStarted,    // genesis on a cycle that already has committed history
         RCardInCirculation, // genesis while the predecessor cycle is still open
-        RNotRequested       // Shelve from a status other than REQUESTED
+        RNotRequested,      // Shelve from a status other than REQUESTED
+        RPoolNotEmpty,      // attach: the bin must read EMPTY at attach
+        RForeignPool        // attach: the bin must be in the cycle's tenant
         extends Reason {}
 
 // ── chaining (unconditional — refusals read the real state) ─────────────────────────────────────
@@ -114,6 +111,13 @@ fun forwardViol[o: CycleOcc]: set Reason {
       and some m: LifecycleConfig.active | regionBetween[m, o.pre.sStatus, targetOf[o]])
      => RSkippedActive else none)
 }
+/** startViol — StartProcessing = the forward step PLUS the bin attach: the resolved pool (if it
+    resolves — dangling allowed, soft ref) must be in-tenant and must read EMPTY at attach. */
+fun startViol[o: StartProcessingOcc]: set Reason {
+  forwardViol[o]
+  + ((some p: resolve[o.pool] & InventoryPool | p.tenantId != o.cycle.tenantId) => RForeignPool else none)
+  + ((some p: resolve[o.pool] & InventoryPool | some heldAt[p, o.tick]) => RPoolNotEmpty else none)
+}
 /** shelveViol — the sanctioned backward operation: exactly REQUESTED → REQUESTING. */
 fun shelveViol[o: ShelveOcc]: set Reason {
   ((not liveAtOcc[o]) => RClosed else none)
@@ -128,7 +132,8 @@ fun cycleForwardOps: set CycleOcc {
 }
 fact CycleAdmissionWitness {
   all o: RequestOcc  | (o.admission = Accepted iff no requestViol[o])  and (o.admission in Rejected implies o.admission.because = requestViol[o])
-  all o: cycleForwardOps | (o.admission = Accepted iff no forwardViol[o]) and (o.admission in Rejected implies o.admission.because = forwardViol[o])
+  all o: cycleForwardOps - StartProcessingOcc | (o.admission = Accepted iff no forwardViol[o]) and (o.admission in Rejected implies o.admission.because = forwardViol[o])
+  all o: StartProcessingOcc | (o.admission = Accepted iff no startViol[o]) and (o.admission in Rejected implies o.admission.because = startViol[o])
   all o: ShelveOcc   | (o.admission = Accepted iff no shelveViol[o])   and (o.admission in Rejected implies o.admission.because = shelveViol[o])
   all o: WithdrawOcc | (o.admission = Accepted iff no withdrawViol[o]) and (o.admission in Rejected implies o.admission.because = withdrawViol[o])
 }
@@ -137,26 +142,21 @@ fact CycleCommitAccepts { all o: CycleOcc | some o.commit implies o.commit = Acc
 
 // ── effects (committed) — per-kind frames on the record ────────────────────────────────────────
 pred sameCyclePayloadButStatus[b, a: CycleState] {
-  a.sLocator = b.sLocator and a.sMaterials = b.sMaterials and a.sQuantityOverride = b.sQuantityOverride
+  a.sLocator = b.sLocator and a.sPool = b.sPool and a.sQuantityOverride = b.sQuantityOverride
 }
 fact CycleEffectWitness {
   all o: RequestOcc | committed[o] implies {
     o.post.sStatus = REQUESTING
-    no o.post.sMaterials                       // the demanding leg is empty (KD12)
+    no o.post.sPool                            // the demanding leg carries no bin (KD12 revised)
     o.post.sQuantityOverride = o.qtyOverride
-    no o.post.sLocator                         // location arrives with an on-demand move-analog
+    no o.post.sLocator                         // dormant until the rung-4 writer
   }
-  all o: cycleForwardOps - ReceiveOcc - DepleteOcc | committed[o] implies {
+  all o: cycleForwardOps - StartProcessingOcc | committed[o] implies {
     o.post.sStatus = targetOf[o] and sameCyclePayloadButStatus[o.pre, o.post]
   }
-  all o: ReceiveOcc | committed[o] implies {
-    o.post.sStatus = FULFILLED
-    o.post.sMaterials = o.pre.sMaterials + o.materials          // materials ACCRUE (KD12)
-    o.post.sLocator = o.pre.sLocator and o.post.sQuantityOverride = o.pre.sQuantityOverride
-  }
-  all o: DepleteOcc | committed[o] implies {
-    o.post.sStatus = DEPLETED
-    no o.post.sMaterials                                        // consumed — the re-trigger reads empty
+  all o: StartProcessingOcc | committed[o] implies {
+    o.post.sStatus = IN_PROCESS
+    o.post.sPool = o.pool                      // the bin ATTACHES (empty — guard) and stays frozen
     o.post.sLocator = o.pre.sLocator and o.post.sQuantityOverride = o.pre.sQuantityOverride
   }
   all o: ShelveOcc | committed[o] implies {

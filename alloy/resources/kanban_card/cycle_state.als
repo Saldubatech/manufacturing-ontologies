@@ -16,12 +16,19 @@ module resources/kanban_card/cycle_state
 open meta/profiles/domain_log                 // PROFILE (DT-012): the log anatomy
 open shared/values                            // Quantity, PhysicalLocator
 open resources/kanban_card/card_cycle         // KanbanCardStatus (the 8 core states + AVAILABLE)
+open resources/inventory_item/inventory_pool  // InventoryPool — the cycle's BIN (sPool soft-ref target)
 
 /** CycleState — one moment's mutable payload of a CardCycle (a value; extensional). */
 sig CycleState extends Snapshot {
   sStatus:          one  KanbanCardStatus,   // operational state (core 8 — fact below)
-  sLocator:         lone PhysicalLocator,    // where the card is, this moment of the cycle
-  sMaterials:       set  EntityId,           // → InventoryItem(s) carried (KD12; soft refs)
+  sLocator:         lone PhysicalLocator,    // where the card is (VALUE ref). Absent = position not
+                                             //   operationally tracked on this leg. NB currently
+                                             //   DORMANT: no operation writes it yet — the writer
+                                             //   arrives with Receiving/moves (DT-014 rung 4)
+  sPool:            lone EntityId,           // → InventoryPool — the cycle's BIN (KD12 revised
+                                             //   2026-07-03: pool-mediated materials; absent = no
+                                             //   bin attached (the demand leg); attached EMPTY at
+                                             //   StartProcessing; pool-present-but-empty ≠ detached)
   sQuantityOverride: lone Quantity           // per-cycle override of the card's nominalQuantity
 }
 
@@ -29,7 +36,13 @@ sig CycleState extends Snapshot {
 fact CycleStateExtensional {
   all disj a, b: CycleState |
     a.sStatus != b.sStatus or a.sLocator != b.sLocator
-    or a.sMaterials != b.sMaterials or a.sQuantityOverride != b.sQuantityOverride
+    or a.sPool != b.sPool or a.sQuantityOverride != b.sQuantityOverride
+}
+
+// The bin ref is TYPED (soft — dangling/cross-Universe allowed): a resolved sPool is an InventoryPool.
+// (Tenancy is occurrence-side — the attach guard — since a record cannot know its cycle's tenant.)
+fact CyclePoolIntegrity {
+  all s: CycleState | let p = resolve[s.sPool] | some p implies p in InventoryPool
 }
 
 // KC-MH-6 as a record fact: a cycle state is always one of the 8 core states.

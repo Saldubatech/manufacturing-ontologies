@@ -37,35 +37,38 @@ run unit_kc_outOfCirculation {
   some k: KanbanCard, t: Tick | some k.cycles and not cardInCirculationAt[k, t]
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
-// A loaded cycle: IN_USE carrying materials (record-carried since Phase B), sourced by an order.
+// A loaded cycle: IN_USE with its bin attached and stocked, sourced by a (stub) document.
 run unit_kc_loadedCycle {
-  some c: CardCycle, t: Tick | {
+  some c: CardCycle, t: Tick, p: InventoryPool | {
     statusAt[c, t] = IN_USE
-    some stateOfCycleAt[c, t].sMaterials
+    resolve[stateOfCycleAt[c, t].sPool] = p and some heldAt[p, t]
     some c.sourcedBy
   }
-} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 2 InventoryItem expect 1
+} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 2 InventoryItem, 1 InventoryPool expect 1
 
 // A card whose loop resolves to a Loop (KC-MH-5).
 run unit_kc_cardOnLoop {
   some k: KanbanCard | some l: Loop | resolve[k.loopRef] = l
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
-// A received material resolves to an actual InventoryItem (KC-MH-12 typed seam, via the record).
-run unit_kc_materialsResolveII {
-  some o: ReceiveOcc, ii: InventoryItem | committed[o] and resolve[o.materials] = ii
-} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 2 InventoryItem expect 1
+// The cycle's bin resolves to an actual InventoryPool (the KD12-revised typed seam).
+run unit_kc_binResolvesPool {
+  some s: CycleState, p: InventoryPool | resolve[s.sPool] = p
+} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 2 InventoryItem, 1 InventoryPool expect 1
 
-// A cycle carrying TWO distinct holdings at once (KC-MH-12 SET — e.g. two lots, no Merge forced).
+// The bin carries TWO distinct holdings at once (the pool holds the set — no Merge forced; the
+// one-vs-set duality lives on the POOL, exactly its founding intent).
 run unit_kc_multiMaterials {
-  some c: CardCycle, t: Tick | some disj a, b: InventoryItem |
-    (a + b) in resolve[stateOfCycleAt[c, t].sMaterials]
-} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 2 InventoryItem expect 1
+  some c: CardCycle, t: Tick, p: InventoryPool | {
+    resolve[stateOfCycleAt[c, t].sPool] = p
+    some disj a, b: InventoryItem | (a + b) in heldAt[p, t]
+  }
+} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 3 InventoryItem, 1 InventoryPool expect 1
 
 // ── UNSAT: structural invariants forbid the bad case ────────────────────────────────────────
-// KC-MH-12: received materials are typed — they can never resolve to a non-InventoryItem entity.
-run unit_kc_materialsNonIIImpossible {
-  some o: ReceiveOcc | let m = resolve[o.materials] | some m and m not in InventoryItem
+// The bin ref is typed — it can never resolve to a non-InventoryPool entity.
+run unit_kc_binNonPoolImpossible {
+  some s: CycleState | let p = resolve[s.sPool] | some p and p not in InventoryPool
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
 
 // KC-MH-6: a cycle STATE can never be AVAILABLE (that is card-level; a CycleState record fact).

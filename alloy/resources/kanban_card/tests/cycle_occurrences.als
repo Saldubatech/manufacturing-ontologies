@@ -18,7 +18,7 @@ run unit_cyc_genesisBirths {
   some o: RequestOcc | committed[o]
     and statusAt[o.cycle, o.tick] = REQUESTING
     and liveCycleAt[o.cycle, o.tick]
-    and no stateOfCycleAt[o.cycle, o.tick].sMaterials
+    and no stateOfCycleAt[o.cycle, o.tick].sPool
 } for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
@@ -53,12 +53,25 @@ run unit_cyc_shelveStepsBack {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
-// Receive attaches materials (KD12 accrual).
-run unit_cyc_receiveAttachesMaterials {
-  some o: ReceiveOcc | committed[o] and some o.materials
-    and o.materials in stateOfCycleAt[o.cycle, o.tick].sMaterials
+// The BIN story (KD12 revised): StartProcessing attaches an EMPTY pool; a PoolAddOcc on the
+// pool's own log (interleaved on the shared Tick order) fills it — pool-present-but-empty and
+// pool-with-stock are both readable, distinct from no-pool.
+run unit_cyc_binAttachesEmptyThenFills {
+  some sp: StartProcessingOcc, a: PoolAddOcc | {
+    committed[sp] and committed[a]
+    resolve[sp.pool] = a.pool and precedes[sp.tick, a.tick]
+    no heldAt[a.pool, sp.tick]                                   // attached empty
+    some heldAt[a.pool, a.tick]                                  // filled by the pool log
+    some stateOfCycleAt[sp.cycle, a.tick].sPool                  // still attached on the cycle side
+  }
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      2 CardCycle, 1 KanbanCard, 2 InventoryItem expect 1
+      2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
+
+// Attaching a NON-EMPTY bin is refused with RPoolNotEmpty among the reasons.
+run unit_cyc_dirtyBinRefused {
+  some o: StartProcessingOcc | refusedAtAdmission[o] and RPoolNotEmpty in o.admission.because
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
 // ROLLOVER closes the predecessor: the successor's genesis reads c1 back as COMPLETED, not live.
 run unit_cyc_rolloverCompletesPredecessor {
@@ -128,14 +141,22 @@ assert unit_cyc_forwardMonotone {
 check unit_cyc_forwardMonotone for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
 
-// The demanding/sourcing legs are empty-handed: any state strictly before FULFILLING carries no
-// materials (Receive is the only attacher; Shelve cannot cross back over it).
-assert unit_cyc_emptyBeforeFulfilling {
-  all o: CycleOcc | (committed[o] and some o.post and regionBefore[o.post.sStatus, FULFILLING])
-    implies no o.post.sMaterials
+// The demanding leg carries no bin: any state strictly before IN_PROCESS has no sPool
+// (StartProcessing is the only attacher; Shelve cannot cross back over it).
+assert unit_cyc_noBinBeforeInProcess {
+  all o: CycleOcc | (committed[o] and some o.post and regionBefore[o.post.sStatus, IN_PROCESS])
+    implies no o.post.sPool
 }
-check unit_cyc_emptyBeforeFulfilling for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      3 CardCycle, 2 KanbanCard, 2 InventoryItem expect 0
+check unit_cyc_noBinBeforeInProcess for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
+
+// Once attached, the bin is FROZEN for the cycle's remainder (the frames carry it; no re-pointing).
+assert unit_cyc_binFrozenOnceAttached {
+  all o: CycleOcc - StartProcessingOcc | (committed[o] and some o.pre.sPool)
+    implies o.post.sPool = o.pre.sPool
+}
+check unit_cyc_binFrozenOnceAttached for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
 
 // Nothing commits on a closed cycle (terminality of closure).
 assert unit_cyc_closureIsTerminal {
