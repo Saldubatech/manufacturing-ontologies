@@ -2,24 +2,24 @@ module resources/kanban_card/kanban_card
 
 open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
 open meta/kernel                                  // Scoped, EntityId, resolve
-open shared/values                                  // Quantity, PhysicalLocator
+open shared/values                                  // Quantity (nominalQuantity)
 open meta/state_machine/machine                   // print StateMachine + firedInto
 open reference_data/item/item                     // Item (soft-ref target)
 open resources/processing_network/processing_network  // Loop (soft-ref target) [KC-MH-5]
 open resources/kanban_card/card_cycle             // CardCycle (the child aggregate)
+open resources/kanban_card/cycle_occurrences      // the cycle LOG (DT-015): liveCycleAt, Tick
 
 /*
  * KanbanCard — the STATIC container (KD13): identity + durable configuration + the physical/print
- * artifact, changed only by administrative edits. All dynamic state lives on its CardCycle children
- * (card_cycle.als). Parent→child aggregation modeled exactly like Item→ItemSupply: `cycles` is a
- * direct containment relation, `currentCycle` is the distinguished member (≙ Item.defaultSupply),
- * and the ownership/ordering facts live HERE in the parent (≙ ItemSupplyOwnership in item.als).
- *
- * DRAFT — tentative hypotheses tagged [KC-MH-n]; see workbook .../kanban_card/model-draft.md.
- * The baseline code-faithful model is preserved under resources/kanban_card/baseline/ [KC-MH-9].
+ * artifact, changed only by administrative edits. All dynamic state lives on its CardCycle
+ * children's OCCURRENCE LOG (cycle_occurrences.als — DT-015): `currentCycleAt` and
+ * `cardInCirculationAt` are log READINGS now, and the former `LiveCycleIsOpenTail` fact is a
+ * verified THEOREM of the genesis guard. Parent→child aggregation modeled exactly like
+ * Item→ItemSupply: `cycles` is a direct containment relation; the ownership/ordering facts live
+ * HERE in the parent (≙ ItemSupplyOwnership in item.als).
  */
 
-// ── print lifecycle (the durable artifact — KD3; lives on the card) ──────────────────────
+// ── print lifecycle (the durable artifact — KD3; lives on the card; STAYS a machine) ─────────────
 /** KanbanCardPrintStatus — print/physical-artifact state (PS_-prefixed; UNKNOWN omitted). */
 abstract sig KanbanCardPrintStatus extends State {}
 one sig PS_NOT_PRINTED, PS_PRINTED, PS_LOST, PS_DEPRECATED, PS_RETIRED extends KanbanCardPrintStatus {}
@@ -50,7 +50,7 @@ sig KanbanCardPrintEvent { type: one KanbanCardPrintEventType }
 
 /** CardSerial — the card's natural identifier, unique within a tenant (opaque). Named distinctly
     from inventory_item's `SerialNumber` (product-instance individualizer) to avoid a cross-module
-    type clash now that card_cycle opens inventory_item; the field stays `serialNumber`. */
+    type clash; the field stays `serialNumber`. */
 sig CardSerial {}
 
 // ── the static card ──────────────────────────────────────────────────────────────────────
@@ -59,15 +59,13 @@ sig KanbanCard extends Scoped {
   // identity & durable configuration (administrative edits only)
   serialNumber:    one CardSerial,               // CardSerial: distinct from inventory_item's SerialNumber
   itemRef:         one EntityId,                 // → Item (immutable classifier)
-  nominalQuantity: lone Quantity,                // durable target (overridable per cycle)
+  nominalQuantity: lone Quantity,                // durable target (overridable per cycle — CycleState.sQuantityOverride)
   loopRef:         lone EntityId,                // → Loop [KC-MH-5 / KD11]
   // the physical/print artifact (durable; spans cycles)
   printStatus:     lone KanbanCardPrintStatus,
   lastPrintEvent:  lone KanbanCardPrintEvent,
   // cycle aggregation (parent→child, ≙ Item.supplies)
   cycles:          set CardCycle                 // direct containment (no back-ref)
-  // [KC-MH-11] currentCycle is now DERIVED from the health axis (the live cycle) — see the fun
-  // below; no longer a stored soft-ref, so the Item.defaultSupply parallel (KC-MH-1) is dropped.
 }
 
 // Outgoing soft references (cycles is a direct relation, kept in-tenant by CardCycleOwnership).
@@ -82,7 +80,7 @@ fact SerialNumberUniqueInTenant {
   all disj a, b: KanbanCard | a.tenantId = b.tenantId implies a.serialNumber != b.serialNumber
 }
 
-// Print snapshot consistency (≙ the operational one on CardCycle).
+// Print snapshot consistency (the print lifecycle keeps the machine + snapshot form — low churn).
 fact KanbanPrintConsistency {
   all k: KanbanCard | some k.lastPrintEvent implies
     firedInto[KanbanPrintMachine, k.printStatus, k.lastPrintEvent.type]
@@ -93,15 +91,6 @@ fact KanbanPrintConsistency {
 fact CardCycleOwnership {
   all c: CardCycle | one k: KanbanCard | c in k.cycles
   all k: KanbanCard, c: k.cycles | c.tenantId = k.tenantId
-}
-// [KC-MH-11] the LIVE cycle is the open/current one: at most one per card, and it is the chain TAIL
-// (KC-MH-8 — nothing in the card succeeds it). done/indeterminate cycles are closed/unclear.
-fact LiveCycleIsOpenTail {
-  all k: KanbanCard {
-    lone c: k.cycles | c.executionStatus in liveCycleStatus                     // ≤ 1 live cycle
-    all c: k.cycles | c.executionStatus in liveCycleStatus implies
-      (no s: k.cycles | s.precededBy = c)                                        // the live cycle is the tail
-  }
 }
 // [KC-MH-2] the precededBy chain stays within the card's own cycles (siblings), and each card has a
 // single chain (one head) — so a card's cycles are one totally-ordered, non-overlapping series.
@@ -114,10 +103,12 @@ fact OneChainPerCard { all k: KanbanCard | lone { c: k.cycles | no c.precededBy 
 fact NoOrphanSerialNumber   { all s: CardSerial         | s in KanbanCard.serialNumber }
 fact NoOrphanPrintEvent     { all e: KanbanCardPrintEvent  | e in KanbanCard.lastPrintEvent }
 
-/** currentCycle — DERIVED [KC-MH-11]: the card's live (open) cycle, if any. `lone` by
-    `LiveCycleIsOpenTail` (≤ 1 live cycle). Supersedes the stored soft-ref of KC-MH-1. */
-fun KanbanCard.currentCycle: lone CardCycle { { c: this.cycles | c.executionStatus in liveCycleStatus } }
-
-/** cardInCirculation — the card has a live cycle. AVAILABLE (KC-MH-6) ⟺ NOT in circulation
-    (no currentCycle); the 8 cycle states never include AVAILABLE. */
-pred cardInCirculation[k: KanbanCard] { some k.currentCycle }
+// ── log readings (DT-015 Phase B — the former LiveCycleIsOpenTail fact is now a THEOREM) ────────
+/** currentCycleAt — the card's live (open) cycle as of `t`. `lone` by the verified
+    one-live-cycle-per-card theorem (tests/cycle_occurrences.als). */
+fun currentCycleAt[k: KanbanCard, t: Tick]: set CardCycle {
+  { c: k.cycles | liveCycleAt[c, t] }
+}
+/** cardInCirculationAt — the card has a live cycle as of `t`. AVAILABLE (KC-MH-6) ⟺ NOT in
+    circulation. */
+pred cardInCirculationAt[k: KanbanCard, t: Tick] { some currentCycleAt[k, t] }

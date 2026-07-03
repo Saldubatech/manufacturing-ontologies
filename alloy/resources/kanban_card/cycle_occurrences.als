@@ -21,6 +21,7 @@ module resources/kanban_card/cycle_occurrences
 
 open meta/profiles/domain_log                 // PROFILE (DT-012): the log anatomy (StatefulAction, Tick, verdicts)
 open resources/kanban_card/cycle_state        // CycleState + the region order (+ card_cycle, shared/values transitively)
+open resources/inventory_item/inventory_item  // InventoryItem — the materials soft-ref target (KD12)
 
 // ── per-deployment lifecycle configuration (KQ-S9 — reified, not hard-coded) ────────────────────
 /** LifecycleConfig — which core statuses this deployment uses; inactive ones are SKIPPED. */
@@ -53,8 +54,14 @@ fun targetOf[o: CycleOcc]: lone KanbanCardStatus {
   else o in DepleteOcc => DEPLETED else none
 }
 
-// Received materials resolve to InventoryItems (soft refs — dangling allowed; KD12).
-fact ReceivedMaterialsIntegrity { all o: ReceiveOcc | resolve[o.materials] in InventoryItem }
+// Received materials resolve to InventoryItems (soft refs — dangling allowed; KD12) IN THE CYCLE'S
+// TENANT. NB record-carried refs are not entity dataRefs, so the kernel's CrossTenantIsolation does
+// not reach them — this fact is their tenancy law (Phase B; the old entity field got it from the
+// kernel for free).
+fact ReceivedMaterialsIntegrity {
+  all o: ReceiveOcc | resolve[o.materials] in InventoryItem
+  all o: ReceiveOcc | all m: resolve[o.materials] & InventoryItem | m.tenantId = o.cycle.tenantId
+}
 
 // ── refusal reasons ─────────────────────────────────────────────────────────────────────────────
 one sig RClosed,            // the cycle is not live (never started, withdrawn, or rolled over)
