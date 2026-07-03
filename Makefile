@@ -36,9 +36,9 @@ check-layering:
 	  echo "FAIL: meta must not open shared (DT-001.12 layer law)"; fail=1; fi; \
 	if grep -rnE '^open ($(DOMAIN_DIRS))/' alloy/meta alloy/shared --include='*.als'; then \
 	  echo "FAIL: meta/shared must not open a domain (DT-001.12 layer law)"; fail=1; fi; \
-	if grep -rn '^open resources/inventory_item/legacy' alloy --include='*.als' | grep -v 'alloy/resources/inventory_item/legacy/'; then \
-	  echo "FAIL: only legacy/ may open legacy/ (DT-011 — the frozen var carrier is isolated)"; fail=1; fi; \
-	[ $$fail -eq 0 ] && echo "OK: layering respected (meta -/-> shared -/-> domains; legacy isolated)" || exit 1
+	if grep -rn '^open resources/inventory_item/legacy' alloy --include='*.als'; then \
+	  echo "FAIL: nothing may open the archived legacy carrier (DT-011 — moved to alloy-sample/inventory_item_legacy)"; fail=1; fi; \
+	[ $$fail -eq 0 ] && echo "OK: layering respected (meta -/-> shared -/-> domains)" || exit 1
 
 ## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch
 check-alloy: $(ALLOY) check-layering

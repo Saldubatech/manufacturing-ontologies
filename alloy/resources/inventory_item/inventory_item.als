@@ -17,9 +17,9 @@ open reference_data/item/item     // Item — the primary classifier
  * canonical module is fully static, per the single-carrier decision.
  *
  * The original Phase-B `var`/LTL carrier (var state fields + transition predicates + its three
- * suites, D1–D17 as originally verified) is preserved VERBATIM in `legacy/` — frozen as of D17/17
- * ops, never opened together with this module (lint-enforced), retiring to alloy-sample/ once the
- * log suite reaches parity. See DT-011 and the kanban `baseline/` precedent (KC-MH-9).
+ * suites, D1–D17 as originally verified) was preserved VERBATIM in `legacy/` and, at full parity
+ * of the log suite (44/44, 2026-07-02), ARCHIVED to `../alloy-sample/inventory_item_legacy/`
+ * (see its README to run it). See DT-011 and the kanban `baseline/` precedent (KC-MH-9).
  */
 
 // ── module-local value / handle types ──────────────────────────────────────────────
