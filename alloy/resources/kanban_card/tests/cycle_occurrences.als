@@ -53,25 +53,36 @@ run unit_cyc_shelveStepsBack {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
-// The BIN story (KD12 revised): StartProcessing attaches an EMPTY pool; a PoolAddOcc on the
-// pool's own log (interleaved on the shared Tick order) fills it — pool-present-but-empty and
-// pool-with-stock are both readable, distinct from no-pool.
-run unit_cyc_binAttachesEmptyThenFills {
+// The pool story (KD12 revised): StartProcessing attaches a pool; a PoolAddOcc on the pool's own
+// log (interleaved on the shared Tick order) fills it — pool-present-but-empty and pool-with-stock
+// are both readable, distinct from no-pool.
+run unit_cyc_poolAttachesThenFills {
   some sp: StartProcessingOcc, a: PoolAddOcc | {
     committed[sp] and committed[a]
     resolve[sp.pool] = a.pool and precedes[sp.tick, a.tick]
-    no heldAt[a.pool, sp.tick]                                   // attached empty
+    no heldAt[a.pool, sp.tick]                                   // attached empty here (allowed, not required)
     some heldAt[a.pool, a.tick]                                  // filled by the pool log
     some stateOfCycleAt[sp.cycle, a.tick].sPool                  // still attached on the cycle side
   }
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
-// Attaching a NON-EMPTY bin is refused with RPoolNotEmpty among the reasons.
-run unit_cyc_dirtyBinRefused {
-  some o: StartProcessingOcc | refusedAtAdmission[o] and RPoolNotEmpty in o.admission.because
+// RESIDUE attach (Miguel): a pool with left-over stock (e.g. over-receiving) attaches DIRECTLY —
+// no emptiness requirement; with enough stock the cycle can move straight on toward READY.
+run unit_cyc_residuePoolAttaches {
+  some sp: StartProcessingOcc, cp: CompleteProcessingOcc | {
+    committed[sp] and committed[cp] and cp.cycle = sp.cycle
+    some heldAt[resolve[sp.pool] & InventoryPool, sp.tick]       // residue present AT attach
+    precedes[sp.tick, cp.tick]                                    // and straight on to READY
+  }
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
+
+// EXCLUSIVITY: attaching a pool held by another LIVE cycle is refused with RPoolInUse.
+run unit_cyc_poolInUseRefused {
+  some o: StartProcessingOcc | refusedAtAdmission[o] and RPoolInUse in o.admission.because
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
 // ROLLOVER closes the predecessor: the successor's genesis reads c1 back as COMPLETED, not live.
 run unit_cyc_rolloverCompletesPredecessor {
@@ -141,22 +152,32 @@ assert unit_cyc_forwardMonotone {
 check unit_cyc_forwardMonotone for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
 
-// The demanding leg carries no bin: any state strictly before IN_PROCESS has no sPool
+// The demanding leg carries no pool: any state strictly before IN_PROCESS has no sPool
 // (StartProcessing is the only attacher; Shelve cannot cross back over it).
-assert unit_cyc_noBinBeforeInProcess {
+assert unit_cyc_noPoolBeforeInProcess {
   all o: CycleOcc | (committed[o] and some o.post and regionBefore[o.post.sStatus, IN_PROCESS])
     implies no o.post.sPool
 }
-check unit_cyc_noBinBeforeInProcess for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+check unit_cyc_noPoolBeforeInProcess for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
 
-// Once attached, the bin is FROZEN for the cycle's remainder (the frames carry it; no re-pointing).
-assert unit_cyc_binFrozenOnceAttached {
+// Once attached, the pool is FROZEN for the cycle's remainder (the frames carry it; no re-pointing).
+assert unit_cyc_poolFrozenOnceAttached {
   all o: CycleOcc - StartProcessingOcc | (committed[o] and some o.pre.sPool)
     implies o.post.sPool = o.pre.sPool
 }
-check unit_cyc_binFrozenOnceAttached for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+check unit_cyc_poolFrozenOnceAttached for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
+
+// EXCLUSIVE WHILE LIVE (Miguel): at any moment, a pool has at most one LIVE holding cycle —
+// derived from the attach guard + the frozen frames + closure semantics. Dismissal is implicit:
+// when the holder closes (rollover/withdraw), the pool becomes attachable again.
+assert unit_cyc_poolExclusiveWhileLive {
+  all p: InventoryPool, t: Tick |
+    lone { c: CardCycle | liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p }
+}
+check unit_cyc_poolExclusiveWhileLive for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 2 InventoryPool expect 0
 
 // Nothing commits on a closed cycle (terminality of closure).
 assert unit_cyc_closureIsTerminal {

@@ -16,7 +16,7 @@ module resources/kanban_card/cycle_state
 open meta/profiles/domain_log                 // PROFILE (DT-012): the log anatomy
 open shared/values                            // Quantity, PhysicalLocator
 open resources/kanban_card/card_cycle         // KanbanCardStatus (the 8 core states + AVAILABLE)
-open resources/inventory_item/inventory_pool  // InventoryPool — the cycle's BIN (sPool soft-ref target)
+open resources/inventory_item/inventory_pool  // InventoryPool — the sPool soft-ref target
 
 /** CycleState — one moment's mutable payload of a CardCycle (a value; extensional). */
 sig CycleState extends Snapshot {
@@ -25,10 +25,12 @@ sig CycleState extends Snapshot {
                                              //   operationally tracked on this leg. NB currently
                                              //   DORMANT: no operation writes it yet — the writer
                                              //   arrives with Receiving/moves (DT-014 rung 4)
-  sPool:            lone EntityId,           // → InventoryPool — the cycle's BIN (KD12 revised
-                                             //   2026-07-03: pool-mediated materials; absent = no
-                                             //   bin attached (the demand leg); attached EMPTY at
-                                             //   StartProcessing; pool-present-but-empty ≠ detached)
+  sPool:            lone EntityId,           // → InventoryPool (KD12 revised 2026-07-03): the
+                                             //   cycle's EXCLUSIVELY-held pool while it lives;
+                                             //   absent = the demand leg; attached at
+                                             //   StartProcessing (residue allowed); persists into
+                                             //   DEPLETED (present-but-empty ≠ detached); dismissed
+                                             //   implicitly when the cycle closes
   sQuantityOverride: lone Quantity           // per-cycle override of the card's nominalQuantity
 }
 

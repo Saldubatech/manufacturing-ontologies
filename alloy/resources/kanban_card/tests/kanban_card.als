@@ -37,7 +37,7 @@ run unit_kc_outOfCirculation {
   some k: KanbanCard, t: Tick | some k.cycles and not cardInCirculationAt[k, t]
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
-// A loaded cycle: IN_USE with its bin attached and stocked, sourced by a (stub) document.
+// A loaded cycle: IN_USE with its pool attached and stocked, sourced by a (stub) document.
 run unit_kc_loadedCycle {
   some c: CardCycle, t: Tick, p: InventoryPool | {
     statusAt[c, t] = IN_USE
@@ -51,23 +51,24 @@ run unit_kc_cardOnLoop {
   some k: KanbanCard | some l: Loop | resolve[k.loopRef] = l
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
-// The cycle's bin resolves to an actual InventoryPool (the KD12-revised typed seam).
-run unit_kc_binResolvesPool {
+// The cycle's pool ref resolves to an actual InventoryPool (the KD12-revised typed seam).
+run unit_kc_poolRefResolves {
   some s: CycleState, p: InventoryPool | resolve[s.sPool] = p
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 2 InventoryItem, 1 InventoryPool expect 1
 
-// The bin carries TWO distinct holdings at once (the pool holds the set — no Merge forced; the
-// one-vs-set duality lives on the POOL, exactly its founding intent).
+// The pool carries TWO distinct holdings at once (no Merge forced; the one-vs-set duality lives
+// on the POOL, exactly its founding intent).
 run unit_kc_multiMaterials {
   some c: CardCycle, t: Tick, p: InventoryPool | {
     resolve[stateOfCycleAt[c, t].sPool] = p
     some disj a, b: InventoryItem | (a + b) in heldAt[p, t]
   }
-} for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar, 3 InventoryItem, 1 InventoryPool expect 1
+} for 7 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar,
+      9 EntityId, 3 InventoryItem, 1 InventoryPool, 2 CardCycle, 1 KanbanCard expect 1
 
 // ── UNSAT: structural invariants forbid the bad case ────────────────────────────────────────
-// The bin ref is typed — it can never resolve to a non-InventoryPool entity.
-run unit_kc_binNonPoolImpossible {
+// The pool ref is typed — it can never resolve to a non-InventoryPool entity.
+run unit_kc_poolRefNonPoolImpossible {
   some s: CycleState | let p = resolve[s.sPool] | some p and p not in InventoryPool
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
 

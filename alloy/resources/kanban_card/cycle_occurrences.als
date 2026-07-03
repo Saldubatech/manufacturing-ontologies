@@ -36,10 +36,10 @@ fact CycleOccRecords { all o: CycleOcc | (o.pre + o.post) in CycleState }
 sig RequestOcc            extends CycleOcc { qtyOverride: lone Quantity } { bindings = cycle + qtyOverride }
 sig AcceptOcc             extends CycleOcc {} { bindings = cycle }
 sig ShelveOcc             extends CycleOcc {} { bindings = cycle }
-sig StartProcessingOcc    extends CycleOcc { pool: one EntityId } { bindings = cycle + pool }   // ATTACHES the (empty) bin
+sig StartProcessingOcc    extends CycleOcc { pool: one EntityId } { bindings = cycle + pool }   // ATTACHES the pool (exclusive while the cycle lives)
 sig CompleteProcessingOcc extends CycleOcc {} { bindings = cycle }
 sig FulfillOcc            extends CycleOcc {} { bindings = cycle }
-sig ReceiveOcc            extends CycleOcc {} { bindings = cycle }   // status-only: material arrivals are PoolAddOcc events on the attached bin
+sig ReceiveOcc            extends CycleOcc {} { bindings = cycle }   // status-only: material arrivals are PoolAddOcc events on the attached pool
 sig UseOcc                extends CycleOcc {} { bindings = cycle }
 sig DepleteOcc            extends CycleOcc {} { bindings = cycle }
 sig WithdrawOcc           extends CycleOcc {} { bindings = cycle }
@@ -54,9 +54,13 @@ fun targetOf[o: CycleOcc]: lone KanbanCardStatus {
 }
 
 // (Materials are POOL-mediated since 2026-07-03 — KD12 revised: the record carries `sPool`, typed
-// in cycle_state.als; tenancy + emptiness are the ATTACH guard below. Receiving puts InventoryItems
-// INTO the pool via its own log (PoolAddOcc), interleaved on the shared Tick order — the
-// cross-log coupling law ("adds only during the accrual window") is DT-014 rung 4.)
+// in cycle_state.als; tenancy + EXCLUSIVITY are the ATTACH guard below. A pool with residual stock
+// may attach (over-receiving leftovers — Miguel); at rollover the pool is DISMISSED implicitly:
+// the closed cycle's records are history and the new cycle is born pool-less — no operation
+// needed; the pool atom persists and becomes attachable again. Explicit detachment for exception
+// paths (unusable/excess materials) is DEFERRED. Receiving puts InventoryItems INTO the pool via
+// its own log (PoolAddOcc), interleaved on the shared Tick order — the accrual-window coupling
+// law is DT-014 rung 4.)
 
 // ── refusal reasons ─────────────────────────────────────────────────────────────────────────────
 one sig RClosed,            // the cycle is not live (never started, withdrawn, or rolled over)
@@ -66,8 +70,8 @@ one sig RClosed,            // the cycle is not live (never started, withdrawn, 
         RAlreadyStarted,    // genesis on a cycle that already has committed history
         RCardInCirculation, // genesis while the predecessor cycle is still open
         RNotRequested,      // Shelve from a status other than REQUESTED
-        RPoolNotEmpty,      // attach: the bin must read EMPTY at attach
-        RForeignPool        // attach: the bin must be in the cycle's tenant
+        RPoolInUse,         // attach: another LIVE cycle currently holds this pool (exclusivity)
+        RForeignPool        // attach: the pool must be in the cycle's tenant
         extends Reason {}
 
 // ── chaining (unconditional — refusals read the real state) ─────────────────────────────────────
@@ -111,12 +115,17 @@ fun forwardViol[o: CycleOcc]: set Reason {
       and some m: LifecycleConfig.active | regionBetween[m, o.pre.sStatus, targetOf[o]])
      => RSkippedActive else none)
 }
-/** startViol — StartProcessing = the forward step PLUS the bin attach: the resolved pool (if it
-    resolves — dangling allowed, soft ref) must be in-tenant and must read EMPTY at attach. */
+/** startViol — StartProcessing = the forward step PLUS the pool attach: the resolved pool (if it
+    resolves — dangling allowed, soft ref) must be in-tenant and not held by another LIVE cycle
+    (EXCLUSIVE while the holder lives — Miguel 2026-07-03). Residue is ALLOWED: a pool with
+    left-over stock (e.g. over-receiving) may attach directly — with enough stock the cycle can
+    move straight on toward READY. */
 fun startViol[o: StartProcessingOcc]: set Reason {
   forwardViol[o]
   + ((some p: resolve[o.pool] & InventoryPool | p.tenantId != o.cycle.tenantId) => RForeignPool else none)
-  + ((some p: resolve[o.pool] & InventoryPool | some heldAt[p, o.tick]) => RPoolNotEmpty else none)
+  + ((some p: resolve[o.pool] & InventoryPool | some c2: CardCycle - o.cycle |
+        liveCycleAt[c2, o.tick] and resolve[stateOfCycleAt[c2, o.tick].sPool] = p)
+     => RPoolInUse else none)
 }
 /** shelveViol — the sanctioned backward operation: exactly REQUESTED → REQUESTING. */
 fun shelveViol[o: ShelveOcc]: set Reason {
@@ -156,7 +165,7 @@ fact CycleEffectWitness {
   }
   all o: StartProcessingOcc | committed[o] implies {
     o.post.sStatus = IN_PROCESS
-    o.post.sPool = o.pool                      // the bin ATTACHES (empty — guard) and stays frozen
+    o.post.sPool = o.pool                      // the pool ATTACHES (exclusive while live) and stays frozen
     o.post.sLocator = o.pre.sLocator and o.post.sQuantityOverride = o.pre.sQuantityOverride
   }
   all o: ShelveOcc | committed[o] implies {
