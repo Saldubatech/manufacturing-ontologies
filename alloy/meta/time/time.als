@@ -22,48 +22,27 @@ open meta/time/duration                          // Duration, ZeroDuration, dAtO
 // `TimeInterval`/`within` now live in meta/time/instant — split out so AXIS-ONLY consumers
 // (meta/occurrence, and through it the whole action/log cone) do not carry the ARITY-4 metric below:
 // Kodkod cannot represent an arity-4 relation once the universe exceeds ~215 atoms (2^31 tuple
-// indices), and domain occurrence-log universes routinely do. This module keeps the calendar and the
-// metric, re-exporting the axis to its openers.
+// indices), and domain occurrence-log universes routinely do. This module keeps the elapsed-time
+// METRIC only (the calendar moved to shared/time/calendar), re-exporting the axis to its openers.
 
-// ── standard period units, time zones & period boundaries (OWL-Time-aligned) ──────────────────
-// Grounded on W3C OWL-Time (http://www.w3.org/2006/time#): PeriodUnit ≈ the time:TemporalUnit
-// individuals (time:unitHour/unitDay/unitWeek); TimeZone ≈ time:TimeZone; `endOfPeriod` is the
-// period close. The actual calendar arithmetic (which Instant *is* a day/week boundary in a given
-// zone) is a time:TRS / clock concern (DT-001.03) — here period boundaries are characterized
-// ABSTRACTLY by their laws, not computed. See shared/std/owl_time for the MIREOT term mapping.
+// ── ABSTRACT period machinery (generic — how a timeline divides; NO real-world vocabulary) ──────
+// The real-world CALENDARING binding (PeriodUnit HOUR/DAY/WEEK, TimeZone, CalendarSpec) lives in
+// `shared/time/calendar` (2026-07-02 — the DT-001.12 earmark): units and zones are SHARED
+// vocabulary; the division machinery below is essential domain-time modeling and stays in meta.
 
-/** PeriodUnit — a standard calculation-period length (OWL-Time `time:unitHour/unitDay/unitWeek`).
-    MONTH/YEAR (variable length) deferred. */
-enum PeriodUnit { HOUR, DAY, WEEK }
+/** PeriodSpec — an ABSTRACT division of the timeline into periods: `closes` maps each instant to
+    the close of its period. Partial here; made total + lawful by the `calendarAxioms` PREMISE. The
+    real-world binding (which unit, which zone) is `shared/time/calendar`'s `CalendarSpec`. */
+sig PeriodSpec { closes: Instant -> lone Instant }
 
-/** TimeZone — a named time zone (opaque; an IANA tz name, e.g. "Europe/Madrid"). Day/week
-    boundaries are zone-relative, so the period close takes a zone (OWL-Time `time:TimeZone`). */
-sig TimeZone {}
-
-/** PeriodSpec — a (PeriodUnit, TimeZone) pairing that fixes how the timeline divides into periods.
-    `closes` maps each instant to the close of its period under this spec. Reified (rather than a
-    4-ary Calendar relation, which would blow up Kodkod's arity limit) so the close relation stays
-    arity-3 and non-period models pay nothing. Abstract: `closes` is partial here, made total + lawful
-    by the `calendarAxioms` PREMISE (mirrors keyed_order's `orderAxioms`); a real TRS supplies the
-    arithmetic (DT-001.03). */
-sig PeriodSpec {
-  unit:   one PeriodUnit,
-  zone:   one TimeZone,
-  closes: Instant -> lone Instant
-}
-/** At most one spec per (unit, zone). */
-fact OneSpecPerUnitZone { all disj p, q: PeriodSpec | p.unit != q.unit or p.zone != q.zone }
-
-/** specFor — the spec for a (unit, zone), if one exists. */
-fun specFor[u: PeriodUnit, z: TimeZone]: lone PeriodSpec { { p: PeriodSpec | p.unit = u and p.zone = z } }
 /** endOfPeriod — the close of the period containing `t` under spec `ps` (lone; total under calendarAxioms). */
 fun endOfPeriod[ps: PeriodSpec, t: Instant]: lone Instant { ps.closes[t] }
-/** samePeriod — `a` and `b` share a period under spec `ps` (same close): an equivalence; with
+/** samePeriod — `a` and `b` share a period under `ps` (same close): an equivalence; with
     monotonicity, periods are contiguous. */
 pred samePeriod[ps: PeriodSpec, a, b: Instant] { ps.closes[a] = ps.closes[b] }
 
-/** calendarAxioms — the period-boundary laws, as a PREMISE (assume it in period-reasoning commands;
-    non-period models pay nothing). Enough to compute "level at end of period" without any arithmetic. */
+/** calendarAxioms — the period-boundary laws, as a PREMISE (assume in period-reasoning commands;
+    non-period models pay nothing). Enough to compute "level at end of period" with no arithmetic. */
 pred calendarAxioms {
   all ps: PeriodSpec, t: Instant {
     one ps.closes[t]                                       // total: every instant has a close

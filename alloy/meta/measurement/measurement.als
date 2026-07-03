@@ -18,7 +18,7 @@ module meta/measurement/measurement[V]
  * `shared/measurement/quantity` binds V = Quantity and supplies the keyed statistics.
  */
 
-open meta/time/time            // Instant, TimeInterval, PeriodUnit, TimeZone, endOfPeriod, within, …
+open meta/time/time            // Instant, TimeInterval, the abstract PeriodSpec/endOfPeriod, within, …
                           // NB: deliberately does NOT open shared/values, so Quantity stays single-path
                           // for the [Quantity] instantiation (avoids parameterized-open ambiguity);
                           // and so meta/time's cost stays confined to measurement-users.
@@ -50,16 +50,16 @@ enum Stat { LAST, FIRST, MIN, MAX, COUNT, SUM, MEAN }
 sig Metric { observes: one Signal, stat: one Stat, over: one TimeInterval }
 
 /** Report — a (stat, signal) sampled across `window` (the Reporting Period), one value per
-    `granularity` Calculation Period (a PeriodUnit: HOUR/DAY/WEEK), in time zone `zone`, recomputed
-    every `cadence` (Metric Interval; none = on-demand). The per-period series is produced downstream
-    from `window`/`granularity`/`zone` (each period's close via `endOfPeriod`). */
+    `granularity` Calculation Period (an ABSTRACT PeriodSpec — the real-world binding to
+    HOUR/DAY/WEEK + a time zone is `shared/time/calendar.CalendarSpec`), recomputed every `cadence`
+    (Metric Interval; none = on-demand). The per-period series is produced downstream from
+    `window`/`granularity` (each period's close via `endOfPeriod`). */
 sig Report {
   observes:    one Signal,
   stat:        one Stat,
   window:      one TimeInterval,
-  granularity: one PeriodUnit,
-  zone:        one TimeZone,
-  cadence:     lone PeriodUnit
+  granularity: one PeriodSpec,
+  cadence:     lone PeriodSpec
 }
 
 // ── selectors (VALUE-AGNOSTIC — available for any V) ─────────────────────────────────────────
