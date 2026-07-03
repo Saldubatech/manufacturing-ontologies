@@ -68,6 +68,7 @@ note bottom #white : every entity is scoped to a Hotel (tenant)
 | 16 | Two time models — `var`/LTL trace vs reified log + projection, with the AGREEMENT theorem (replay ≡ fold) | **ready** | state machine vs event store; State monad run ≡ foldl |
 | 17 | Snapshot-carrying occurrences (`meta/action/stateful`): chaining, value-parameterized cores, invariant-as-THEOREM, LOCF ≡ deltas | **ready** | event store + memento; scan-carrying-state |
 | 18 | The stack on the COMPLETED Action machinery (end of the 16→18 ladder): refusals recorded, `seq`-in-snapshot recovers the structural free ride | **ready** | validated event stream; refusals as retained Lefts |
+| 19 | The SUBJECT-LOG SPINE (`meta/subject_log`, DT-015 Q5): a folio ledger in ~40 domain lines — kinds + guards + effects on the parameterized spine (chaining law + LOCF supplied) | **ready** | event-sourced aggregate on a reusable base; typeclass-style reuse |
 
 "Ready" = a runnable file exists. "Planned" = a catalog slot to fill as the pattern is
 needed. "Deferred" = waits on a modeling decision not yet made (the behavioral/temporal
