@@ -9,11 +9,19 @@ tree mirrors the system's **functional decomposition**.
 
 - **Domain → directory, Module → directory, one owning module per entity.** The
   **module** is the unit of modeling/development: each module is a directory
-  `<domain>/<module>/` holding its definition/fact files (one per entity/concept,
-  e.g. `reference_data/item/item.als` + `reference_data/item/item_supply.als`) and a
-  `tests/` subdirectory. A child entity lives in its parent's module (ItemSupply in
-  `item/`, BusinessRole in `business_affiliate/`). Module paths therefore carry the
-  module segment: `module reference_data/item/item`, `open resources/kanban_card/kanban_card`.
+  `<domain>/<module>/` holding its files and a `tests/` subdirectory. **Module shape (DT-017,
+  the standard):** four role files — `<module>_types.als` (naked sigs + reified observables +
+  read API + definitional facts; what any consumer may see), `<module>_contracts.als` (the
+  published laws as named predicates — curated, few and strong), `<module>_implementation.als`
+  (the machinery + the bridge facts deriving the observables), `<module>_mock.als` (asserts the
+  contract; what consumer UNIT roots open — never together with the implementation,
+  lint-guarded). Internal files below the role files are fine (transitions.als, uom.als — the
+  types-cone weight is part of the interface, keep specialty vocabularies separate). Suites
+  split into `tests/unit/` (implementation vs peers' MOCKS — `make check-units`, the dev loop)
+  and `tests/integration/` (real implementations composed — `make check-integration`, the gate
+  tier); `tests/*.als` directly is fine for single-tier modules. A child entity lives in its parent's module (ItemSupply in
+  `item/` — declared in `item_types.als`; BusinessRole in `business_affiliate/`). Module paths therefore carry the
+  module segment: `module reference_data/item/item_types`, `open resources/kanban_card/kanban_card`.
 - **Every defined concept carries a glossary doc-comment.** Immediately above each
   `sig`/`enum`, a `/** Term — one-line glossary definition. */` block (the
   type-level "description"; Alloy has no sig annotations, so this is the convention).
@@ -55,7 +63,7 @@ tree mirrors the system's **functional decomposition**.
   - `shared/x731_state/state.als` — ITU-T X.731 expressed via `meta/state_machine`: three region machines (Operational ∥ Usage ∥ Administrative) + `Resource` host + interlocks as cross-region invariants (DT-003).
   - `shared/std/{bfo,iof,qudt,owl_time}.als` — **boundary stubs** MIREOT'd from the public standards (only terms our entities touch, each with its source IRI). Currently STUBS; DT-002. The standards (BFO/IOF/QUDT) stay source-of-truth as a **read-only reference cache** under `../owl/imports/` (consult via ROBOT) — we no longer maintain an authored OWL ontology; harvested mappings are in the workbook `domain-ontology/additional-info.md`.
   - `shared/time/calendar.als` — CALENDARING (the DT-001.12 earmark, fulfilled): `PeriodUnit` (HOUR/DAY/WEEK), `TimeZone`, `CalendarSpec extends PeriodSpec` binding the abstract meta period machinery to the real world; future `endOfDay`/standard durations/tenant TZs land here.
-- Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` (Item/ItemSupply/BusinessAffiliate/BusinessRole; Item carries the inventory-tracking `UomScheme`, DT-009 — see `reference_data/item/uom.als` + the multi-unit `collapse` in `reference_data/item/uom_collapse.als`) and `resources` (KanbanCard — the card is the static container + print machine; the CardCycle lifecycle is LOG-CARRIED (DT-015: `cycle_state.als` + `cycle_occurrences.als`, forward-skip guards over the reified `LifecycleConfig`, closure by withdraw/rollover; the op machine + `executionStatus` + `lastEvent` retired; the baseline spike archived to `../alloy-sample/kanban_card_baseline/`); InventoryItem — the CANONICAL log-carried module (DT-011): identity-only entity + `item_state.als` (the InventoryItemState record) + `transitions.als` (value-parameterized cores) + `occurrences.als` (fifteen StatefulAction kinds, reason-precise witnessing, stateAt/liveAt projections); the frozen var carrier was archived VERBATIM to `../alloy-sample/inventory_item_legacy/` at full parity (2026-07-02; see its README to run it); **InventoryPool** — a Scoped set of InventoryItems under one Item, `resources/inventory_item/inventory_pool.als` (part of the inventory_item module — closely coupled, they evolve together; its `var` membership stays out of the static log cone: only its own root and `tests/system.als` open it), DT-004) have content, plus `metrics.als` in the same module (the DT-007 inventory-count read side — metrics live NEXT TO the entities they measure; `operations/` is reserved for actual manufacturing/logistics operations like assembly or put-away); the rest are stubbed (`.gitkeep`).
+- Domains: `system reference_data resources procurement shop_access fulfillment operations receiving shipping oam workflows_and_integrations`. Only `reference_data` (Item/ItemSupply/BusinessAffiliate/BusinessRole; Item carries the inventory-tracking `UomScheme`, DT-009 — see `reference_data/item/uom.als` + the multi-unit `collapse` in `reference_data/item/uom_collapse.als`) and `resources` (KanbanCard — the card is the static container + print machine; the CardCycle lifecycle is LOG-CARRIED (DT-015: `cycle_state.als` + `cycle_occurrences.als`, forward-skip guards over the reified `LifecycleConfig`, closure by withdraw/rollover; the op machine + `executionStatus` + `lastEvent` retired; the baseline spike archived to `../alloy-sample/kanban_card_baseline/`); InventoryItem — the CANONICAL log-carried module (DT-011) and the DT-017 four-file PILOT: `inventory_item_types.als` (identity-only entity + the InventoryItemState record + the reified observables `stateRel`/`liveTicks` with the stateAt/liveAt read API) + `inventory_item_contracts.als` (4 published laws) + `inventory_item_implementation.als` (fifteen StatefulAction kinds, reason-precise witnessing, the observable bridge) + `inventory_item_mock.als`, with `transitions.als` (value-parameterized cores) implementation-internal; the frozen var carrier was archived VERBATIM to `../alloy-sample/inventory_item_legacy/` at full parity (2026-07-02; see its README to run it); **InventoryPool** — a Scoped set of InventoryItems under one Item, `resources/inventory_item/inventory_pool.als` (part of the inventory_item module — closely coupled, they evolve together; its `var` membership stays out of the static log cone: only its own root and `tests/system.als` open it), DT-004) have content, plus `metrics.als` in the same module (the DT-007 inventory-count read side — metrics live NEXT TO the entities they measure; `operations/` is reserved for actual manufacturing/logistics operations like assembly or put-away); the rest are stubbed (`.gitkeep`).
 - The original throwaway X.731 behavioral spike (Loop/Station/Operator/Job/InventoryLot + 8-state lifecycle) was archived to `../alloy-sample/kanban_sim/` when the real code-faithful `KanbanCard` landed (DT-001.08). It is not in the `make check-alloy` set; see its README.
 
 ## ⚠️ Naming: snake_case, never `-` or `.`
@@ -102,8 +110,10 @@ Therefore:
 
 ## Running
 
-From the repo root: `make check-alloy` (all test roots), `make check-examples` (the
-cookbook), `make test-unit`, `make test-sys`, `make alloy` (GUI). Direct: `java -jar tools/alloy.jar exec -c "<name|glob|*>" -o /tmp/ao -f <root>.als`.
+From the repo root: `make check-alloy` (all test roots — THE GATE), `make check-units` (all
+roots except `tests/integration/` — the DT-017 dev loop), `make check-integration` (only the
+integration tiers), `make check-examples` (the cookbook), `make test-unit`, `make test-sys`,
+`make alloy` (GUI). Direct: `java -jar tools/alloy.jar exec -c "<name|glob|*>" -o /tmp/ao -f <root>.als`.
 Interpreting: `run` SAT = instance found; `check` UNSAT = assertion holds.
 
 ## `fact` vs `assert` vs `pred`

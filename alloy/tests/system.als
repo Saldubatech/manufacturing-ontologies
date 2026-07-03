@@ -8,8 +8,8 @@ module tests/system
 // bare (modeling-conventions §3.2).
 open meta/kernel
 open meta/keyed_value_algebra/keyed_order   // ringAxioms/orderAxioms (no longer re-exported by the slimmed inventory_item — DT-011)
-open reference_data/item/item                    // transitively: item_supply, business_affiliate, business_role
-open resources/inventory_item/inventory_item
+open reference_data/item/item_mock                    // item contract assumed (DT-017; transitively: supplies, business chain TYPES)
+open resources/inventory_item/inventory_item_mock
 open resources/inventory_item/inventory_pool
 open resources/kanban_card/kanban_card           // transitively: card_cycle, processing_network
 

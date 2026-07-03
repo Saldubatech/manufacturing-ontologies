@@ -158,7 +158,7 @@ fact CycleEffectWitness {
     o.post.sStatus = REQUESTING
     no o.post.sPool                            // the demanding leg carries no bin (KD12 revised)
     o.post.sQuantityOverride = o.qtyOverride
-    no o.post.sLocator                         // dormant until the rung-4 writer
+    no (o.post & CycleState).sLocator          // dormant until the rung-4 writer (& CycleState: sLocator is ambiguous vs InventoryItemState since DT-017 brought the II record into the pool cone)
   }
   all o: cycleForwardOps - StartProcessingOcc | committed[o] implies {
     o.post.sStatus = targetOf[o] and sameCyclePayloadButStatus[o.pre, o.post]
@@ -166,7 +166,7 @@ fact CycleEffectWitness {
   all o: StartProcessingOcc | committed[o] implies {
     o.post.sStatus = IN_PROCESS
     o.post.sPool = o.pool                      // the pool ATTACHES (exclusive while live) and stays frozen
-    o.post.sLocator = o.pre.sLocator and o.post.sQuantityOverride = o.pre.sQuantityOverride
+    (o.post & CycleState).sLocator = (o.pre & CycleState).sLocator and o.post.sQuantityOverride = o.pre.sQuantityOverride
   }
   all o: ShelveOcc | committed[o] implies {
     o.post.sStatus = REQUESTING and sameCyclePayloadButStatus[o.pre, o.post]

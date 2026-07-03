@@ -14,7 +14,7 @@ ALLOY_FLAGS ?=
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
 
-.PHONY: tools alloy check-layering check-alloy check-examples test-unit test-sys report report-examples check clean
+.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys report report-examples check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -42,7 +42,15 @@ check-layering:
 	  echo "FAIL: meta/shared must not open a domain (DT-001.12 layer law)"; fail=1; fi; \
 	if grep -rn '^open resources/inventory_item/legacy' alloy --include='*.als'; then \
 	  echo "FAIL: nothing may open the archived legacy carrier (DT-011 — moved to alloy-sample/inventory_item_legacy)"; fail=1; fi; \
-	[ $$fail -eq 0 ] && echo "OK: layering respected (meta -/-> shared -/-> domains)" || exit 1
+	if grep -rn '^open .*_mock' alloy --include='*.als' | grep -v '/tests/'; then \
+	  echo "FAIL: only test ROOTS may open a module mock (DT-017 — library files open peers' _types only)"; fail=1; fi; \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*'); do \
+	  for m in $$(grep -E '^open [a-z0-9_/]*_mock' "$$f" | awk '{print $$2}' | sed 's|_mock$$||'); do \
+	    if grep -qE "^open $$m"_implementation "$$f"; then \
+	      echo "FAIL: $$f opens both $${m}_mock and $${m}_implementation (DT-017 — meaningless universe)"; fail=1; fi; \
+	  done; \
+	done; \
+	[ $$fail -eq 0 ] && echo "OK: layering respected (meta -/-> shared -/-> domains; DT-017 mock discipline)" || exit 1
 
 ## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch
 check-alloy: $(ALLOY) check-layering
@@ -66,10 +74,34 @@ check-examples: $(ALLOY)
 	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect (see 'against expectation' above)"; exit 1; fi; \
 	echo "OK: all commands matched their expect"
 
+## check-units: the DEV-LOOP tier (DT-017) — every test root EXCEPT tests/integration/ (unit roots
+## run this module's implementation against peers' MOCKS; minutes, run freely while developing)
+check-units: $(ALLOY) check-layering
+	@mkdir -p $(OUT); fail=0; \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path '*/tests/integration/*' | sort); do \
+	  echo "== $$f =="; \
+	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
+	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi; \
+	echo "OK: all unit-tier commands matched their expect"
+
+## check-integration: the GATE tier (DT-017) — only tests/integration/ roots (real implementations
+## composed across layers; big, expensive — run at gates, always before push via check-alloy)
+check-integration: $(ALLOY)
+	@mkdir -p $(OUT); fail=0; \
+	for f in $$(find alloy -path '*/tests/integration/*.als' ! -path '*/legacy/*' | sort); do \
+	  echo "== $$f =="; \
+	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
+	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi; \
+	echo "OK: all integration-tier commands matched their expect"
+
 ## test-unit: run only unit_* commands across all test roots
 test-unit: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path '*/tests/integration/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) exec $(ALLOY_FLAGS) -c "unit_*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \

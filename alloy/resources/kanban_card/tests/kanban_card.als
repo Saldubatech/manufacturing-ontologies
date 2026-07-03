@@ -3,8 +3,8 @@ module resources/kanban_card/tests/kanban_card
 open meta/kernel
 open shared/values
 open meta/state_machine/machine
-open reference_data/item/item
-open resources/inventory_item/inventory_item   // InventoryItem (materials soft-ref target) [KC-MH-12]
+open reference_data/item/item_mock                  // item laws as CONTRACT (DT-017 consumer unit root)
+open resources/inventory_item/inventory_item_types   // InventoryItem (materials soft-ref target) [KC-MH-12]
 open resources/processing_network/processing_network
 open resources/kanban_card/card_cycle
 open resources/kanban_card/cycle_occurrences

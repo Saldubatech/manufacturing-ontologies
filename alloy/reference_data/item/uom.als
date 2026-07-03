@@ -5,6 +5,11 @@ module reference_data/item/uom
  * carries a `UomScheme`. The scheme is a STAR conversion to a canonical reference unit ALWAYS named
  * `each` (factor 1.0): every configured unit `u` has a factor `factor[u]` = how many `each` in one `u`.
  *
+ * DT-017 note: this is an INTERNAL VOCABULARY file of the item module, opened by item_types.als (and
+ * by uom_collapse.als, whose arity-4 fold must not pay the full item cone). `UomSchemeWF` stays HERE
+ * as a DEFINITIONAL fact — it states what a well-formed scheme VALUE is (like record extensionality),
+ * not a promise about module content; the relational law (scheme ownership) is contract C2.
+ *
  * Unit names are normalized identifiers `[a-z][0-9_a-z-]*` (case-insensitive) — for both configured and
  * ad-hoc (non-tracked) units; modeled here as opaque `Unit` atoms (distinct atom = distinct canonical
  * name; Alloy has no strings/regex to enforce the lexical rule).

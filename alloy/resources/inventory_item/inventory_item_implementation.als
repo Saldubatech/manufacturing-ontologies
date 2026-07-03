@@ -1,6 +1,12 @@
-module resources/inventory_item/occurrences
+module resources/inventory_item/inventory_item_implementation
 
 /*
+ * INVENTORY ITEM — IMPLEMENTATION (DT-017; the former occurrences.als, strict rename
+ * 2026-07-03). The MATH that realizes the contract: the occurrence log plus the BRIDGE facts
+ * (end of file) deriving the types-level observables (`stateRel`/`liveTicks`) from it. Opened
+ * by integration roots and by this module's own files (metrics.als — intra-module exemption);
+ * cross-module consumers open inventory_item_types/_mock instead (lint-guarded).
+ *
  * The InventoryItem OCCURRENCE LOG (DT-006 domain build): each staged operation is a
  * StatefulAction kind carrying typed bindings + the state records it read (`pre`) and produced
  * (`post`); guards are REASON-PRECISE witnessed (admission = Accepted iff no violations; a
@@ -18,9 +24,9 @@ module resources/inventory_item/occurrences
  */
 
 open meta/profiles/domain_log          // PROFILE (DT-012): log anatomy + group/order premises IN FORCE for the whole cone
-open meta/action/stateful                        // StatefulAction (pre/post), committed, committedUpTo, …
-open resources/inventory_item/item_state         // InventoryItemState + intra-snapshot facts + derived
-open resources/inventory_item/transitions        // the value-parameterized cores + g* guard checks
+open meta/action/stateful                            // StatefulAction (pre/post), committed, committedUpTo, …
+open resources/inventory_item/inventory_item_types   // entity + record + observables + read API
+open resources/inventory_item/transitions            // the value-parameterized cores + g* guard checks
 
 // ── Reason taxonomy (the "else Rejected:*" comments of operations.als, reified) ──────────────────
 one sig RNotLive, RAlreadyExists, RLocked, RUnfit, REmpty, RNonPositive, ROverdraw,
@@ -340,16 +346,21 @@ fact IIEffectWitness {
 fact NoOrphanLotNumber { all x: LotNumber | x in InventoryItemState.sLots + ReplenishOcc.lots }
 fact NoOrphanText      { all x: Text | x in InventoryItemState.(sNotes + sColorCode) }
 
-// ── the projections ───────────────────────────────────────────────────────────────────────────────
+// ── the projections and the OBSERVABLE BRIDGE (DT-017) ───────────────────────────────────────────
 /** lastTouch — the latest committed occurrence at-or-before `t` that touches `ii`. */
 fun lastTouch[ii: InventoryItem, t: Tick]: lone IIOcc {
   { o: IIOcc | committed[o] and ii in touches[o] and notAfter[o.tick, t]
       and (no b: IIOcc | committed[b] and ii in touches[b] and notAfter[b.tick, t]
              and precedes[o.tick, b.tick]) }
 }
-/** stateAt — LOCF of records: ii's payload as of `t` (its tombstone once retired — check liveAt). */
-fun stateAt[ii: InventoryItem, t: Tick]: lone InventoryItemState { postFor[lastTouch[ii, t], ii] }
-/** liveAt — the existence projection: created, and the last touch did not retire it. */
-pred liveAt[ii: InventoryItem, t: Tick] {
-  let o = lastTouch[ii, t] | some o and not retiringFor[o, ii]
+
+// The bridge: the types-level observables ARE the log projections. `stateAt`/`liveAt` (the read
+// API in inventory_item_types.als) read these fields, so every former call site keeps its
+// meaning; the contract laws become theorems about the log, discharged in tests/unit/.
+fact IIObservableBridge {
+  all ii: InventoryItem, t: Tick {
+    ii.stateRel[t] = postFor[lastTouch[ii, t], ii]                        // LOCF of records
+    (t in ii.liveTicks iff
+      (let o = lastTouch[ii, t] | some o and not retiringFor[o, ii]))     // existence projection
+  }
 }

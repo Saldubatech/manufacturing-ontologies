@@ -1,8 +1,7 @@
 module reference_data/shared/tests/shared
 
 open meta/kernel
-open reference_data/item/item
-open reference_data/item/item_supply
+open reference_data/item/item_implementation
 open reference_data/business_affiliate/business_affiliate
 open reference_data/business_affiliate/business_role
 

@@ -25,8 +25,8 @@ module resources/inventory_item/inventory_pool
 
 open meta/profiles/domain_log                    // PROFILE (DT-012): the log anatomy (StatefulAction, Tick, verdicts)
 open meta/kernel                                 // Scoped, Entity, EntityId, resolve
-open reference_data/item/item                    // Item — the membership classifier
-open resources/inventory_item/inventory_item     // InventoryItem (+ transitively keyed algebra, values)
+open reference_data/item/item_types            // Item — the membership classifier (TYPES; laws via root mock/impl)
+open resources/inventory_item/inventory_item_types     // InventoryItem (+ transitively keyed algebra, values)
 
 /** InventoryPool — the IDENTITY of a tenant-scoped set of InventoryItems under one Item; its
     membership lives on PoolState records in the occurrence log. */

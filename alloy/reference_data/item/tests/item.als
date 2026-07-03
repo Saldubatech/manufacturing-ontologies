@@ -1,8 +1,7 @@
 module reference_data/item/tests/item
 
 open meta/kernel
-open reference_data/item/item
-open reference_data/item/item_supply
+open reference_data/item/item_implementation
 
 // Item-module verification: Item + its child ItemSupply (structure only). The cross-module
 // supply→supplier reference chain is verified in reference_data/shared/tests (it spans both modules).

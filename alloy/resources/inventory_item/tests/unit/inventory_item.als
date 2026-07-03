@@ -1,15 +1,36 @@
-module resources/inventory_item/tests/occurrences
+module resources/inventory_item/tests/unit/inventory_item
 
-open resources/inventory_item/occurrences
+open resources/inventory_item/inventory_item_implementation
+open resources/inventory_item/inventory_item_contracts
+open reference_data/item/item_mock                 // the LOWER LAYER as its CONTRACT (DT-017 two-layer PoC)
 
 /*
- * Suite for the InventoryItem OCCURRENCE LOG (DT-006 domain build). The cone is fully STATIC — the
- * canonical entity is identity-only (DT-011; the var carrier lives in legacy/). Premises as in
- * every quantitative root. Scope notes: each committed occurrence consumes a Tick + record +
- * Quantity atoms — scopes size those families generously and keep the rest small.
+ * UNIT suite for the InventoryItem module (DT-017; the former tests/occurrences.als): this
+ * module's REAL implementation against the item module's MOCK — proving
+ * `II_impl ∧ item_contract ⊨ II_contract` plus the log's own witnesses and theorems. The
+ * integration tier (tests/integration/) re-runs the composition on the real item stack.
+ * Joint-SAT obligation for the mock (vacuity guard): the witnesses below that force resolved
+ * Items and UomSchemes (e.g. unit_occ_invalidUnitRefused) double as the `loads` witness.
+ *
+ * The cone is fully STATIC — the canonical entity is identity-only (DT-011). Scope notes: each
+ * committed occurrence consumes a Tick + record + Quantity atoms — scopes size those families
+ * generously and keep the rest small.
  */
-// Premises come with the profile: occurrences.als opens meta/profiles/domain_log (DT-012) —
+// Premises come with the profile: the types file opens meta/profiles/domain_log (DT-012) —
 // groupAxioms + orderAxioms are FACTS in this cone; no per-root premise assertion needed.
+
+// ── CONTRACT DISCHARGE (check; UNSAT = the implementation satisfies the published law) ───────────
+assert unit_ii_contract_stateFunction { stateIsFunctionOnceStarted }
+check unit_ii_contract_stateFunction for 5 but 3 Scalar, 5 Int expect 0
+
+assert unit_ii_contract_liveHaveState { liveHaveState }
+check unit_ii_contract_liveHaveState for 5 but 3 Scalar, 5 Int expect 0
+
+assert unit_ii_contract_bornLive { bornLive }
+check unit_ii_contract_bornLive for 5 but 3 Scalar, 5 Int expect 0
+
+assert unit_ii_contract_closureIsTerminal { closureIsTerminal }
+check unit_ii_contract_closureIsTerminal for 5 but 3 Scalar, 5 Int expect 0
 
 // ── SAT witnesses ─────────────────────────────────────────────────────────────────────────────────
 // A committed Create: read back through the projections — live, with its born record.

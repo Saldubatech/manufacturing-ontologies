@@ -35,7 +35,7 @@ module resources/inventory_item/metrics
  */
 
 open meta/profiles/timed_log                          // PROFILE (DT-012): P2 — the log + wall-clock (Timed, Instant axis)
-open resources/inventory_item/occurrences             // the log: IIOcc, committed, touches, postFor, retiringFor
+open resources/inventory_item/inventory_item_implementation  // the log: IIOcc, committed, touches, postFor, retiringFor (intra-module)
 open shared/time/calendar                             // CalendarSpec + endOfPeriod/samePeriod (family B closes)
 open shared/measurement/quantity                      // Signal/Measurement[Quantity], valueAt (LOCF); keyed_sum[Measurement]
 open meta/keyed_value_algebra/keyed_sum[TLine] as ts  // Σ actualQuantity over a cell's members

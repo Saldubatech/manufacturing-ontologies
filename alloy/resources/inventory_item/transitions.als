@@ -18,7 +18,7 @@ module resources/inventory_item/transitions
 
 open shared/values                             // Quantity maps, Unit
 open meta/keyed_value_algebra/keyed_order      // classify, lte, isZero, semanticEq (+ add, negate, zero)
-open resources/inventory_item/inventory_item   // FillState, AdministrativeState, LotNumber enums/handles
+open resources/inventory_item/inventory_item_types   // FillState, AdministrativeState, LotNumber enums/handles
 
 /** minExpV — the earlier of two expirations; ABSENT = "never" = +∞ (D17). */
 fun minExpV[a, b: lone Int]: lone Int { no a => b else (no b => a else (a < b => a else b)) }
