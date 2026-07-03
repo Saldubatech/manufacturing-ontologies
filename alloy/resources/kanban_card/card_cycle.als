@@ -1,5 +1,6 @@
 module resources/kanban_card/card_cycle
 
+open meta/profiles/baseline       // PROFILE (DT-012): structural — identity/refs/tenancy (added 2026-07-02; the sweep missed this file)
 open meta/kernel                  // Scoped, EntityId
 open shared/values                  // Quantity, PhysicalLocator
 open meta/state_machine/machine   // State, Signal, StateMachine, firedInto
@@ -17,6 +18,7 @@ open resources/inventory_item/inventory_item  // InventoryItem (materials soft-r
  * `notebooks/domain-ontology/resources/kanban_card/model-draft.md`. Atemporal/structural [KC-MH-7]:
  * operational coherence is the (b) snapshot rule (status == produces[lastEvent.type]); the (c)
  * forward-skip lifecycle discipline is deferred (KQ-S1) — so this draft PERMITS illegal sequences.
+ * The temporal re-carrier is DT-015 (the domain-log kit — the old Phase-B/`var` plan is obsolete).
  */
 
 // ── operational lifecycle (code names; lives with the cycle — KD3) ───────────────────────
@@ -114,10 +116,11 @@ fact MaterialsRefIntegrity {
     members of `materials`). */
 fun CardCycle.materialsItems: set InventoryItem { resolve[this.materials] & InventoryItem }
 
-// consolidatedActual — the cycle's total on-hand across its holdings = the keyed Σ of
-// `materialsItems.actualQuantity`. The keyed sum-over-a-set (Σ / fold of meta/keyed_value_algebra add) is the SAME
-// capability deferred for the inventory-count metrics (workbook DT-007); until it lands, the set of
-// contributing quantities is `this.materialsItems.actualQuantity` and the fold is computed downstream.
+// consolidatedActual — the cycle's total on-hand across its holdings = the keyed Σ of the members'
+// as-of quantities. NB the entity no longer carries a quantity (DT-011: identity-only; quantities
+// live on InventoryItemState records, read via stateAt) — and the Σ machinery EXISTS now: the
+// metrics package (resources/inventory_item/metrics.als, DT-007). A cycle-scoped count cell (Σ over
+// materialsItems' as-of records) lands there on demand with DT-015 (the log re-model).
 // (Multi-unit, no cross-unit conversion — a consolidated total may span units, exactly like DT-007.)
 
 // [KC-MH-6] a CardCycle is always in one of the 8 core states (never AVAILABLE — that is card-level).
