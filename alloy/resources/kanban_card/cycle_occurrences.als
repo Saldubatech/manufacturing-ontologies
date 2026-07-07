@@ -8,7 +8,12 @@ module resources/kanban_card/cycle_occurrences
  * The lifecycle discipline (KD9/KQ-S1/KQ-S9) is the ADMISSION GUARD: the canonical region order
  * (cycle_state.als) + a reified per-deployment configuration (`LifecycleConfig.active` — the
  * industry survey's control-cycle precedent): a forward operation may SKIP only INACTIVE statuses.
- * `Shelve` is the one sanctioned backward operation. Reason-precise witnessing throughout.
+ * TWO sanctioned backward operations: `Shelve` (REQUESTED → REQUESTING) and `ProductionFailure`
+ * (IN_PROCESS → REQUESTING — DT-016 R8, amended 2026-07-06: a production run completed without allocating this cycle
+ * any inventory; the cycle re-enters the waiting queue REQUESTING, attachable by a new DemandItem). Reason-precise
+ * witnessing throughout. R7 (DT-016): the cycle QUANTITY IS FIXED AT GENESIS — `sQuantityOverride`
+ * is written by `RequestOcc` only and framed by every other effect (theorem
+ * unit_cyc_quantityFixedAtGenesis).
  *
  * CLOSURE (the SQ-8 dissolution, pending the Q3/Q4 re-evaluation): a cycle is closed by a
  * committed `WithdrawOcc` (read back: ABANDONED) or by its SUCCESSOR's committed `RequestOcc`
@@ -43,6 +48,7 @@ sig ReceiveOcc            extends CycleOcc {} { bindings = cycle }   // status-o
 sig UseOcc                extends CycleOcc {} { bindings = cycle }
 sig DepleteOcc            extends CycleOcc {} { bindings = cycle }
 sig WithdrawOcc           extends CycleOcc {} { bindings = cycle }
+sig ProductionFailureOcc  extends CycleOcc {} { bindings = cycle }   // IN_PROCESS → REQUESTING (2nd sanctioned backward, R8): the run closed with no inventory for this cycle; the pool DETACHES (back to the demand leg)
 
 /** targetOf — the operation's CANONICAL target status (none for the closing Withdraw). */
 fun targetOf[o: CycleOcc]: lone KanbanCardStatus {
@@ -50,7 +56,8 @@ fun targetOf[o: CycleOcc]: lone KanbanCardStatus {
   else o in ShelveOcc => REQUESTING else o in StartProcessingOcc => IN_PROCESS
   else o in CompleteProcessingOcc => READY else o in FulfillOcc => FULFILLING
   else o in ReceiveOcc => FULFILLED else o in UseOcc => IN_USE
-  else o in DepleteOcc => DEPLETED else none
+  else o in DepleteOcc => DEPLETED
+  else o in ProductionFailureOcc => REQUESTING else none
 }
 
 // (Materials are POOL-mediated since 2026-07-03 — KD12 revised: the record carries `sPool`, typed
@@ -71,7 +78,8 @@ one sig RClosed,            // the cycle is not live (never started, withdrawn, 
         RCardInCirculation, // genesis while the predecessor cycle is still open
         RNotRequested,      // Shelve from a status other than REQUESTED
         RPoolInUse,         // attach: another LIVE cycle currently holds this pool (exclusivity)
-        RForeignPool        // attach: the pool must be in the cycle's tenant
+        RForeignPool,       // attach: the pool must be in the cycle's tenant
+        RNotInProcess       // ProductionFailure from a status other than IN_PROCESS (R8)
         extends Reason {}
 
 // ── chaining (unconditional — refusals read the real state) ─────────────────────────────────────
@@ -135,6 +143,14 @@ fun shelveViol[o: ShelveOcc]: set Reason {
 }
 /** withdrawViol — closing an open cycle. */
 fun withdrawViol[o: WithdrawOcc]: set Reason { (not liveAtOcc[o]) => RClosed else none }
+/** productionFailureViol — the SECOND sanctioned backward operation (R8, amended 2026-07-06):
+    exactly IN_PROCESS → REQUESTING (the completing production run allocated this cycle nothing;
+    it re-enters the waiting queue, attachable by a new DemandItem). */
+fun productionFailureViol[o: ProductionFailureOcc]: set Reason {
+  ((not liveAtOcc[o]) => RClosed else none)
+  + ((liveAtOcc[o] and o.pre.sStatus != IN_PROCESS) => RNotInProcess else none)
+  + ((REQUESTING not in LifecycleConfig.active) => RInactiveTarget else none)
+}
 
 fun cycleForwardOps: set CycleOcc {
   AcceptOcc + StartProcessingOcc + CompleteProcessingOcc + FulfillOcc + ReceiveOcc + UseOcc + DepleteOcc
@@ -145,6 +161,7 @@ fact CycleAdmissionWitness {
   all o: StartProcessingOcc | (o.admission = Accepted iff no startViol[o]) and (o.admission in Rejected implies o.admission.because = startViol[o])
   all o: ShelveOcc   | (o.admission = Accepted iff no shelveViol[o])   and (o.admission in Rejected implies o.admission.because = shelveViol[o])
   all o: WithdrawOcc | (o.admission = Accepted iff no withdrawViol[o]) and (o.admission in Rejected implies o.admission.because = withdrawViol[o])
+  all o: ProductionFailureOcc | (o.admission = Accepted iff no productionFailureViol[o]) and (o.admission in Rejected implies o.admission.because = productionFailureViol[o])
 }
 // No result policy in v1 (mirrors the InventoryItem and pool logs).
 fact CycleCommitAccepts { all o: CycleOcc | some o.commit implies o.commit = Accepted }
@@ -172,6 +189,12 @@ fact CycleEffectWitness {
     o.post.sStatus = REQUESTING and sameCyclePayloadButStatus[o.pre, o.post]
   }
   all o: WithdrawOcc | committed[o] implies o.post = o.pre      // the TOMBSTONE (closing; abandoned)
+  all o: ProductionFailureOcc | committed[o] implies {          // back to the waiting queue (R8)
+    o.post.sStatus = REQUESTING
+    no o.post.sPool                            // the pool DETACHES — REQUESTED is the demand leg again
+    (o.post & CycleState).sLocator = (o.pre & CycleState).sLocator
+    o.post.sQuantityOverride = o.pre.sQuantityOverride
+  }
 }
 
 // ── the projections (the notifications surface) ────────────────────────────────────────────────

@@ -100,6 +100,17 @@ run unit_cyc_withdrawAbandons {
 } for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
+// PRODUCTION FAILURE steps back (R8 — the 2nd sanctioned backward operation): IN_PROCESS →
+// REQUESTING, the pool detached (back to the demand-leg queue), the cycle live and attachable by a new DemandItem (R8 amended 2026-07-06).
+run unit_cyc_productionFailureRequeues {
+  some o: ProductionFailureOcc | committed[o]
+    and o.pre.sStatus = IN_PROCESS
+    and statusAt[o.cycle, o.tick] = REQUESTING
+    and no stateOfCycleAt[o.cycle, o.tick].sPool
+    and liveCycleAt[o.cycle, o.tick]
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
+
 // ── reason-precise refusals ─────────────────────────────────────────────────────────────────────
 // A backward jump (Accept after IN_PROCESS) is refused with exactly RBackward.
 run unit_cyc_backwardRefused {
@@ -134,6 +145,12 @@ run unit_cyc_shelveWrongSourceRefused {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
+// ProductionFailure from a status other than IN_PROCESS is refused with exactly RNotInProcess (R8).
+run unit_cyc_productionFailureWrongSourceRefused {
+  some o: ProductionFailureOcc | refusedAtAdmission[o] and o.admission.because = RNotInProcess
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
+
 // ── theorems (check; UNSAT = holds) ─────────────────────────────────────────────────────────────
 // ≤ 1 live cycle per card — DERIVED from the genesis guard + the chain facts (was the standing
 // LiveCycleIsOpenTail fact; the log makes it a consequence).
@@ -161,9 +178,10 @@ assert unit_cyc_noPoolBeforeInProcess {
 check unit_cyc_noPoolBeforeInProcess for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
 
-// Once attached, the pool is FROZEN for the cycle's remainder (the frames carry it; no re-pointing).
+// Once attached, the pool is FROZEN for the cycle's remainder (the frames carry it; no
+// re-pointing). ProductionFailure is the ONE detacher (R8) — exempted alongside the attacher.
 assert unit_cyc_poolFrozenOnceAttached {
-  all o: CycleOcc - StartProcessingOcc | (committed[o] and some o.pre.sPool)
+  all o: CycleOcc - StartProcessingOcc - ProductionFailureOcc | (committed[o] and some o.pre.sPool)
     implies o.post.sPool = o.pre.sPool
 }
 check unit_cyc_poolFrozenOnceAttached for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
@@ -184,4 +202,14 @@ assert unit_cyc_closureIsTerminal {
   all o: CycleOcc | closedStrictlyBefore[o.cycle, o.tick] implies not committed[o]
 }
 check unit_cyc_closureIsTerminal for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
+
+// QUANTITY FIXED AT GENESIS (DT-016 R7, MP): `sQuantityOverride` is written by RequestOcc only —
+// every other committed effect frames it. The cycle's quantum (override-if-given-else-nominal)
+// is therefore immutable for the cycle's whole existence; mid-flight change = withdraw + re-request.
+assert unit_cyc_quantityFixedAtGenesis {
+  all o: CycleOcc - RequestOcc | (committed[o] and some o.pre)
+    implies o.post.sQuantityOverride = o.pre.sQuantityOverride
+}
+check unit_cyc_quantityFixedAtGenesis for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0

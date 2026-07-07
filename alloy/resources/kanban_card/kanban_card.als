@@ -5,7 +5,7 @@ open meta/kernel                                  // Scoped, EntityId, resolve
 open shared/values                                  // Quantity (nominalQuantity)
 open meta/state_machine/machine                   // print StateMachine + firedInto
 open reference_data/item/item_types                     // Item (soft-ref target; TYPES only — DT-017)
-open resources/processing_network/processing_network  // Loop (soft-ref target) [KC-MH-5]
+open resources/processing_network/processing_network_types  // Loop (soft-ref target; TYPES only — DT-017) [KC-MH-5]
 open resources/kanban_card/card_cycle             // CardCycle (the child aggregate)
 open resources/kanban_card/cycle_occurrences      // the cycle LOG (DT-015): liveCycleAt, Tick
 

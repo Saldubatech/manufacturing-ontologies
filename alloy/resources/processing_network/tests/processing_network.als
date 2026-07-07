@@ -1,0 +1,30 @@
+module resources/processing_network/tests/processing_network
+
+open meta/kernel
+open resources/processing_network/processing_network_implementation
+
+/*
+ * Satisfiability suite for the STUB module (DT-017 static degenerate: the laws are axioms, so the
+ * obligation is joint SAT witnesses + impossibility guards, not discharge proofs).
+ */
+
+// A station network loads: a loop between two stations of one tenant.
+run unit_pnet_coherent {
+  some l: Loop | some l.source and some l.sink
+} for 4 expect 1
+
+// Two stations in ONE tenant coexist — the DT-016 two-station reality (Procurement source,
+// Shop Floor sink) is witness configuration, not schema.
+run unit_pnet_twoStationsOneTenant {
+  some disj a, b: Station | a.tenantId = b.tenantId
+} for 4 expect 1
+
+// A degenerate self-loop is impossible (loopWellFormed).
+run unit_pnet_selfLoopImpossible {
+  some l: Loop | l.source = l.sink
+} for 4 expect 0
+
+// A loop crossing tenants is impossible (loopWellFormed).
+run unit_pnet_crossTenantLoopImpossible {
+  some l: Loop | l.source.tenantId != l.tenantId or l.sink.tenantId != l.tenantId
+} for 4 expect 0
