@@ -200,9 +200,8 @@ run unit_dem_twoOpenSameIdentityLegal {
   some disj a, b: DemandItem, t: Tick | {
     a.tenantId = b.tenantId
     demandStatusAt[a, t] = DS_OPEN and demandStatusAt[b, t] = DS_OPEN
-    demandStateAt[a, t].sItem = demandStateAt[b, t].sItem
-    demandStateAt[a, t].sStation = demandStateAt[b, t].sStation
-    a + b in demandsFor[demandStateAt[a, t].sItem, demandStateAt[a, t].sStation, t]
+    a.itemRef = b.itemRef and a.stationRef = b.stationRef
+    a + b in demandsFor[a.itemRef, a.stationRef, t]
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem, 9 EntityId expect 1
@@ -223,10 +222,12 @@ run unit_dem_badStateRefused {
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
+// RForeignRef guards the RECORD-carried refs only (holding/delivery) — the entity's
+// itemRef/stationRef are kernel-covered post-lift (cross-tenant = unrepresentable).
 run unit_dem_foreignRefRefused {
-  some o: CreateDemandOcc | refusedAtAdmission[o] and o.admission.because = RForeignRef
+  some o: StartProductionOcc | refusedAtAdmission[o] and RForeignRef in o.admission.because
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem, 9 EntityId expect 1
+      1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 InventoryPool, 9 EntityId expect 1
 
 run unit_dem_foreignCycleRefused {
   some o: AddCycleOcc | refusedAtAdmission[o] and RForeignCycle in o.admission.because

@@ -47,15 +47,17 @@ fun liveStatuses: set DemandStatus { DS_OPEN + DS_RELEASED + DS_IN_PROCESS }
 /** DemandItem — the production task: one collated "Intent to Produce" an Item at its
     Production/Source Station. Identity only; everything else rides the log (DemandState
     records + occurrences). */
-sig DemandItem extends Scoped {}
-// RESOLVED with MP (2026-07-06 late): `dataRefs` is empty TODAY because sItem/sStation ride the
-// record — but they are IMMUTABLE identity-structure, and the principled split is
-// entity = identity + immutable structure / log = mutable state (the CardCycle.precededBy
-// precedent: a log-birthed subject with entity-carried immutable fields, read by its own
-// genesis guard). AGREED FOLLOW-UP (queued as the next model change): LIFT itemRef/stationRef
-// onto this entity — dataRefs then covers them (kernel isolation replaces the RForeignRef
-// guard clause), the create kinds drop those payloads, and the record slims to mutable state.
-fact DemandItemRefs { all d: DemandItem | no d.dataRefs }   // until the agreed lift lands (see above); tenancy = guards meanwhile
+sig DemandItem extends Scoped {
+  itemRef:    one EntityId,   // → Item: WHAT is produced (immutable identity-structure — MP 2026-07-06: entity = identity + immutable structure, log = mutable state; the CardCycle.precededBy precedent)
+  stationRef: one EntityId    // → Station: the PRODUCTION/SOURCE station (never a destination)
+}
+fact DemandItemRefs { all d: DemandItem | d.dataRefs = d.itemRef + d.stationRef }   // kernel isolation covers them
+fact DemandItemRefIntegrity {
+  all d: DemandItem {
+    (let i = resolve[d.itemRef]     | some i implies i in Item)
+    (let st = resolve[d.stationRef] | some st implies st in Station)
+  }
+}
 
 // ── the state record ────────────────────────────────────────────────────────────────────────────
 /** DemandState — one moment's mutable payload of a DemandItem (a value; extensional). */
@@ -63,8 +65,6 @@ sig DemandState extends Snapshot {
   sStatus:    one  DemandStatus,   // where the task stands (R5)
   sDemandQty: lone Quantity,       // the stored, ADVISORY intent total (R3b): no cone, may float free of the members' sum
   sMembership: set EntityId,       // → CardCycle (soft refs; DEMAND-SIDE ONLY — R2; may retain withdrawn cycles — R7)
-  sItem:      one  EntityId,       // → Item (identity-derivation, R1 amended: WHAT is produced)
-  sStation:   one  EntityId,       // → Station: the PRODUCTION/SOURCE station (identity-derivation, R1 amended 2026-07-06 — NEVER a destination; destinations are plural and derived: members' Loops, the Distribute Locator)
   sHolding:   lone EntityId        // → InventoryPool (R8): production deliveries accumulate here; must be EMPTY at Complete
 }
 
@@ -72,14 +72,12 @@ sig DemandState extends Snapshot {
 fact DemandStateExtensional {
   all disj a, b: DemandState |
     a.sStatus != b.sStatus or a.sDemandQty != b.sDemandQty or a.sMembership != b.sMembership
-    or a.sItem != b.sItem or a.sStation != b.sStation or a.sHolding != b.sHolding
+    or a.sHolding != b.sHolding
 }
 
 // Record-carried refs are TYPED (soft — dangling/cross-Universe allowed; tenancy is guard-side).
 fact DemandRefIntegrity {
   all s: DemandState {
-    (let i = resolve[s.sItem]    | some i implies i in Item)
-    (let st = resolve[s.sStation] | some st implies st in Station)
     (let h = resolve[s.sHolding] | some h implies h in InventoryPool)
     all m: s.sMembership | let c = resolve[m] | some c implies c in CardCycle
   }
@@ -87,15 +85,15 @@ fact DemandRefIntegrity {
 
 // ── the kinds — the 15 operations (product-register names in comments) ─────────────────────────
 /** Create — start a card-less demand task (births the DemandItem OPEN, seeds the intent). */
-sig CreateDemandOcc extends dlog/SubjectOcc { item, station: one EntityId, qty: lone Quantity }
-  { bindings = subject + item + station + qty }
+sig CreateDemandOcc extends dlog/SubjectOcc { qty: lone Quantity }
+  { bindings = subject + qty }   // item/station ride the ENTITY (immutable structure), not the payload
 /** MemberOcc — the abstract parent of the member-addressing kinds: `member` declared ONCE so
     union quantifiers over these kinds stay unambiguous. */
 abstract sig MemberOcc extends dlog/SubjectOcc { member: one EntityId }
 /** CreateWithCycle — start a task from its first demand signal (births + attaches; C/OP
     call-first: the caller invokes the cycle's Accept FIRST, this commit is the saga's gate). */
-sig CreateWithCycleOcc extends MemberOcc { item, station: one EntityId, qty: lone Quantity }
-  { bindings = subject + item + station + qty + member }
+sig CreateWithCycleOcc extends MemberOcc { qty: lone Quantity }
+  { bindings = subject + qty + member }
 /** AddCycle — collate a further signal (C/OP call-first, after the cycle's Accept). */
 sig AddCycleOcc extends MemberOcc {} { bindings = subject + member }
 /** RemoveCycle — return a signal to the queue (C/OP call-first, after the cycle's Shelve). */
@@ -213,8 +211,7 @@ fun demandOf[c: CardCycle, t: Tick]: set DemandItem {
     read for its collation policy (single-OPEN, round-robin, …) — the module does NOT enforce
     uniqueness (R1 amended). */
 fun demandsFor[item, station: EntityId, t: Tick]: set DemandItem {
-  { d: DemandItem | liveDemandAt[d, t]
-      and demandStateAt[d, t].sItem = item and demandStateAt[d, t].sStation = station }
+  { d: DemandItem | liveDemandAt[d, t] and d.itemRef = item and d.stationRef = station }
 }
 
 // ── the effective quantity (R7: FIXED AT GENESIS) ───────────────────────────────────────────────

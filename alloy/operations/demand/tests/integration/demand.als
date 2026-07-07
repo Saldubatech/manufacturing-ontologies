@@ -17,8 +17,8 @@ open resources/processing_network/processing_network_implementation
 run int_dem_loads {
   some o: CreateWithCycleOcc | {
     committed[o]
-    some resolve[o.item] & Item
-    some resolve[o.station] & Station
+    some resolve[o.subject.itemRef] & Item
+    some resolve[o.subject.stationRef] & Station
     some resolve[o.member] & CardCycle
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,

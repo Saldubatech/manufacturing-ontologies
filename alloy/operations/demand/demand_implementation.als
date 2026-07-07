@@ -42,10 +42,11 @@ pred deletedBeforeD[o: dlog/SubjectOcc] {
 /** createGenesisViol — the genesis conditions shared by both create kinds. (NO uniqueness check —
     R1 amended: multiple DemandItems per (Item, Source Station) are legal; single-OPEN, if a
     deployment wants it, is CALLER policy over the `demandsFor` read.) */
-fun createGenesisViol[o: dlog/SubjectOcc, item, station: EntityId]: set Reason {
+fun createGenesisViol[o: dlog/SubjectOcc]: set Reason {
   (startedBeforeD[o] => RDemandStarted else none)
-  + ((some i: resolve[item] & Item | i.tenantId != o.subject.tenantId) => RForeignRef else none)
-  + ((some s: resolve[station] & Station | s.tenantId != o.subject.tenantId) => RForeignRef else none)
+  // (No item/station tenancy clause: itemRef/stationRef are ENTITY dataRefs post-lift — the
+  //  kernel's CrossTenantIsolation makes a cross-tenant resolution UNREPRESENTABLE. RForeignRef
+  //  remains for the RECORD-carried refs: holding, delivery.)
 }
 /** attachCycleViol — the SAGA COMMIT GATE for attach (C/OP call-first): the member must be an
     in-tenant, live cycle standing at REQUESTED (its Accept — the saga's first leg — already
@@ -62,9 +63,9 @@ fun attachCycleViol[o: dlog/SubjectOcc, m: EntityId]: set Reason {
        => RCycleHeld else none)
     + ((m in dPre[o].sMembership) => RCycleHeld else none))
 }
-fun createViol[o: CreateDemandOcc]: set Reason { createGenesisViol[o, o.item, o.station] }
+fun createViol[o: CreateDemandOcc]: set Reason { createGenesisViol[o] }
 fun createWithViol[o: CreateWithCycleOcc]: set Reason {
-  createGenesisViol[o, o.item, o.station] + attachCycleViol[o, o.member]
+  createGenesisViol[o] + attachCycleViol[o, o.member]
 }
 fun addViol[o: AddCycleOcc]: set Reason {
   ((not liveAtOccD[o]) => RDemandClosed else none)
@@ -163,51 +164,46 @@ fact DemandAdmissionWitness {
 // ── effects (committed) — per-kind frames on the record ────────────────────────────────────────
 /** sameDemandButStatus — everything except the status is carried over. */
 pred sameDemandButStatus[b, a: DemandState] {
-  a.sDemandQty = b.sDemandQty and a.sMembership = b.sMembership
-  and a.sItem = b.sItem and a.sStation = b.sStation and a.sHolding = b.sHolding
+  a.sDemandQty = b.sDemandQty and a.sMembership = b.sMembership and a.sHolding = b.sHolding
 }
-/** sameKeyAndHolding — the immutable collation key and the holding ref are carried over. */
-pred sameKeyAndHolding[b, a: DemandState] {
-  a.sItem = b.sItem and a.sStation = b.sStation and a.sHolding = b.sHolding
-}
+/** sameHolding — the holding ref is carried over (item/station live on the ENTITY now). */
+pred sameHolding[b, a: DemandState] { a.sHolding = b.sHolding }
 
 fact DemandEffectWitness {
   all o: CreateDemandOcc | committed[o] implies {
     dPost[o].sStatus = DS_OPEN
     dPost[o].sDemandQty = o.qty                       // seeds the advisory intent (R3b)
     no dPost[o].sMembership
-    dPost[o].sItem = o.item and dPost[o].sStation = o.station
     no dPost[o].sHolding
   }
   all o: CreateWithCycleOcc | committed[o] implies {
     dPost[o].sStatus = DS_OPEN
     qtyMap[dPost[o].sDemandQty] = add[qtyMap[o.qty], effectiveQtyMap[resolve[o.member] & CardCycle]]
     dPost[o].sMembership = o.member
-    dPost[o].sItem = o.item and dPost[o].sStation = o.station
     no dPost[o].sHolding
   }
   all o: AddCycleOcc | committed[o] implies {
     dPost[o].sStatus = dPre[o].sStatus
     qtyMap[dPost[o].sDemandQty] = add[qtyMap[dPre[o].sDemandQty], effectiveQtyMap[resolve[o.member] & CardCycle]]
     dPost[o].sMembership = dPre[o].sMembership + o.member
-    sameKeyAndHolding[dPre[o], dPost[o]]
+    sameHolding[dPre[o], dPost[o]]
   }
   all o: RemoveCycleOcc + DetachWithdrawnOcc | committed[o] implies {
     dPost[o].sStatus = dPre[o].sStatus
     qtyMap[dPost[o].sDemandQty] = add[qtyMap[dPre[o].sDemandQty], negate[effectiveQtyMap[resolve[o.member] & CardCycle]]]
     dPost[o].sMembership = dPre[o].sMembership - o.member
-    sameKeyAndHolding[dPre[o], dPost[o]]
+    sameHolding[dPre[o], dPost[o]]
   }
   all o: AdjustQtyOcc | committed[o] implies {
     dPost[o].sStatus = dPre[o].sStatus
     dPost[o].sDemandQty = o.qty                       // SET (R3b; delta-adjust is client sugar)
     dPost[o].sMembership = dPre[o].sMembership
-    sameKeyAndHolding[dPre[o], dPost[o]]
+    sameHolding[dPre[o], dPost[o]]
   }
   all o: ResetQtyOcc | committed[o] implies {       // Σ semantics CONFINED to demand_reset.als
     dPost[o].sStatus = dPre[o].sStatus
     dPost[o].sMembership = dPre[o].sMembership
-    sameKeyAndHolding[dPre[o], dPost[o]]
+    sameHolding[dPre[o], dPost[o]]
   }
   all o: ReleaseOcc | committed[o] implies
     { dPost[o].sStatus = DS_RELEASED and sameDemandButStatus[dPre[o], dPost[o]] }
@@ -218,7 +214,6 @@ fact DemandEffectWitness {
     dPost[o].sHolding = o.holding                     // the accumulation pool attaches (R8)
     dPost[o].sDemandQty = dPre[o].sDemandQty
     dPost[o].sMembership = dPre[o].sMembership
-    dPost[o].sItem = dPre[o].sItem and dPost[o].sStation = dPre[o].sStation
   }
   all o: RecordProductionOcc | committed[o] implies o.post = o.pre   // ⟲ — the delivery lands on the POOL log
   all o: DistributeOcc       | committed[o] implies o.post = o.pre   // ⟲ — allocation moves pools + cycles, not this record
