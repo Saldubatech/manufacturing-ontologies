@@ -19,7 +19,7 @@ open meta/profiles/baseline          // PROFILE (DT-012): structural — identit
 open meta/kernel                     // Scoped, EntityId, resolve
 open shared/values                   // Quantity, Money, Unit
 open reference_data/item/uom         // UomScheme, Each, toEach, units (internal vocabulary, DT-009)
-open reference_data/business_affiliate/business_affiliate   // SupplierReference (ItemSupply field type)
+open reference_data/business_affiliate/business_affiliate_types   // SupplierReference (ItemSupply field type; laws via root mock/impl — DT-017)
 
 // ── supply sources ───────────────────────────────────────────────────────────────────────────────
 /** OrderMethod — how an item is ordered from a supplier. */

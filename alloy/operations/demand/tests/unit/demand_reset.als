@@ -3,6 +3,7 @@ module operations/demand/tests/unit/demand_reset
 open operations/demand/demand_reset
 open reference_data/item/item_mock
 open resources/processing_network/processing_network_mock
+open resources/kanban_card/kanban_card_mock
 
 /*
  * THE DEDICATED ResetQty root (R3b confinement): the ONLY root that opens demand_reset.als.

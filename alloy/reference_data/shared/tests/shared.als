@@ -2,8 +2,8 @@ module reference_data/shared/tests/shared
 
 open meta/kernel
 open reference_data/item/item_implementation
-open reference_data/business_affiliate/business_affiliate
-open reference_data/business_affiliate/business_role
+open reference_data/business_affiliate/business_affiliate_implementation
+
 
 // reference_data/shared — the DOMAIN-level shared module (the meta-equivalent at domain scope): holds
 // cross-module verifications (and any domain-shared super-classes, when they arise) that belong to no

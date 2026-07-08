@@ -12,7 +12,7 @@ open reference_data/item/item_mock                    // item contract assumed (
 open resources/inventory_item/inventory_item_mock
 open resources/inventory_item/inventory_pool
 open resources/processing_network/processing_network_mock   // stub laws as CONTRACT (DT-017)
-open resources/kanban_card/kanban_card           // transitively: card_cycle, processing_network_types
+open resources/kanban_card/kanban_card_implementation   // transitively: kanban_card_types, processing_network_types
 
 // The quantitative layers' premises (same assumption the module suites make).
 fact ScalarPremises { groupAxioms and orderAxioms }   // group suffices: domain roots do additive arithmetic only (DT-011)

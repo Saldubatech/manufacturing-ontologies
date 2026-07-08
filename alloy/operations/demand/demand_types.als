@@ -21,8 +21,9 @@ module operations/demand/demand_types
  * Produce/Fulfill vocabulary). Statuses carry the DS_ prefix (the print machine's PS_ precedent —
  * the cycle log owns bare IN_PROCESS etc.).
  *
- * INTERIM SEAM (R3): this module opens the kanban cycle log DIRECTLY (cycle_occurrences) until
- * kanban's four-file cut narrows the seam to types + mock. inventory_pool rides that cone.
+ * SEAM (R3, narrowed 2026-07-08): this module opens kanban_card_TYPES only (the four-file cut
+ * landed); unit roots take the kanban MOCK, integration roots the real implementation.
+ * inventory_pool rides that cone.
  */
 
 open meta/profiles/domain_log                        // PROFILE (DT-012): log anatomy + group/order premises
@@ -31,8 +32,7 @@ open meta/subject_log/subject_log[DemandItem, DemandState] as dlog   // the log 
 open shared/values                                   // Quantity
 open reference_data/item/item_types                  // Item (collation-key target; TYPES only)
 open resources/processing_network/processing_network_types   // Station (collation-key target; TYPES only)
-open resources/kanban_card/cycle_occurrences         // INTERIM (R3): CardCycle + the cycle log (+ pool transitively)
-open resources/kanban_card/kanban_card               // KanbanCard (nominalQuantity — the effective-quantity fallback leg)
+open resources/kanban_card/kanban_card_types          // CardCycle + the cycle log surface + KanbanCard (TYPES — DT-017; the kanban four-file cut retired the INTERIM direct open, 2026-07-08)
 
 // ── the status vocabulary ───────────────────────────────────────────────────────────────────────
 /** DemandStatus — the DemandItem lifecycle states (R5: MVP2 five states, plain enum; DS_ prefix
@@ -139,8 +139,8 @@ sig DeleteDemandOcc extends dlog/SubjectOcc {} { bindings = subject }
 fun demandMutators: set dlog/SubjectOcc {
   AddCycleOcc + RemoveCycleOcc + AdjustQtyOcc + ResetQtyOcc + DetachWithdrawnOcc
 }
-/** demandKinds — ALL demand operation occurrences (the module's family, alias-free for roots). */
-fun demandKinds: set dlog/SubjectOcc { dlog/SubjectOcc }
+/** demandOccKinds — ALL demand occurrence kinds (the module family, alias-free for roots). Renamed from demandKinds 2026-07-08: `kind` binds to OCCURRENCE, never the module/entity (interaction-terminology section occurrence-kind). */
+fun demandOccKinds: set dlog/SubjectOcc { dlog/SubjectOcc }
 
 // ── refusal reasons ─────────────────────────────────────────────────────────────────────────────
 // (No uniqueness reason: multiple DemandItems per (Item, Source Station) are legal — R1 amended;

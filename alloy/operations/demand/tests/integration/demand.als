@@ -4,6 +4,7 @@ open operations/demand/demand_implementation
 open operations/demand/demand_contracts
 open reference_data/item/item_implementation                        // the LOWER LAYERS for real
 open resources/processing_network/processing_network_implementation
+open resources/kanban_card/kanban_card_implementation
 
 /*
  * INTEGRATION suite for the demand module (DT-016/DT-017; C/OP call-first shape): the real

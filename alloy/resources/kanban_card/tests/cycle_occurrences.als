@@ -1,7 +1,7 @@
 module resources/kanban_card/tests/cycle_occurrences
 
-open resources/kanban_card/cycle_occurrences
-open resources/kanban_card/kanban_card
+open resources/kanban_card/kanban_card_implementation
+open resources/kanban_card/kanban_card_contracts
 
 /*
  * Suite for the CardCycle occurrence log (DT-015 Phase A bones). Premises via the P1 profile in
@@ -151,65 +151,32 @@ run unit_cyc_productionFailureWrongSourceRefused {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
-// ── theorems (check; UNSAT = holds) ─────────────────────────────────────────────────────────────
-// ≤ 1 live cycle per card — DERIVED from the genesis guard + the chain facts (was the standing
-// LiveCycleIsOpenTail fact; the log makes it a consequence).
-assert unit_cyc_oneLiveCyclePerCard {
-  all k: KanbanCard, t: Tick | lone currentCycleAt[k, t]
-}
+// ── theorems (check; UNSAT = holds) — the PUBLISHED CONTRACT (kanban_card_contracts.als),
+// discharged here by name against the real implementation (DT-017 co-change, 2026-07-08).
+assert unit_cyc_oneLiveCyclePerCard { oneLiveCyclePerCard }
 check unit_cyc_oneLiveCyclePerCard for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
 
-// Forward monotonicity: every committed non-Shelve, non-Withdraw operation strictly advances the
-// region order (KD9 — backward motion is impossible outside the sanctioned Shelve).
-assert unit_cyc_forwardMonotone {
-  all o: cycleForwardOps | (committed[o] and some o.pre) implies
-    regionBefore[o.pre.sStatus, o.post.sStatus]
-}
+assert unit_cyc_forwardMonotone { forwardMonotone }
 check unit_cyc_forwardMonotone for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
 
-// The demanding leg carries no pool: any state strictly before IN_PROCESS has no sPool
-// (StartProcessing is the only attacher; Shelve cannot cross back over it).
-assert unit_cyc_noPoolBeforeInProcess {
-  all o: CycleOcc | (committed[o] and some o.post and regionBefore[o.post.sStatus, IN_PROCESS])
-    implies no o.post.sPool
-}
+assert unit_cyc_noPoolBeforeInProcess { noPoolBeforeInProcess }
 check unit_cyc_noPoolBeforeInProcess for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
 
-// Once attached, the pool is FROZEN for the cycle's remainder (the frames carry it; no
-// re-pointing). ProductionFailure is the ONE detacher (R8) — exempted alongside the attacher.
-assert unit_cyc_poolFrozenOnceAttached {
-  all o: CycleOcc - StartProcessingOcc - ProductionFailureOcc | (committed[o] and some o.pre.sPool)
-    implies o.post.sPool = o.pre.sPool
-}
+assert unit_cyc_poolFrozenOnceAttached { poolFrozenOnceAttached }
 check unit_cyc_poolFrozenOnceAttached for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
 
-// EXCLUSIVE WHILE LIVE (Miguel): at any moment, a pool has at most one LIVE holding cycle —
-// derived from the attach guard + the frozen frames + closure semantics. Dismissal is implicit:
-// when the holder closes (rollover/withdraw), the pool becomes attachable again.
-assert unit_cyc_poolExclusiveWhileLive {
-  all p: InventoryPool, t: Tick |
-    lone { c: CardCycle | liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p }
-}
+assert unit_cyc_poolExclusiveWhileLive { poolExclusiveWhileLive }
 check unit_cyc_poolExclusiveWhileLive for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 2 InventoryPool expect 0
 
-// Nothing commits on a closed cycle (terminality of closure).
-assert unit_cyc_closureIsTerminal {
-  all o: CycleOcc | closedStrictlyBefore[o.cycle, o.tick] implies not committed[o]
-}
+assert unit_cyc_closureIsTerminal { closureIsTerminal }
 check unit_cyc_closureIsTerminal for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
 
-// QUANTITY FIXED AT GENESIS (DT-016 R7, MP): `sQuantityOverride` is written by RequestOcc only —
-// every other committed effect frames it. The cycle's quantum (override-if-given-else-nominal)
-// is therefore immutable for the cycle's whole existence; mid-flight change = withdraw + re-request.
-assert unit_cyc_quantityFixedAtGenesis {
-  all o: CycleOcc - RequestOcc | (committed[o] and some o.pre)
-    implies o.post.sQuantityOverride = o.pre.sQuantityOverride
-}
+assert unit_cyc_quantityFixedAtGenesis { quantityFixedAtGenesis }
 check unit_cyc_quantityFixedAtGenesis for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0

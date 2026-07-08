@@ -4,6 +4,7 @@ open operations/demand/demand_implementation
 open operations/demand/demand_contracts
 open reference_data/item/item_mock                            // lower layer as CONTRACT (DT-017)
 open resources/processing_network/processing_network_mock    // Station stub as CONTRACT
+open resources/kanban_card/kanban_card_mock                   // kanban as CONTRACT (DT-017 — the cut retired the INTERIM real cone, 2026-07-08)
 
 /*
  * UNIT suite for the demand module (DT-016; C/OP remodel 2026-07-06). INTERIM (R3): the kanban
@@ -290,6 +291,6 @@ run unit_dem_intentFloatsFree {
 // An unattached REQUESTING cycle persists indefinitely (R6: attachment is NEVER automatic).
 run unit_dem_unattachedRequestingLegal {
   some c: CardCycle, t: Tick | statusAt[c, t] = REQUESTING and no demandOf[c, t]
-    and no o: demandKinds | committed[o]
+    and no o: demandOccKinds | committed[o]
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1

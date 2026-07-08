@@ -1,8 +1,7 @@
 module reference_data/business_affiliate/tests/business_affiliate
 
 open meta/kernel
-open reference_data/business_affiliate/business_affiliate
-open reference_data/business_affiliate/business_role
+open reference_data/business_affiliate/business_affiliate_implementation
 
 // Business-affiliate-module verification: BusinessAffiliate + child BusinessRole. The cross-module
 // supply→supplier chain is verified from the item side (reference_data/item/tests).

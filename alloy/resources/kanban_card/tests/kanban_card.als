@@ -6,9 +6,7 @@ open meta/state_machine/machine
 open reference_data/item/item_mock                  // item laws as CONTRACT (DT-017 consumer unit root)
 open resources/inventory_item/inventory_item_types   // InventoryItem (materials soft-ref target) [KC-MH-12]
 open resources/processing_network/processing_network_mock   // stub laws as CONTRACT (DT-017 consumer unit root)
-open resources/kanban_card/card_cycle
-open resources/kanban_card/cycle_occurrences
-open resources/kanban_card/kanban_card
+open resources/kanban_card/kanban_card_implementation
 
 /*
  * Structural suite for the split KanbanCard + CardCycle model — SLIMMED with DT-015 Phase B: the
