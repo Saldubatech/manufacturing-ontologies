@@ -84,11 +84,43 @@ run unit_cyc_poolInUseRefused {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
-// ROLLOVER closes the predecessor: the successor's genesis reads c1 back as COMPLETED, not live.
+// ROLLOVER closes the predecessor: the successor's genesis commits over the STILL-OPEN
+// predecessor at a completable status and reads it back as COMPLETED, not live. The
+// `no WithdrawOcc` conjunct is load-bearing (review 2026-07-08): without it the solver
+// satisfied this witness by withdrawing c1 first — concealing that the pre-ruling guard made
+// rollover-over-an-open-predecessor UNSAT.
 run unit_cyc_rolloverCompletesPredecessor {
   some disj c1, c2: CardCycle, r2: RequestOcc | {
     c2.precededBy = c1 and r2.cycle = c2 and committed[r2]
+    no w: WithdrawOcc | committed[w] and w.cycle = c1
     completedAt[c1, r2.tick] and not liveCycleAt[c1, r2.tick] and liveCycleAt[c2, r2.tick]
+  }
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
+
+// The FLUSH rollover (MP ruling 2026-07-08): the predecessor is mid-inventory at IN_USE and
+// still holds its pool when the successor's genesis rolls it over — the pool is implicitly
+// released (no live holder afterward; exclusivity counts LIVE cycles only), its items staying
+// wherever they were.
+run unit_cyc_rolloverFlushReleasesPool {
+  some disj c1, c2: CardCycle, r2: RequestOcc, p: InventoryPool | {
+    c2.precededBy = c1 and r2.cycle = c2 and committed[r2]
+    no w: WithdrawOcc | committed[w] and w.cycle = c1
+    statusAt[c1, r2.tick] = IN_USE    // LOCF of c1's own records — the genesis writes only c2's
+    resolve[stateOfCycleAt[c1, r2.tick].sPool] = p
+    completedAt[c1, r2.tick]
+    no c: CardCycle | liveCycleAt[c, r2.tick] and resolve[stateOfCycleAt[c, r2.tick].sPool] = p
+  }
+} for 7 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
+
+// A genesis over a MID-TRIP predecessor (before any inventory association — here REQUESTED)
+// is refused with exactly RCardInCirculation: aborting mid-trip stays an explicit Withdraw.
+run unit_cyc_genesisMidTripRefused {
+  some c1: CardCycle, o: RequestOcc | {
+    o.cycle.precededBy = c1
+    statusAt[c1, o.tick] = REQUESTED
+    refusedAtAdmission[o] and o.admission.because = RCardInCirculation
   }
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1

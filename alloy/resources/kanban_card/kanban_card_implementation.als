@@ -24,12 +24,14 @@ fact CycleCommitAccepts { clog/commitAlwaysAccepts }
 pred liveAtOcc[o: CycleOcc] { some o.pre and not closedStrictlyBefore[o.subject, o.tick] }
 
 // ── reason-precise admission guards (Accepted ⟺ ∅; because = EXACTLY the set) ───────────────────
-/** requestViol — genesis: a fresh cycle, whose predecessor (if any) is closed, into an active
-    REQUESTING. */
+/** requestViol — genesis: a fresh cycle, whose predecessor (if any) is rollover-eligible
+    (closed, or open at a COMPLETABLE status — the genesis then closes it as completed; MP
+    ruling 2026-07-08), into an active REQUESTING. Mid-trip (REQUESTING/REQUESTED/IN_PROCESS)
+    refuses: aborting there stays an explicit, auditable Withdraw. */
 fun requestViol[o: RequestOcc]: set Reason {
   ((some b: CycleOcc | committed[b] and b.subject = o.subject and precedes[b.tick, o.tick])
      => RAlreadyStarted else none)
-  + ((some o.subject.precededBy and not closedStrictlyBefore[o.subject.precededBy, o.tick])
+  + ((some o.subject.precededBy and not rolloverEligible[o.subject.precededBy, o.tick])
      => RCardInCirculation else none)
   + ((REQUESTING not in LifecycleConfig.active) => RInactiveTarget else none)
 }

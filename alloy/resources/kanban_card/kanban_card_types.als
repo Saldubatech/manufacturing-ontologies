@@ -139,7 +139,7 @@ one sig RClosed,            // the cycle is not live (never started, withdrawn, 
         RInactiveTarget,    // the deployment does not use the target status
         RSkippedActive,     // the jump skips a status the deployment DOES use
         RAlreadyStarted,    // genesis on a cycle that already has committed history
-        RCardInCirculation, // genesis while the predecessor cycle is still open
+        RCardInCirculation, // genesis while the predecessor cycle is mid-trip (open at a NON-completable status)
         RNotRequested,      // Shelve from a status other than REQUESTED
         RPoolInUse,         // attach: another LIVE cycle currently holds this pool (exclusivity)
         RForeignPool,       // attach: the pool must be in the cycle's tenant
@@ -166,9 +166,34 @@ pred closedAt[c: CardCycle, t: Tick] {
 }
 /** liveCycleAt — started and open as of `t` (the SQ-8 "live" reading). */
 pred liveCycleAt[c: CardCycle, t: Tick] { some lastCycleTouch[c, t] and not closedAt[c, t] }
-/** completedAt / abandonedAt — the SQ-8 "done" readings, DERIVED from how the cycle closed. */
+
+/** completableStatuses — the statuses from which a cycle may be ROLLED OVER by its successor's
+    genesis (MP ruling 2026-07-08): once INVENTORY ASSOCIATION IS COMPLETE (READY and beyond),
+    any real-world event may flush that inventory (damage, fire, consumption off the books), so
+    the new demand signal MUST be admissible — the system cannot insist on the remaining
+    statuses being walked. Mid-trip is different in kind: through IN_PROCESS the card is under
+    the control of the PRODUCING PROCESS, which remedies issues internally until it completes
+    (→ READY) or gives up (→ ProductionFailure) — no end-of-cycle is needed from there. Effect
+    on an attached pool: implicit release (exclusivity counts LIVE holders only —
+    `poolExclusiveWhileLive`); the pool's items stay at their last known locators (the pool is
+    informational, never a locator writer). */
+fun completableStatuses: set KanbanCardStatus { READY + FULFILLING + FULFILLED + IN_USE + DEPLETED }
+/** rolloverEligible — the predecessor does not block a successor's genesis: already closed, or
+    STARTED and open at a completable status (the genesis itself then closes it as COMPLETED —
+    rollover). The `some` conjunct is load-bearing: an unstarted predecessor has empty statusAt
+    and `∅ in S` is vacuously true (the subset trap, solver-limits) — without it a genesis
+    could close a predecessor that never started, breaking closure terminality. */
+pred rolloverEligible[c: CardCycle, t: Tick] {
+  closedStrictlyBefore[c, t]
+  or (some statusAt[c, t] and statusAt[c, t] in completableStatuses)
+}
+
+/** completedAt / abandonedAt — the SQ-8 "done" readings, DERIVED from how the cycle closed:
+    completed = rolled over (successor genesis, no withdraw); abandoned = withdrawn. Disjoint —
+    a withdrawn-then-re-requested predecessor reads ABANDONED only. */
 pred completedAt[c: CardCycle, t: Tick] {
-  some r: RequestOcc | committed[r] and r.subject.precededBy = c and notAfter[r.tick, t]
+  (some r: RequestOcc | committed[r] and r.subject.precededBy = c and notAfter[r.tick, t])
+  and (no w: WithdrawOcc | committed[w] and w.subject = c)
 }
 pred abandonedAt[c: CardCycle, t: Tick] {
   some w: WithdrawOcc | committed[w] and w.subject = c and notAfter[w.tick, t]
