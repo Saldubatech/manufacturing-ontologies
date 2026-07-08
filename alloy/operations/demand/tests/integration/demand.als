@@ -6,6 +6,11 @@ open reference_data/item/item_implementation                        // the LOWER
 open resources/processing_network/processing_network_implementation
 open resources/kanban_card/kanban_card_implementation
 
+// SupplierReference CLOSURE (modeling-conventions §6, handles — MP 2026-07-08): this cone's
+// only carrier is item; tie the shared handle to it so universes stay tight (the module-local
+// no-orphan fact was retired when procurement/order became a second consumer).
+fact SupplierReferenceClosed { SupplierReference = itemCarriedSupplierRefs }
+
 /*
  * INTEGRATION suite for the demand module (DT-016/DT-017; C/OP call-first shape): the real
  * demand log composed with the REAL item + station stacks (the kanban cycle log and the pool

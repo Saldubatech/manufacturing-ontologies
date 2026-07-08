@@ -60,10 +60,18 @@ fact ItemSupplyRefs {
   all s: ItemSupply | s.dataRefs = s.supplier.vendorRef + s.supplier.affiliateRef
 }
 
-// Tight by default: no orphan value/handle atoms. Money/Duration/SupplierReference remain
-// ItemSupply-exclusive (within this module's view). Quantity is SHARED and no-orphan-EXEMPT
-// (DT-004 Q8; see modeling-conventions §6).
-fact NoOrphanSupplierReference { all sr: SupplierReference | sr in ItemSupply.supplier }
+// Tight by default: no orphan value/handle atoms. Money/Duration remain ItemSupply-exclusive
+// (within this module's view). Quantity is SHARED and no-orphan-EXEMPT (DT-004 Q8; see
+// modeling-conventions §6). SupplierReference became a SHARED HANDLE at the DT-018 order
+// build (2026-07-08): the former module-local NoOrphanSupplierReference fact was RETIRED
+// (it forced every order-carried reference to ALSO be an item supply's supplier, where
+// supplierRefsSound then outlawed the order module's wrong-role refusal witness model-wide).
+// Per the §6 handle-closure REFINEMENT (MP ruling): this module EXPORTS its carrier set;
+// heavy ROOTS assert the closure over their cone's carriers. Each consumer states its own
+// soundness over the references it carries (item: supplierRefsSound; order: its guard).
+/** itemCarriedSupplierRefs — the SupplierReference atoms THIS module carries (for root-side
+    closure facts — modeling-conventions §6, handles). */
+fun itemCarriedSupplierRefs: set SupplierReference { ItemSupply.supplier }
 fact NoOrphanItemSupplyValues {
   all m: Money    | m in ItemSupply.unitCost
   all d: Duration | d in ItemSupply.averageLeadTime
