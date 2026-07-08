@@ -38,8 +38,12 @@ check-layering:
 	@fail=0; \
 	if grep -rn '^open shared/' alloy/meta --include='*.als'; then \
 	  echo "FAIL: meta must not open shared (DT-001.12 layer law)"; fail=1; fi; \
-	if grep -rnE '^open ($(DOMAIN_DIRS))/' alloy/meta alloy/shared --include='*.als'; then \
-	  echo "FAIL: meta/shared must not open a domain (DT-001.12 layer law)"; fail=1; fi; \
+	if grep -rnE '^open ($(DOMAIN_DIRS)|conventions)/' alloy/meta alloy/shared --include='*.als'; then \
+	  echo "FAIL: meta/shared must not open a domain or conventions (DT-001.12 layer law)"; fail=1; fi; \
+	if grep -rn '^open ' alloy/conventions --include='*.als' 2>/dev/null | grep -vE ':open (meta|shared|conventions)/'; then \
+	  echo "FAIL: conventions exemplars may open meta/, shared/, or their own files ONLY (MP 2026-07-08)"; fail=1; fi; \
+	if grep -rn '^open conventions/' alloy --include='*.als' | grep -v '^alloy/conventions/'; then \
+	  echo "FAIL: only conventions/ files may open conventions/ (exemplars are not libraries — MP 2026-07-08)"; fail=1; fi; \
 	if grep -rn '^open resources/inventory_item/legacy' alloy --include='*.als'; then \
 	  echo "FAIL: nothing may open the archived legacy carrier (DT-011 — moved to alloy-sample/inventory_item_legacy)"; fail=1; fi; \
 	if grep -rn '^open .*_mock' alloy --include='*.als' | grep -v '/tests/'; then \
