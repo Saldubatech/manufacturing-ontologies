@@ -76,6 +76,16 @@ fact SupplierBindingExtensional {
     a.name != b.name or a.reference != b.reference or a.base != b.base or a.overrides != b.overrides
 }
 
+// ── the item descriptor copy (MP ruling 2026-07-08) ─────────────────────────────────────────────
+/** ItemDescriptor — the OPAQUE copied item descriptor a line captures at genesis and FREEZES
+    (MP ruling: "lines do freeze the item descriptor, otherwise commitments to/from vendors are
+    not repeatable/auditable" — the §7 COPY form against the quasi-static item; field detail is
+    runtime). Exactly the SupplierData treatment one field over. */
+sig ItemDescriptor {}
+fact NoOrphanItemDescriptor {
+  all d: ItemDescriptor | d in OrderLineState.sItemData + AddLineOcc.itemData
+}
+
 // ── the confirmation facet (F3) ─────────────────────────────────────────────────────────────────
 /** Disposition — the vendor's per-line answer; WAIVED = an acknowledgment recorded WITHOUT an
     explicit vendor answer (the F3 auto-confirm, trusting the user act). */
@@ -138,12 +148,13 @@ sig OrderLineState extends Snapshot {
   sConfirmation: lone Confirmation,    // the vendor's answer (F3); none until acknowledged
   sReceived:     lone Quantity,        // STORED, incrementally maintained (F9); none = the keyed zero
   sLineStatus:   one  OrderLineStatus, // L_OPEN / L_CLOSED (closure by act — F7)
-  sDemand:       set  EntityId         // → DemandItem: the serviced demand (O3: the HOLDER carries the refs)
+  sDemand:       set  EntityId,        // → DemandItem: the serviced demand (O3: the HOLDER carries the refs)
+  sItemData:     lone ItemDescriptor   // the COPIED item descriptor (present ⟺ the line orders an Item; captured at genesis, frozen for audit — MP 2026-07-08)
 }
 fact OrderLineStateExtensional {
   all disj a, b: OrderLineState |
     a.sQuantity != b.sQuantity or a.sConfirmation != b.sConfirmation or a.sReceived != b.sReceived
-    or a.sLineStatus != b.sLineStatus or a.sDemand != b.sDemand
+    or a.sLineStatus != b.sLineStatus or a.sDemand != b.sDemand or a.sItemData != b.sItemData
 }
 // Record-carried refs are TYPED (soft — dangling allowed; tenancy is guard-side).
 fact OrderLineDemandRefIntegrity {
@@ -178,9 +189,10 @@ sig DeleteOrderOcc extends olog/SubjectOcc {} { bindings = subject }
 // ── the kinds — LINE subject ────────────────────────────────────────────────────────────────────
 /** AddLine — line genesis: from a DemandItem, from an Item, or free-form (F6). The on-the-fly
     card-less DemandItem for a naked-item line is the CALLER's demand-side Create — order-side
-    this is just genesis + attach. orderRef/itemRef ride the ENTITY. */
-sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId }
-  { bindings = subject + qty + demand }
+    this is just genesis + attach. orderRef/itemRef ride the ENTITY; `itemData` is the COPIED
+    descriptor captured at genesis (present ⟺ the line orders an Item — the audit copy). */
+sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId, itemData: lone ItemDescriptor }
+  { bindings = subject + qty + demand + itemData }
 /** UpdateLine — edit the requested quantity (SET; the item is immutable — O5). */
 sig UpdateLineOcc extends llog/SubjectOcc { qty: one Quantity } { bindings = subject + qty }
 /** LineDemandOcc — the abstract parent of the demand-addressing line kinds (`demand` declared
@@ -237,7 +249,10 @@ one sig ROrderStarted,      // create: this order already has committed history 
         RDemandIneligible,  // attach/submit C/OP gate: the demand item is dangling, not live, or
                             //   not at the expected saga state (RELEASED for attach; IN_PROCESS at submit)
         RLinesOpen,         // close: a live line is still L_OPEN
-        RNoDemand           // record-receipt: the line is free-form (no received tracking — F7)
+        RNoDemand,          // record-receipt: the line is free-form (no received tracking — F7)
+        RNoDescriptor       // add-line: the item descriptor must be captured EXACTLY when the
+                            //   line orders an Item (the copy-freeze — MP 2026-07-08; covers
+                            //   both a missing copy and a descriptor on a free-form line)
         extends Reason {}
 
 // ── the read API (per-role; L9) ─────────────────────────────────────────────────────────────────

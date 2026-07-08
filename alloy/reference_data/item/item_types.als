@@ -1,5 +1,13 @@
 module reference_data/item/item_types
 
+// QUASI-STATIC SCOPE (MP ruling 2026-07-08): this module is modeled IMMUTABLE because items are
+// SLOW-CHANGING relative to the model's trace window — a timescale scope decision, not an
+// omission. The real system's horizon (audit spans) DOES include their changes, so the
+// IMPLEMENTATION MUST provide pinning semantics (record rId / as-of reads) for every frozen
+// holder. Consumer freeze laws to AUDIT if this module gains a log: procurement/order
+// `lineDescriptorFrozen` (copy-covered by design) and every consumer reading item structure
+// from a frozen document. See modeling-conventions §7.
+
 /*
  * ITEM — TYPES (DT-017 four-file architecture: types / contracts / implementation / mock).
  * The naked signatures, fields, and read-API of the item module: what any consumer may see.

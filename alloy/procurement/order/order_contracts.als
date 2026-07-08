@@ -111,6 +111,17 @@ pred supplierBindingFrozen {
       oPost[o].sSupplier = oPre[o].sSupplier
 }
 
+// ── C9b · the item-descriptor copy-freeze (MP 2026-07-08) — ATOMIC ──────────────────────────────
+/** A line captures the item descriptor COPY at genesis exactly when it orders an Item, and no
+    later occurrence ever changes it — vendor commitments stay repeatable/auditable regardless
+    of later item edits (the §7 COPY form: the frozen denotation lives on the line's own log;
+    the quasi-static item needs no pin model-side, and the IMPLEMENTATION pins — see the item
+    module's scope note). */
+pred lineDescriptorFrozen {
+  all o: AddLineOcc | committed[o] implies (some lPost[o].sItemData iff some o.subject.itemRef)
+  all o: lineOccKinds | (committed[o] and some lPre[o]) implies lPost[o].sItemData = lPre[o].sItemData
+}
+
 // ── C10 · terminal closure (SL-4) — ATOMIC ──────────────────────────────────────────────────────
 /** Once CLOSED/CANCELED, forever closed (Delete keeps the terminal record — tombstoned
     retirement). */
@@ -134,5 +145,6 @@ pred guarantees {
   and lineClosureByAct
   and closeRequiresSettled
   and supplierBindingFrozen
+  and lineDescriptorFrozen
   and orderTerminalClosure
 }

@@ -56,6 +56,11 @@ assert unit_ord_contract_orderTerminalClosure { orderTerminalClosure }
 check unit_ord_contract_orderTerminalClosure for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station expect 0
 
+assert unit_ord_contract_lineDescriptorFrozen { lineDescriptorFrozen }
+check unit_ord_contract_lineDescriptorFrozen for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      3 ItemDescriptor expect 0
+
 // ── SAT witnesses — the §2 scenarios ────────────────────────────────────────────────────────────
 // Smoke/genesis: Create births DRAFT.
 run unit_ord_createDraft {
@@ -172,6 +177,19 @@ run unit_ord_cancelReturnsToQueue {
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       9 Tick, 10 EntityId, 10 Snapshot expect 1
 
+// The copy-freeze arc (MP 2026-07-08): the descriptor lands at genesis and survives a later
+// mutation untouched — the frozen denotation lives on the line's OWN log.
+run unit_ord_descriptorCapturedFrozen {
+  some a: AddLineOcc, u: UpdateLineOcc | {
+    committed[a] and committed[u]
+    a.subject = u.subject and precedes[a.tick, u.tick]
+    some a.itemData
+    lineStateAt[a.subject, u.tick].sItemData = a.itemData
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      2 ItemDescriptor, 9 Tick, 9 EntityId, 9 Snapshot, 3 Quantity expect 1
+
 // The F8 arc: choose → override → ResetToSupplier discards the overrides, keeps the identity.
 run unit_ord_resetToSupplier {
   some r: ResetToSupplierOcc | {
@@ -285,6 +303,16 @@ run unit_ord_notTerminalRefused {
 } for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       7 EntityId expect 1
+
+// The copy-freeze capture refusal (MP 2026-07-08): an ITEM line without its copied descriptor.
+run unit_ord_noDescriptorRefused {
+  some o: AddLineOcc | {
+    refusedAtAdmission[o] and o.admission.because = RNoDescriptor
+    some o.subject.itemRef and no o.itemData
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      0 ItemDescriptor, 9 EntityId, 8 Snapshot expect 1
 
 // ── boundary witnesses (must be LEGAL — never UNSAT) ────────────────────────────────────────────
 // A free-form line: documentary only — no item, no demand, no received tracking.

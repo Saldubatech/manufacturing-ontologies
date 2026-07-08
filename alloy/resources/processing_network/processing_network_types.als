@@ -1,5 +1,10 @@
 module resources/processing_network/processing_network_types
 
+// QUASI-STATIC SCOPE (MP ruling 2026-07-08): modeled IMMUTABLE — slow-changing relative to the
+// model's trace window (a timescale scope decision). The IMPLEMENTATION MUST provide pinning
+// semantics for frozen holders when station/loop data becomes editable. See
+// modeling-conventions §7.
+
 /*
  * PROCESSING NETWORK — TYPES (DT-017 four-file architecture; STUB module, cut 2026-07-06 for the
  * DT-016 demand build). Just enough Station/Loop to be soft-ref targets for the Kanban Cards and

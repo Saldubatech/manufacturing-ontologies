@@ -133,9 +133,12 @@ fun addLineViol[o: AddLineOcc]: set Reason {
   (startedBeforeL[o] => RLineStarted else none)
   + parentGateViol[o]
   + (some o.demand => attachDemandViol[o, o.demand] else none)
-  // (No item clause: itemRef is an ENTITY dataRef — kernel isolation makes a cross-tenant
-  //  resolution unrepresentable, the demand entity-lift precedent. RForeignRef here covers the
-  //  RECORD-carried demand ref via attachDemandViol.)
+  + ((some o.subject.itemRef iff some o.itemData) => none else RNoDescriptor)
+    // the copy-freeze capture (MP 2026-07-08): an item line MUST carry the copied descriptor;
+    // a free-form line must NOT.
+  // (No item tenancy clause: itemRef is an ENTITY dataRef — kernel isolation makes a
+  //  cross-tenant resolution unrepresentable, the demand entity-lift precedent. RForeignRef
+  //  here covers the RECORD-carried demand ref via attachDemandViol.)
 }
 fun updateLineViol[o: UpdateLineOcc]: set Reason {
   ((not usableLineAtOcc[o]) => RLineClosed else none)
@@ -200,26 +203,27 @@ fact OrderAdmissionWitness {
 // ── effects (committed) — per-kind frames on the records ────────────────────────────────────────
 /** sameOrderButStatus — everything except the status is carried over. */
 pred sameOrderButStatus[b, a: OrderState] { a.sSupplier = b.sSupplier }
-/** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed). */
+/** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed —
+    `sItemData` is framed by EVERY mutator: the copy-freeze, MP 2026-07-08). */
 pred sameLineButQuantity[b, a: OrderLineState] {
   a.sConfirmation = b.sConfirmation and a.sReceived = b.sReceived
-  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
+  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
 }
 pred sameLineButDemand[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sConfirmation = b.sConfirmation
-  and a.sReceived = b.sReceived and a.sLineStatus = b.sLineStatus
+  and a.sReceived = b.sReceived and a.sLineStatus = b.sLineStatus and a.sItemData = b.sItemData
 }
 pred sameLineButConfirmation[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sReceived = b.sReceived
-  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
+  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
 }
 pred sameLineButReceived[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sConfirmation = b.sConfirmation
-  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
+  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
 }
 pred sameLineButStatus[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sConfirmation = b.sConfirmation
-  and a.sReceived = b.sReceived and a.sDemand = b.sDemand
+  and a.sReceived = b.sReceived and a.sDemand = b.sDemand and a.sItemData = b.sItemData
 }
 
 fact OrderEffectWitness {
@@ -253,6 +257,7 @@ fact OrderEffectWitness {
     no lPost[o].sReceived                          // the keyed zero — accrual starts empty (F9)
     lPost[o].sLineStatus = L_OPEN
     lPost[o].sDemand = o.demand                    // lone → the singleton or empty set
+    lPost[o].sItemData = o.itemData                // the copied descriptor lands at genesis
   }
   all o: UpdateLineOcc | committed[o] implies {
     lPost[o].sQuantity = o.qty                     // SET (delta is client sugar)

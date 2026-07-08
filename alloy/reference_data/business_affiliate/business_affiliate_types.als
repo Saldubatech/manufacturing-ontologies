@@ -1,5 +1,13 @@
 module reference_data/business_affiliate/business_affiliate_types
 
+// QUASI-STATIC SCOPE (MP ruling 2026-07-08): this module is modeled IMMUTABLE because business
+// affiliates are SLOW-CHANGING relative to the model's trace window — a timescale scope
+// decision, not an omission. The real system's horizon (audit spans) DOES include their
+// changes, so the IMPLEMENTATION MUST provide pinning semantics (record rId / as-of reads) for
+// every frozen holder of these entities. Consumer freeze laws to AUDIT if this module gains a
+// log: procurement/order `supplierBindingFrozen` (copy-covered today — verify the copy still
+// covers every read). See modeling-conventions §7 (reference forms + the freeze obligation).
+
 /*
  * BusinessAffiliate — TYPES (DT-017 four-file cut, 2026-07-08; content from the pre-cut
  * business_affiliate.als + business_role.als, unchanged): the entities, the role vocabulary,
