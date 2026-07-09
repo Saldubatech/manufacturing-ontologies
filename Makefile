@@ -67,6 +67,67 @@ check-alloy: $(ALLOY) check-layering
 	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect (see 'against expectation' above)"; exit 1; fi; \
 	echo "OK: all commands matched their expect"
 
+## check-affected: cone-aware incremental gate — run only roots whose open-cone touches changed files
+## (scaling-outlook to-do #1). FILES="a.als b.als" overrides; default = git-changed alloy files.
+check-affected: $(ALLOY) check-layering
+	@files="$(FILES)"; \
+	[ -z "$$files" ] && files="$$( (git diff --name-only HEAD -- alloy; git diff --cached --name-only -- alloy) | sort -u)"; \
+	if [ -z "$$files" ]; then echo "check-affected: no changed alloy files — nothing to run"; exit 0; fi; \
+	echo "changed:"; for c in $$files; do echo "  $$c"; done; \
+	mkdir -p $(OUT); fail=0; ran=0; \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	  cone="$$(tools/cone.sh $$f)"; hit=0; \
+	  for c in $$files; do case "$$cone" in *"$$c"*) hit=1;; esac; done; \
+	  [ $$hit -eq 1 ] || continue; ran=$$((ran+1)); echo "== $$f =="; \
+	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
+	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
+	done; \
+	echo "affected roots run: $$ran"; \
+	if [ $$fail -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi; \
+	echo "OK: all affected commands matched their expect (NOT the full gate — run check-alloy before push)"
+
+## check-alloy-par: the full gate fanned out across cores (scaling-outlook to-do #2); PAR=N workers
+## (default 4 — each root is its own JVM). Per-root logs + instances under out/par/.
+PAR ?= 4
+check-alloy-par: $(ALLOY) check-layering
+	@rm -rf out/par; mkdir -p out/par; \
+	roots="$$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort)"; \
+	n=$$(echo "$$roots" | grep -c .); \
+	echo "$$roots" | ALLOY_JAR=$(ALLOY) ALLOY_FLAGS='$(ALLOY_FLAGS)' xargs -P $(PAR) -n 1 tools/run-root.sh; \
+	logs=$$(ls out/par/*.log 2>/dev/null | grep -c . || echo 0); \
+	fail=0; \
+	if [ "$$logs" != "$$n" ]; then echo "FAIL: expected $$n root logs, found $$logs (a runner died before logging)"; fail=1; fi; \
+	for l in out/par/*.log; do \
+	  [ -f "$$l" ] || continue; \
+	  if ! grep -qE 'SAT|UNSAT' "$$l"; then echo "INCOMPLETE (no solver output): $$l"; fail=1; fi; \
+	  if grep -qiE 'against expectation' "$$l"; then echo "MISMATCH in $$l:"; grep -iE 'against expectation' "$$l"; fail=1; fi; \
+	  if grep -qE '\[main\] (ERROR|SEVERE)|Exception in thread' "$$l"; then echo "ERROR in $$l"; fail=1; fi; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "FAIL: see out/par/*.log"; exit 1; fi; \
+	echo "OK: all commands matched their expect ($$n roots, PAR=$(PAR))"
+
+## check-budget: BEST-EFFORT universe-budget lint (scaling-outlook to-do #3) — per root, estimate
+## the largest command universe (2^Int + explicit scope counts + one-sigs in the cone) and warn
+## past the arity-4 folklore ceiling (~215 atoms). A heuristic: unscoped sigs at the `for N`
+## default are NOT counted — treat warnings as real, silence as advisory only.
+BUDGET ?= 215
+check-budget:
+	@for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	  ones=$$(tools/cone.sh $$f | xargs grep -hE '^one sig' 2>/dev/null | grep -oE 'one sig [A-Za-z0-9_, ]+' | sed 's/one sig //' | tr ',' '\n' | grep -c . || echo 0); \
+	  max=$$(grep -hoE 'for [0-9]+( but [^{]*)?expect' "$$f" | sed 's/expect//' | \
+	    awk -v ones="$$ones" '{ \
+	      intv=0; sum=0; \
+	      for (i=1; i<=NF; i++) { \
+	        if ($$i ~ /^[0-9]+$$/) { n=$$i; nx=$$(i+1); \
+	          if (nx == "Int" || nx == "Int,") intv=n; \
+	          else if (i>1 && $$(i-1)=="for") next_default=n; \
+	          else sum+=n; } } \
+	      u = (intv>0 ? 2^intv : 0) + sum + ones; \
+	      if (u>m) m=u } END { print m+0 }'); \
+	  flag=""; [ "$$max" -gt $(BUDGET) ] && flag="  <-- WARN: past the ~$(BUDGET)-atom arity-4 ceiling (fine if the cone has no arity-4 relations)"; \
+	  printf '%-70s max-est %5s%s\n' "$$f" "$$max" "$$flag"; \
+	done
+
 ## check-examples: run every command in the modeling cookbook (alloy/meta/examples/*.als)
 check-examples: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \

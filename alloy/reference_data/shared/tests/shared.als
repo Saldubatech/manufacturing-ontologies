@@ -40,3 +40,33 @@ run unit_shared_noCrossTenantSupplier {
   some s: ItemSupply, r: BusinessRole |
     s.supplier.vendorRef = r.eId and s.tenantId != r.tenantId
 } for 6 expect 0
+
+// ── the named happy-path witnesses (unwitnessed-scenarios follow-up, 2026-07-08) ────────────────
+// Previously covered only implicitly by the joint-SAT load; named so the shapes cannot silently
+// die (the vacuous-witness lesson: a witness must EXCLUDE the degenerate satisfactions).
+
+// The CLEAN resolution read: a fully-LINKED supplier reference — BOTH handles present, resolving,
+// mutually consistent (the vendor role is owned by the referenced affiliate), same tenant — and NO
+// dangling handle anywhere in the instance (the negative conjunct).
+run unit_shared_cleanResolution {
+  some s: ItemSupply, r: BusinessRole, ba: BusinessAffiliate | {
+    resolve[s.supplier.vendorRef] = r
+    resolve[s.supplier.affiliateRef] = ba
+    r in ba.roles and r.role = VENDOR
+    s.tenantId = ba.tenantId
+  }
+  no sr: SupplierReference {
+    (some sr.vendorRef and no resolve[sr.vendorRef]) or
+    (some sr.affiliateRef and no resolve[sr.affiliateRef])
+  }
+} for 6 expect 1
+
+// The linked-VENDOR selection is PRECISE, not incidental: the referenced affiliate bears MORE THAN
+// ONE role, and the reference resolves to exactly its VENDOR one.
+run unit_shared_linkedVendorPrecise {
+  some s: ItemSupply, ba: BusinessAffiliate, disj r1, r2: BusinessRole | {
+    r1 in ba.roles and r2 in ba.roles and r1.role = VENDOR and r2.role != VENDOR
+    resolve[s.supplier.vendorRef] = r1
+    resolve[s.supplier.affiliateRef] = ba
+  }
+} for 6 expect 1
