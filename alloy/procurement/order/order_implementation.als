@@ -75,14 +75,18 @@ fun parentGateViol[o: llog/SubjectOcc]: set Reason {
 }
 /** attachDemandViol — the C/OP attach gate (order-side ONLY — O3): the demand item must resolve
     IN-TENANT (RForeignRef), be live and standing at RELEASED (RDemandIneligible — dangling
-    refuses conservatively), and be serviced by NO live line (RDemandHeld; `self` excludes the
-    acting line — its read at o.tick would be strictly-before anyway, but the acting line's own
-    pre-membership is the separate double-attach check). */
+    refuses conservatively), be DENOMINATED in the line's item (RDemandIneligible — C3b: wrong
+    item, or a FREE-FORM target line whose empty itemRef can never agree), and be serviced by
+    NO live line (RDemandHeld; `self` excludes the acting line — its read at o.tick would be
+    strictly-before anyway, but the acting line's own pre-membership is the separate
+    double-attach check). */
 fun attachDemandViol[o: llog/SubjectOcc, m: EntityId]: set Reason {
   (let d = resolve[m] & DemandItem |
     ((some d and d.tenantId != o.subject.tenantId) => RForeignRef else none)
     + ((no d or not liveDemandAt[d, o.tick] or demandStatusAt[d, o.tick] != DS_RELEASED)
        => RDemandIneligible else none)
+    + ((some d and d.itemRef != o.subject.itemRef)
+       => RDemandIneligible else none)   // C3b item-agreement (MP 2026-07-10): wrong item OR free-form target
     + ((some d and some (holdingLineOf[d, o.tick] - o.subject))
        => RDemandHeld else none)   // the hold reading — parent-live lines only (a canceled order's holds are gone)
     + ((m in lPre[o].sDemand) => RDemandHeld else none))

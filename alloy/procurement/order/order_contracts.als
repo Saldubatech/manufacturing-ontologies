@@ -54,6 +54,23 @@ pred attachRequiresReleased {
     demandStatusAt[resolve[o.demand] & DemandItem, o.tick] = DS_RELEASED
 }
 
+// ── C3b · the attach item-agreement (MP ruling 2026-07-10, PR operations#225) — ATOMIC ──────────
+/** A committed demand pairing (AttachDemand, or AddLine's demand arm) is DENOMINATED in the
+    line's item: the serviced DemandItem's itemRef equals the line's itemRef. Corollary: a
+    FREE-FORM line (no itemRef) services NOTHING — the design's "documentary only, no demand
+    pairing" (F7 flag 3) is now structural, since a DemandItem always carries exactly ONE
+    itemRef and the equality can never hold against an empty one. The guard refuses
+    RDemandIneligible (wrong item, or a free-form target line). Unlike C3's status read, both
+    compared fields are IMMUTABLE identity-structure, so the gate cannot go stale — no
+    convergence window, no probe obligation. The invariant protects the line's own arithmetic
+    (sReceived accrual, openOf, the receipts drill-down all denominate in the line's item). */
+pred attachItemAgrees {
+  all o: AttachDemandOcc | committed[o] implies
+    (resolve[o.demand] & DemandItem).itemRef = o.subject.itemRef
+  all o: AddLineOcc | (committed[o] and some o.demand) implies
+    (resolve[o.demand] & DemandItem).itemRef = o.subject.itemRef
+}
+
 // ── C4 · the Submit gate (O2) — CONVERGENT/OPERATION, call-first ────────────────────────────────
 /** A committed Submit saw EVERY serviced DemandItem at IN_PROCESS (their StartProduction — the
     saga's first legs, each internally starting its member cycles — already committed). The
@@ -140,6 +157,7 @@ pred guarantees {
   frozenOutsideDraft
   and demandIndivisible
   and attachRequiresReleased
+  and attachItemAgrees
   and submitRequiresStarted
   and receiptAccrues
   and lineClosureByAct

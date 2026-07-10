@@ -32,6 +32,10 @@ assert unit_ord_contract_attachRequiresReleased { attachRequiresReleased }
 check unit_ord_contract_attachRequiresReleased for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station expect 0
 
+assert unit_ord_contract_attachItemAgrees { attachItemAgrees }
+check unit_ord_contract_attachItemAgrees for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station expect 0
+
 assert unit_ord_contract_submitRequiresStarted { submitRequiresStarted }
 check unit_ord_contract_submitRequiresStarted for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station expect 0
@@ -276,6 +280,35 @@ run unit_ord_demandIneligibleRefused {
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       9 EntityId, 8 Snapshot expect 1
+
+// C3b (MP ruling 2026-07-10) — the WRONG-ITEM pairing: a RELEASED, live, unheld demand for a
+// DIFFERENT item than the line's refuses RDemandIneligible; reason-PRECISE (the status conjunct
+// is satisfied, so only the item-agreement fires).
+run unit_ord_wrongItemRefused {
+  some o: AttachDemandOcc, d: DemandItem | {
+    refusedAtAdmission[o] and o.admission.because = RDemandIneligible
+    resolve[o.demand] = d
+    demandStatusAt[d, o.tick] = DS_RELEASED
+    some o.subject.itemRef
+    d.itemRef != o.subject.itemRef
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      10 EntityId, 8 Snapshot expect 1
+
+// C3b corollary — the FREE-FORM target: attaching ANY demand (even RELEASED) to a line with no
+// itemRef refuses RDemandIneligible. "Documentary only, no demand pairing" (F7 flag 3) is now a
+// GUARD, not just prose.
+run unit_ord_freeFormAttachRefused {
+  some o: AttachDemandOcc, d: DemandItem | {
+    refusedAtAdmission[o] and o.admission.because = RDemandIneligible
+    resolve[o.demand] = d
+    demandStatusAt[d, o.tick] = DS_RELEASED
+    freeForm[o.subject]
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      10 EntityId, 8 Snapshot expect 1
 
 run unit_ord_notAttachedRefused {
   some o: DetachDemandOcc | refusedAtAdmission[o] and o.admission.because = RNotAttached

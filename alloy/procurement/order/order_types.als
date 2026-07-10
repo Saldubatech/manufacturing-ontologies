@@ -246,8 +246,10 @@ one sig ROrderStarted,      // create: this order already has committed history 
         RNoLines,           // submit: no live lines
         RNoSupplier,        // submit: the supplier binding carries no name (PDEV-241 floor)
         RDemandHeld,        // attach: the demand item is already serviced by a live line (demandIndivisible)
-        RDemandIneligible,  // attach/submit C/OP gate: the demand item is dangling, not live, or
-                            //   not at the expected saga state (RELEASED for attach; IN_PROCESS at submit)
+        RDemandIneligible,  // attach/submit C/OP gate: the demand item is dangling, not live,
+                            //   not at the expected saga state (RELEASED for attach; IN_PROCESS at submit),
+                            //   or not denominated in the line's item (C3b, MP 2026-07-10 — wrong
+                            //   item, or a free-form target line: no itemRef can never agree)
         RLinesOpen,         // close: a live line is still L_OPEN
         RNoDemand,          // record-receipt: the line is free-form (no received tracking — F7)
         RNoDescriptor       // add-line: the item descriptor must be captured EXACTLY when the
