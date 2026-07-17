@@ -84,6 +84,15 @@ run unit_cyc_poolInUseRefused {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
+// HOMOGENEITY (DT-015 R1, MP 2026-07-16): attaching a pool of a DIFFERENT Item than the card
+// demands is refused with exactly RPoolWrongItem (the sight-of-card guard — the admission reads
+// the owning card's itemRef). Exactness is the anti-vacuity load: the sole violation forces the
+// pool to resolve, sit in-tenant, be unheld, and the forward step to be legal.
+run unit_cyc_poolWrongItemRefused {
+  some o: StartProcessingOcc | refusedAtAdmission[o] and o.admission.because = RPoolWrongItem
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
+
 // ROLLOVER closes the predecessor: the successor's genesis commits over the STILL-OPEN
 // predecessor at a completable status and reads it back as COMPLETED, not live. The
 // `no WithdrawOcc` conjunct is load-bearing (review 2026-07-08): without it the solver
@@ -212,3 +221,14 @@ check unit_cyc_closureIsTerminal for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State,
 assert unit_cyc_quantityFixedAtGenesis { quantityFixedAtGenesis }
 check unit_cyc_quantityFixedAtGenesis for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem expect 0
+
+// HOMOGENEITY theorem (DT-015 R1 — SUITE-LEVEL by ruling, not a published contract law; promote
+// per L9 when a consumer stages reliance, e.g. demand's Distribute): a cycle's resolved pool
+// always classifies under its card's demanded Item — derived from the attach guard +
+// poolFrozenOnceAttached + the ProductionFailure detach (both itemRefs are immutable).
+assert unit_cyc_poolItemHomogeneous {
+  all c: CardCycle, t: Tick | let p = resolve[stateOfCycleAt[c, t].sPool] & InventoryPool |
+    some p implies p.itemRef = (cycles.c).itemRef
+}
+check unit_cyc_poolItemHomogeneous for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 2 InventoryPool expect 0

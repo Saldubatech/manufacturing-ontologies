@@ -46,16 +46,21 @@ fun forwardViol[o: CycleOcc]: set Reason {
      => RSkippedActive else none)
 }
 /** startViol — StartProcessing = the forward step PLUS the pool attach: the resolved pool (if it
-    resolves — dangling allowed, soft ref) must be in-tenant and not held by another LIVE cycle
-    (EXCLUSIVE while the holder lives — Miguel 2026-07-03). Residue is ALLOWED: a pool with
-    left-over stock (e.g. over-receiving) may attach directly — with enough stock the cycle can
-    move straight on toward READY. */
+    resolves — dangling allowed, soft ref) must be in-tenant, not held by another LIVE cycle
+    (EXCLUSIVE while the holder lives — Miguel 2026-07-03), and classify under the card's demanded
+    Item (HOMOGENEITY — DT-015 R1, MP 2026-07-16: sight-of-card, the admission reads the OWNING
+    card's itemRef; `cycles.(o.subject)` is unique by CardCycleOwnership; comparison at the
+    EntityId level, like the pool-side RWrongItem). Residue is ALLOWED: a pool with left-over
+    stock (e.g. over-receiving) may attach directly — with enough stock the cycle can move
+    straight on toward READY. */
 fun startViol[o: StartProcessingOcc]: set Reason {
   forwardViol[o]
   + ((some p: resolve[o.pool] & InventoryPool | p.tenantId != o.subject.tenantId) => RForeignPool else none)
   + ((some p: resolve[o.pool] & InventoryPool | some c2: CardCycle - o.subject |
         liveCycleAt[c2, o.tick] and resolve[stateOfCycleAt[c2, o.tick].sPool] = p)
      => RPoolInUse else none)
+  + ((some p: resolve[o.pool] & InventoryPool | p.itemRef != (cycles.(o.subject)).itemRef)
+     => RPoolWrongItem else none)
 }
 /** shelveViol — the sanctioned backward operation: exactly REQUESTED → REQUESTING. */
 fun shelveViol[o: ShelveOcc]: set Reason {

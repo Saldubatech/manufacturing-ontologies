@@ -4,7 +4,7 @@ module resources/kanban_card/kanban_card_types
  * KanbanCard + CardCycle — TYPES (DT-017 four-file cut, 2026-07-08; content consolidated from
  * the pre-cut kanban_card.als / card_cycle.als / cycle_state.als / cycle_occurrences.als):
  * the entities, the CycleState record, the status vocabularies, the reified LifecycleConfig,
- * the PUBLIC OPERATION SURFACE (the twelve cycle kinds + the Reason taxonomy — L9), and the
+ * the PUBLIC OPERATION SURFACE (the eleven cycle kinds + the Reason taxonomy — L9), and the
  * read API. Guards, effects, chaining, and the print machine live in
  * kanban_card_implementation.als; the published laws in kanban_card_contracts.als.
  *
@@ -143,6 +143,7 @@ one sig RClosed,            // the cycle is not live (never started, withdrawn, 
         RNotRequested,      // Shelve from a status other than REQUESTED
         RPoolInUse,         // attach: another LIVE cycle currently holds this pool (exclusivity)
         RForeignPool,       // attach: the pool must be in the cycle's tenant
+        RPoolWrongItem,     // attach: the pool's Item must be the card's demanded Item (homogeneity — DT-015 R1)
         RNotInProcess       // ProductionFailure from a status other than IN_PROCESS (R8)
         extends Reason {}
 
