@@ -6,10 +6,11 @@
 
 ALLOY := tools/alloy.jar
 ROBOT := tools/robot.jar
-# Extra flags for `alloy exec` — e.g. a faster SAT backend: make check-alloy ALLOY_FLAGS='-s glucose'
-# (glucose ships as a JNI native in this jar and loads on darwin/arm64; the default stays SAT4J —
-# pure Java — so the gate works on any machine. Both are sound/complete: only speed differs.)
-ALLOY_FLAGS ?=
+# Extra flags for `alloy exec`. Default = glucose (JNI native in this jar; loads on darwin/arm64
+# and is dramatically faster than SAT4J on this model — MP ruling 2026-07-17, DT-015 completion
+# session). On a machine where the native fails to load, revert to pure-Java SAT4J with
+# ALLOY_FLAGS='' (env or make arg — `?=` yields). Both are sound/complete: only speed differs.
+ALLOY_FLAGS ?= -s glucose
 # Alloy exec output (receipts + solution dumps) goes here — gitignored; never committed.
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy

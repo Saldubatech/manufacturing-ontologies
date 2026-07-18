@@ -21,6 +21,13 @@ module resources/inventory_item/inventory_item_implementation
  * AdjustQuantity, Inspect, RePack, Split, Merge) + the state writers (Lock/Unlock, Seal/Unseal).
  * Move/AdjustProperties follow on demand. Authorization (WriteOff privileged, ABAC via the
  * `attributed` extension) is the deferred commit-guard hook.
+ *
+ * SPINE NOTE — this log stays BESPOKE (DT-015 Q5, ruled 2026-07-03; deliberately NOT ported to
+ * `meta/subject_log`, unlike the InventoryPool and CardCycle logs): the multi-subject kinds
+ * (Split/Merge) chain PER-ROLE (`priorOn[o, ii]`, `preFor`/`postFor` over `touches`), which the
+ * single-subject spine cannot carry — this log is the maximal exemplar the spine was extracted
+ * FROM. A touches-generalized spine becomes a NEW design topic if a second multi-subject
+ * consumer appears (`Load`/HU nesting is the likely candidate).
  */
 
 open meta/profiles/domain_log          // PROFILE (DT-012): log anatomy + group/order premises IN FORCE for the whole cone

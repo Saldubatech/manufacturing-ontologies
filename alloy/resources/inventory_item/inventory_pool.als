@@ -14,6 +14,13 @@ module resources/inventory_item/inventory_pool
  * theorems (witnessed refusals: `RWrongItem`/`RWrongTenant`), not standing `always` facts. Pool
  * occurrences share the one causal Tick order with the InventoryItem occurrences.
  *
+ * SPINE (ported 2026-07-17 — DT-015 R2, the last row of the Q5 refactor review): the membership
+ * log now rides `meta/subject_log[InventoryPool, PoolState]` — the spine EXTRACTED from this
+ * log's hand-built original (with the II and CardCycle logs). The kind subject field is
+ * therefore `subject`; the alias `fun pool` preserves every existing `o.pool` read (receiver
+ * syntax), so consumers and suites are unchanged; `heldAt` is a wrapper over the spine's
+ * `recordAt`.
+ *
  * Still v1 scope: membership only — no liveness coupling to members (a retired member is a
  * modeling question deferred with reservations). Inventory counts remain DERIVED, never stored —
  * the counting machinery is the metrics package (`resources/inventory_item/metrics.als`, DT-007);
@@ -27,6 +34,7 @@ open meta/profiles/domain_log                    // PROFILE (DT-012): the log an
 open meta/kernel                                 // Scoped, Entity, EntityId, resolve
 open reference_data/item/item_types            // Item — the membership classifier (TYPES; laws via root mock/impl)
 open resources/inventory_item/inventory_item_types     // InventoryItem (+ transitively keyed algebra, values)
+open meta/subject_log/subject_log[InventoryPool, PoolState] as plog
 
 /** InventoryPool — the IDENTITY of a tenant-scoped set of InventoryItems under one Item; its
     membership lives on PoolState records in the occurrence log. */
@@ -46,27 +54,21 @@ sig PoolState extends Snapshot { holds: set InventoryItem }
 fact PoolStateExtensional { all disj a, b: PoolState | a.holds != b.holds }
 
 // ── the kinds ────────────────────────────────────────────────────────────────────────────────────
-/** PoolOcc — a pool-membership operation occurrence; `pool` is the subject (pre/post are its
-    PoolState records). */
-abstract sig PoolOcc extends StatefulAction { pool: one InventoryPool }
-fact PoolOccRecords { all o: PoolOcc | (o.pre + o.post) in PoolState }
+/** PoolOcc — a pool-membership operation occurrence on the spine; `subject` is the pool (pre/post
+    are its PoolState records — the spine's SubjectOccRecords). */
+abstract sig PoolOcc extends plog/SubjectOcc {}
+/** pool — the reading alias for the spine's `subject` field (receiver syntax: `o.pool`). */
+fun pool[o: PoolOcc]: one InventoryPool { o.subject }
 
-sig PoolAddOcc    extends PoolOcc { item: one InventoryItem } { bindings = pool + item }
-sig PoolRemoveOcc extends PoolOcc { item: one InventoryItem } { bindings = pool + item }
+sig PoolAddOcc    extends PoolOcc { item: one InventoryItem } { bindings = subject + item }
+sig PoolRemoveOcc extends PoolOcc { item: one InventoryItem } { bindings = subject + item }
 
 // ── refusal reasons ──────────────────────────────────────────────────────────────────────────────
 one sig RWrongItem, RWrongTenant, RAlreadyMember, RNotMember extends Reason {}
 
-// ── chaining (unconditional — a refused occurrence still read the real membership) ───────────────
-/** priorPoolOcc — the latest committed pool occurrence on the same pool before `o`. */
-fun priorPoolOcc[o: PoolOcc]: lone PoolOcc {
-  { b: PoolOcc | committed[b] and b.pool = o.pool and precedes[b.tick, o.tick]
-      and (no c: PoolOcc | committed[c] and c.pool = o.pool
-             and precedes[b.tick, c.tick] and precedes[c.tick, o.tick]) }
-}
-fact PoolChaining {
-  all o: PoolOcc | let pr = priorPoolOcc[o] | (some pr => o.pre = pr.post else no o.pre)
-}
+// ── the spine adoption: chaining (unconditional — a refused occurrence still read the real
+// membership) + v1 result policy ────────────────────────────────────────────────────────────────
+fact PoolChaining      { plog/chained }
 // (no o.pre = the pool has no committed history: membership reads empty — `none.holds = none`.)
 
 // ── reason-precise admission guards (Accepted ⟺ ∅; because = EXACTLY the set) ────────────────────
@@ -83,7 +85,7 @@ fact PoolAdmissionWitness {
   all o: PoolRemoveOcc | (o.admission = Accepted iff no poolRemoveViol[o]) and (o.admission in Rejected implies o.admission.because = poolRemoveViol[o])
 }
 // No result policy in v1 (mirrors the InventoryItem log).
-fact PoolCommitAccepts { all o: PoolOcc | some o.commit implies o.commit = Accepted }
+fact PoolCommitAccepts { plog/commitAlwaysAccepts }
 
 // ── effects ──────────────────────────────────────────────────────────────────────────────────────
 fact PoolEffectWitness {
@@ -91,12 +93,8 @@ fact PoolEffectWitness {
   all o: PoolRemoveOcc | committed[o] implies o.post.holds = o.pre.holds - o.item
 }
 
-// ── the projections ──────────────────────────────────────────────────────────────────────────────
+// ── the projections (wrappers over the spine's reads — public surface preserved) ────────────────
 /** lastPoolTouch — the latest committed occurrence on `p` at-or-before `t`. */
-fun lastPoolTouch[p: InventoryPool, t: Tick]: lone PoolOcc {
-  { o: PoolOcc | committed[o] and o.pool = p and notAfter[o.tick, t]
-      and (no b: PoolOcc | committed[b] and b.pool = p and notAfter[b.tick, t]
-             and precedes[o.tick, b.tick]) }
-}
+fun lastPoolTouch[p: InventoryPool, t: Tick]: lone PoolOcc { plog/lastTouch[p, t] }
 /** heldAt — the pool's membership as of `t` (empty before any committed history). */
-fun heldAt[p: InventoryPool, t: Tick]: set InventoryItem { lastPoolTouch[p, t].post.holds }
+fun heldAt[p: InventoryPool, t: Tick]: set InventoryItem { plog/recordAt[p, t].holds }
