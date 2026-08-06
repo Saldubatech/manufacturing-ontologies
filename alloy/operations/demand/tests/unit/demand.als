@@ -294,3 +294,70 @@ run unit_dem_unattachedRequestingLegal {
     and no o: demandOccKinds | committed[o]
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
+
+// ── the ProductionDelivery subject (§8.1.2/§8.1.4, DT-020 build cut 3) ──────────────────────────
+// Contract discharge — the §8.1.4 gates as theorems of createDeliveryViol:
+assert unit_dem_contract_createDeliveryGated { createDeliveryGated }
+check unit_dem_contract_createDeliveryGated for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 2 ProductionDelivery expect 0
+
+assert unit_dem_contract_deliveryTerminalRevoke { deliveryTerminalRevoke }
+check unit_dem_contract_deliveryTerminalRevoke for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 2 ProductionDelivery expect 0
+
+// The composed accrual arc (§8.1.2 ATOMIC): CreateDelivery + its RecordProduction on the
+// target's log — the F7 edge as one demand tx (two ticks under OneOccurrencePerTick).
+run unit_dem_deliveryComposedArc {
+  some c: CreateDeliveryOcc, r: RecordProductionOcc | {
+    committed[c] and committed[r]
+    r.delivery = c.subject.eId and r.subject.eId = c.subject.demandRef
+    deliveryStatusAt[c.subject, c.tick] = PD_CREATED
+    c.subject in contributionsFor[resolve[c.subject.demandRef] & DemandItem, c.tick]
+  }
+} for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
+      9 Tick, 9 EntityId, 8 Snapshot expect 1
+
+// The composed reversal arc: Revoke + ExtractProduction; the delivery leaves the
+// contributions fold forever (reversing-entry semantics — §8.1.1).
+run unit_dem_deliveryRevokedArc {
+  some v: RevokeDeliveryOcc, x: ExtractProductionOcc | {
+    committed[v] and committed[x]
+    x.delivery = v.subject.eId
+    deliveryStatusAt[v.subject, v.tick] = PD_REVOKED
+    v.subject not in contributionsFor[resolve[v.subject.demandRef] & DemandItem, v.tick]
+  }
+} for 8 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
+      10 Tick, 10 EntityId, 9 Snapshot expect 1
+
+// §8.1.4 refusal: a CreateDelivery whose target is not IN_PROCESS (here: still OPEN) —
+// exactly RTargetNotInProcess. The OPEN→IN_PROCESS choreography is a composite's, not ours.
+run unit_dem_targetNotInProcessRefused {
+  some o: CreateDeliveryOcc | {
+    refusedAtAdmission[o] and o.admission.because = RTargetNotInProcess
+    demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] = DS_OPEN
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
+      8 EntityId, 8 Snapshot expect 1
+
+// §8.1.4 item agreement refusal: the delivery denominated in the WRONG item — exactly
+// RWrongItem (the pool module's reason reused; agreement is a Create guard, never a
+// downstream pool-law violation).
+run unit_dem_deliveryWrongItemRefused {
+  some o: CreateDeliveryOcc | {
+    refusedAtAdmission[o] and o.admission.because = RWrongItem
+    demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] = DS_IN_PROCESS
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
+      9 EntityId, 8 Snapshot expect 1
+
+// Revoke on an already-REVOKED delivery — exactly RDeliveryClosed (terminal §8.1.1).
+run unit_dem_revokeRevokedRefused {
+  some o: RevokeDeliveryOcc | refusedAtAdmission[o] and o.admission.because = RDeliveryClosed
+    and some o.pre and pdPre[o].sStatus = PD_REVOKED
+} for 8 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
+      10 Tick, 10 EntityId, 9 Snapshot expect 1

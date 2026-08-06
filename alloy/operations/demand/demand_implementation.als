@@ -19,10 +19,18 @@ module operations/demand/demand_implementation
 
 open operations/demand/demand_contracts
 open meta/subject_log/subject_log[DemandItem, DemandState] as dlog   // same params ⇒ the SAME spine instance as demand_types
+open meta/subject_log/subject_log[ProductionDelivery, PDState] as pdlog  // the second subject's spine (§8.1.2)
 
-// ── spine adoption (DT-015 Q5) ──────────────────────────────────────────────────────────────────
+// ── spine adoption (DT-015 Q5; the PD spine §8.1.2) ─────────────────────────────────────────────
 fact DemandChaining      { dlog/chained }
 fact DemandCommitAccepts { dlog/commitAlwaysAccepts }   // v1 result policy (no commit-gate refusals)
+fact PDChaining          { pdlog/chained }
+fact PDCommitAccepts     { pdlog/commitAlwaysAccepts }
+
+// ── the §8.1.2 ATOMIC compositions (enforcement facts — the model's rendering of the ONE
+// demand tx; see the C8 contracts note for why these are facts here and not in `guarantees`) ──
+fact CreateComposesWithRecord  { createRecordsAtomically }
+fact RevokeComposesWithExtract { revokeExtractsAtomically }
 
 // ── guard-side reads ────────────────────────────────────────────────────────────────────────────
 /** liveAtOccD — the demand item is STARTED and LIVE as the operation reads it (pre-record). */
@@ -114,8 +122,38 @@ fun startProductionViol[o: StartProductionOcc]: set Reason {
 fun recordProductionViol[o: RecordProductionOcc]: set Reason {
   ((not liveAtOccD[o]) => RDemandClosed else none)
   + ((liveAtOccD[o] and dPre[o].sStatus != DS_IN_PROCESS) => RBadState else none)
-  + ((some p: resolve[o.delivery] & InventoryPool | p.tenantId != o.subject.tenantId)
+  + ((some pd: resolve[o.delivery] & ProductionDelivery | pd.tenantId != o.subject.tenantId)
+     => RForeignRef else none)   // §8.1.2: delivery now = the PD entity, not the transient pool
+}
+fun extractProductionViol[o: ExtractProductionOcc]: set Reason {
+  ((not liveAtOccD[o]) => RDemandClosed else none)
+  + ((liveAtOccD[o] and dPre[o].sStatus != DS_IN_PROCESS) => RBadState else none)
+  + ((some pd: resolve[o.delivery] & ProductionDelivery | pd.tenantId != o.subject.tenantId)
      => RForeignRef else none)
+}
+// ── the PD subject's guards (§8.1.2/§8.1.4) ────────────────────────────────────────────────────
+/** startedBeforePD — the delivery has committed history strictly before `o` (genesis-once). */
+pred startedBeforePD[o: pdlog/SubjectOcc] {
+  some b: pdlog/SubjectOcc | committed[b] and b.subject = o.subject and precedes[b.tick, o.tick]
+}
+/** createDeliveryViol — the §8.1.4 target gates. The demandRef is an ENTITY dataRef: kernel
+    isolation makes a cross-tenant resolution UNREPRESENTABLE (the entity-lift precedent), so
+    there is no tenancy clause; a DANGLING or non-IN_PROCESS target refuses conservatively via
+    the status read. Both clauses may fire together (reason-precise = the SET). */
+fun createDeliveryViol[o: CreateDeliveryOcc]: set Reason {
+  (startedBeforePD[o] => RDeliveryStarted else none)
+  + ((demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] != DS_IN_PROCESS)
+     => RTargetNotInProcess else none)
+  + ((o.item != (resolve[o.subject.demandRef] & DemandItem).itemRef)
+     => RWrongItem else none)   // §8.1.4 item agreement — the pool module's reason REUSED
+}
+/** revokeDeliveryViol — §8.1.1: subject live + DI live. The content clause (holding content ≥
+    contributed) is RUNTIME enforcement + probe — the standing I3 arity-4 exclusion; the
+    caller's own source-state check (RL allows) is the CALLER's leg, ordinary call-first. */
+fun revokeDeliveryViol[o: RevokeDeliveryOcc]: set Reason {
+  ((no o.pre or pdPre[o].sStatus = PD_REVOKED) => RDeliveryClosed else none)
+  + ((let d = resolve[o.subject.demandRef] & DemandItem | no d or not liveDemandAt[d, o.tick])
+     => RDemandClosed else none)
 }
 fun distributeViol[o: DistributeOcc]: set Reason {
   ((not liveAtOccD[o]) => RDemandClosed else none)
@@ -156,6 +194,9 @@ fact DemandAdmissionWitness {
   all o: StartProductionOcc  | (o.admission = Accepted iff no startProductionViol[o])  and (o.admission in Rejected implies o.admission.because = startProductionViol[o])
   all o: RecordProductionOcc | (o.admission = Accepted iff no recordProductionViol[o]) and (o.admission in Rejected implies o.admission.because = recordProductionViol[o])
   all o: DistributeOcc       | (o.admission = Accepted iff no distributeViol[o])       and (o.admission in Rejected implies o.admission.because = distributeViol[o])
+  all o: ExtractProductionOcc | (o.admission = Accepted iff no extractProductionViol[o]) and (o.admission in Rejected implies o.admission.because = extractProductionViol[o])
+  all o: CreateDeliveryOcc   | (o.admission = Accepted iff no createDeliveryViol[o])   and (o.admission in Rejected implies o.admission.because = createDeliveryViol[o])
+  all o: RevokeDeliveryOcc   | (o.admission = Accepted iff no revokeDeliveryViol[o])   and (o.admission in Rejected implies o.admission.because = revokeDeliveryViol[o])
   all o: CompleteOcc         | (o.admission = Accepted iff no completeViol[o])         and (o.admission in Rejected implies o.admission.because = completeViol[o])
   all o: CancelOcc           | (o.admission = Accepted iff no cancelViol[o])           and (o.admission in Rejected implies o.admission.because = cancelViol[o])
   all o: DeleteDemandOcc     | (o.admission = Accepted iff no deleteViol[o])           and (o.admission in Rejected implies o.admission.because = deleteViol[o])
@@ -215,8 +256,11 @@ fact DemandEffectWitness {
     dPost[o].sDemandQty = dPre[o].sDemandQty
     dPost[o].sMembership = dPre[o].sMembership
   }
-  all o: RecordProductionOcc | committed[o] implies o.post = o.pre   // ⟲ — the delivery lands on the POOL log
+  all o: RecordProductionOcc | committed[o] implies o.post = o.pre   // ⟲ — the contribution is the PD row (§8.1.2); pool merges are runtime
+  all o: ExtractProductionOcc | committed[o] implies o.post = o.pre  // ⟲ — the reversal is the PD's REVOKED row; pool movement is runtime
   all o: DistributeOcc       | committed[o] implies o.post = o.pre   // ⟲ — allocation moves pools + cycles, not this record
+  all o: CreateDeliveryOcc   | committed[o] implies pdPost[o].sStatus = PD_CREATED
+  all o: RevokeDeliveryOcc   | committed[o] implies pdPost[o].sStatus = PD_REVOKED
   all o: CompleteOcc | committed[o] implies
     { dPost[o].sStatus = DS_COMPLETE and sameDemandButStatus[dPre[o], dPost[o]] }
   all o: CancelOcc | committed[o] implies

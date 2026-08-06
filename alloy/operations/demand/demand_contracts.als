@@ -111,6 +111,51 @@ pred withdrawnDetachReconciles {
   }
 }
 
+// ── C8 · the ProductionDelivery subject (§8.1.2/§8.1.4, DT-020 build cut 3) ─────────────────────
+/** A committed CreateDelivery saw its target IN_PROCESS and was denominated in the target's
+    item (§8.1.4 — both typed refusals at the guard; the OPEN→IN_PROCESS StartProduction
+    choreography belongs to a service composite OUTSIDE the model, A4 caller-responsibility;
+    item agreement here rather than as a downstream pool-homogeneity violation). ATOMIC. */
+pred createDeliveryGated {
+  all o: CreateDeliveryOcc | committed[o] implies {
+    demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] = DS_IN_PROCESS
+    o.item = (resolve[o.subject.demandRef] & DemandItem).itemRef
+  }
+}
+/** Create COMPOSES with RecordProduction (§8.1.2 compose-don't-subsume — ONE atomic demand
+    commit; the model renders the tx as a both-or-neither pairing): every committed
+    CreateDelivery has exactly one committed RecordProduction recording IT on its own target's
+    log, and vice versa. The listener chain (ProductionRecorded → the order's receiptAccrues)
+    rides the RecordProduction half UNTOUCHED. NOT in `guarantees` (the demandCyclesAlignedAt
+    precedent, L9): no mock consumer relies on the pairing — the order's listener treats
+    RecordProduction as its notification source regardless of PD reification, and putting it
+    in the mock would force PD machinery into every consumer universe. Enforced by the
+    implementation's composition facts; discharged in THIS module's suites. */
+pred createRecordsAtomically {
+  all c: CreateDeliveryOcc | committed[c] implies
+    (one r: RecordProductionOcc | committed[r] and r.delivery = c.subject.eId)
+  all r: RecordProductionOcc | committed[r] implies
+    (one c: CreateDeliveryOcc | committed[c] and c.subject.eId = r.delivery
+       and r.subject.eId = c.subject.demandRef)
+}
+/** Revoke COMPOSES with ExtractProduction — the symmetric §8.1.2 pair (same non-publication
+    rationale). The content clause (holding ≥ contributed) is RUNTIME enforcement + probe —
+    the standing I3 arity-4 exclusion. */
+pred revokeExtractsAtomically {
+  all v: RevokeDeliveryOcc | committed[v] implies
+    (one x: ExtractProductionOcc | committed[x] and x.delivery = v.subject.eId)
+  all x: ExtractProductionOcc | committed[x] implies
+    (one v: RevokeDeliveryOcc | committed[v] and v.subject.eId = x.delivery
+       and x.subject.eId = v.subject.demandRef)
+}
+/** Once REVOKED, forever REVOKED (SL-4; §8.1.1 reversing-entry semantics: the terminal record
+    is kept, the delivery contributes NOTHING — `contributionsFor` excludes it forever). */
+pred deliveryTerminalRevoke {
+  all pd: ProductionDelivery, t1, t2: Tick |
+    (notAfter[t1, t2] and deliveryStatusAt[pd, t1] = PD_REVOKED)
+      implies deliveryStatusAt[pd, t2] = PD_REVOKED
+}
+
 // ── C7 · terminal closure (SL-4 instance, R5/R7) — single-log law ───────────────────────────────
 /** Once COMPLETE/CANCELED, forever closed: no later tick shows a live status (Delete/Retire
     keeps the terminal record — tombstoned retirement, II precedent). */
@@ -136,4 +181,7 @@ pred guarantees {
   and completeRequiresDistributed
   and withdrawnDetachReconciles
   and terminalClosure
+  and createDeliveryGated       // §8.1.4 (vacuous in PD-free consumer universes)
+  and deliveryTerminalRevoke    // §8.1.1 (likewise vacuous without PDs)
+  // createRecordsAtomically / revokeExtractsAtomically: deliberately NOT here — see C8.
 }

@@ -29,6 +29,7 @@ module operations/demand/demand_types
 open meta/profiles/domain_log                        // PROFILE (DT-012): log anatomy + group/order premises
 open meta/kernel                                     // Scoped, EntityId, resolve
 open meta/subject_log/subject_log[DemandItem, DemandState] as dlog   // the log SPINE (DT-015 Q5)
+open meta/subject_log/subject_log[ProductionDelivery, PDState] as pdlog  // the SECOND subject (§8.1.2, DT-020 build cut 3)
 open shared/values                                   // Quantity
 open reference_data/item/item_types                  // Item (collation-key target; TYPES only)
 open resources/processing_network/processing_network_types   // Station (collation-key target; TYPES only)
@@ -83,6 +84,38 @@ fact DemandRefIntegrity {
   }
 }
 
+// ── the SECOND subject: ProductionDelivery (§8.1.2, DT-020 build cut 3) ─────────────────────────
+/** ProductionDelivery — the materialized record of ONE production-process output contributing
+    inventory to a DemandItem (DT-020 §8.1/§8.1.1, re-homed HERE §8.1.2 as the module's second
+    subject: the intersection reified PROCESS-GENERICALLY — receiving is one producing process;
+    manufacturing runs, kitting, transfers reuse this surface). Decomposes the process↔demand
+    m:n into two functional legs (1:N source→PDs, M:1 PDs→demand). Identity + immutable
+    structure only: the one MANDATORY target leg, the contributed quantity (immutable at Create
+    — corrections are Revoke + recreate, reversing-entry semantics §8.1.1), and the OPAQUE
+    source handle (§8.1.3: reconciliation-only — NO LAW reads it; the typed, law-bearing
+    provenance is process-owned, the producing process's `sDeliveries`). */
+sig ProductionDelivery extends Scoped {
+  demandRef:    one  EntityId,        // → DemandItem — the one MANDATORY leg (same module)
+  quantity:     one  Quantity,        // contributed; immutable at Create
+  sourceHandle: lone PDSourceHandle   // opaque reconciliation metadata (the R7 rId-stamping precedent)
+}
+/** PDSourceHandle — the §8.1.3 reconciliation handle: idempotency plumbing for the producing
+    process's append; opaque, nominal, never resolved or interpreted by any law. */
+sig PDSourceHandle {}
+fact PDRefs { all pd: ProductionDelivery | pd.dataRefs = pd.demandRef }   // kernel isolation covers it
+fact PDRefIntegrity {
+  all pd: ProductionDelivery | let d = resolve[pd.demandRef] | some d implies d in DemandItem
+}
+fact NoOrphanPDSourceHandle { all h: PDSourceHandle | h in ProductionDelivery.sourceHandle }
+
+/** PDStatus — Create-immutable then terminal Revoke (§8.1.1): a REVOKED delivery contributes
+    NOTHING and stays forever (audit preserved — reversing-entry semantics). */
+abstract sig PDStatus {}
+one sig PD_CREATED, PD_REVOKED extends PDStatus {}
+/** PDState — one moment's status of a delivery (a value; extensional). */
+sig PDState extends Snapshot { sStatus: one PDStatus }
+fact PDStateExtensional { all disj a, b: PDState | a.sStatus != b.sStatus }
+
 // ── the kinds — the 15 operations (product-register names in comments) ─────────────────────────
 /** Create — start a card-less demand task (births the DemandItem OPEN, seeds the intent). */
 sig CreateDemandOcc extends dlog/SubjectOcc { qty: lone Quantity }
@@ -115,9 +148,18 @@ sig ReopenOcc extends dlog/SubjectOcc {} { bindings = subject }
     holding pool. C/OP call-first: the caller moves each live member cycle → IN_PROCESS (cycle
     StartProcessing) first; this commit GATES on all of them being there. */
 sig StartProductionOcc extends dlog/SubjectOcc { holding: lone EntityId } { bindings = subject + holding }
-/** RecordProduction — record a production delivery (⟲, R8): the delivery pool merges into the
-    holding pool (pool-log events); NO distribution — too early. */
+/** RecordProduction — record a production delivery (⟲, R8; §8.1.2 re-based): `delivery` now
+    references the ProductionDelivery ENTITY (the reified contribution — was the transient
+    delivery pool pre-§8.1.2); the delivery pool's merge into the holding pool stays pool-log/
+    runtime territory. Committed ONLY as the demand-side half of the ATOMIC Create composition
+    (compose-don't-subsume — CreateComposesWithRecord in the implementation): the listener
+    chain (ProductionRecorded → the order's receiptAccrues) rides THIS kind, untouched. */
 sig RecordProductionOcc extends dlog/SubjectOcc { delivery: lone EntityId } { bindings = subject + delivery }
+/** ExtractProduction — the demand-side extraction pairing Revoke (⟲, §8.1.2): reverses the
+    recorded contribution on the target's log (the fulfillment fold ignores REVOKED deliveries;
+    the holding pool's content movement is runtime, watched by the I3-family probe). Committed
+    ONLY as the demand-side half of the ATOMIC Revoke composition. */
+sig ExtractProductionOcc extends dlog/SubjectOcc { delivery: lone EntityId } { bindings = subject + delivery }
 /** Distribute — allocate accumulated production (⟲, R8): a DATA-DRIVEN distribution matrix
     (per-member quantities) + the caller's fullness assertion `fills` (intent-capturing — the
     keyed-Quantity partial order may be INDETERMINATE). C/OP call-first: the caller moves each
@@ -135,12 +177,29 @@ sig CancelOcc extends dlog/SubjectOcc {} { bindings = subject }
 /** Delete — delete/retire the closed task (R7: terminal Delete/Retire; tombstoned, II precedent). */
 sig DeleteDemandOcc extends dlog/SubjectOcc {} { bindings = subject }
 
+// ── the kinds — ProductionDelivery subject (§8.1.2, cut 3) ─────────────────────────────────────
+/** CreateDelivery — PD genesis, the F7 accrual edge's demand-side commit (§8.1.2 ATOMIC:
+    target guards + the PD row + the RecordProduction effect in ONE demand commit; the I3
+    quantity band is RUNTIME enforcement + probe — the pool-content fold stays out of the
+    model, the standing arity-4 exclusion). `item` carries the delivery's Item (from the
+    split delivery pool, caller-supplied) for the §8.1.4 item-agreement guard — deliberately
+    an OCCURRENCE binding, not an entity field (D5 ruled the entity shape without it). */
+sig CreateDeliveryOcc extends pdlog/SubjectOcc { item: lone EntityId } { bindings = subject + item }
+/** RevokeDelivery — terminal reversal (§8.1.1 reversing-entry): the delivery contributes
+    nothing from here on; corrections are Revoke + recreate. The caller (the producing
+    process) checks its OWN source state per ordinary call-first; the content clause
+    (holding ≥ contributed) is RUNTIME + probe (the I3 exclusion). Pairs ATOMICALLY with
+    ExtractProduction on the target's log. */
+sig RevokeDeliveryOcc extends pdlog/SubjectOcc {} { bindings = subject }
+
 /** demandMutators — the composition/intent mutators under the R5 freeze (OPEN-only, RFrozen). */
 fun demandMutators: set dlog/SubjectOcc {
   AddCycleOcc + RemoveCycleOcc + AdjustQtyOcc + ResetQtyOcc + DetachWithdrawnOcc
 }
 /** demandOccKinds — ALL demand occurrence kinds (the module family, alias-free for roots). Renamed from demandKinds 2026-07-08: `kind` binds to OCCURRENCE, never the module/entity (interaction-terminology section occurrence-kind). */
 fun demandOccKinds: set dlog/SubjectOcc { dlog/SubjectOcc }
+/** pdOccKinds — the ProductionDelivery subject's kinds (§8.1.2). */
+fun pdOccKinds: set pdlog/SubjectOcc { pdlog/SubjectOcc }
 
 // ── refusal reasons ─────────────────────────────────────────────────────────────────────────────
 // (No uniqueness reason: multiple DemandItems per (Item, Source Station) are legal — R1 amended;
@@ -161,6 +220,16 @@ one sig RDemandStarted,     // create: this subject already has committed histor
         RBadAllocation,     // distribute: allocation keys / fills outside the live membership (R8)
         RUndistributed,     // complete: the holding pool still has content (R8)
         RNotTerminal        // delete: the subject is not COMPLETE/CANCELED
+        extends Reason {}
+// The PD subject's reasons (§8.1.2/§8.1.4; cut 3). RWrongItem is REUSED from the pool module
+// (same semantic — item disagreement; the order module's reuse precedent).
+one sig RDeliveryStarted,      // create-delivery: this PD already has committed history (genesis-once)
+        RDeliveryClosed,       // revoke: the delivery is not live — never created, or already
+                               //   REVOKED (terminal — §8.1.1; the RDemandClosed/ROrderClosed shape)
+        RTargetNotInProcess    // create-delivery (§8.1.4): the target DemandItem is not IN_PROCESS —
+                               //   COMPLETE/tombstoned/dangling targets refuse conservatively; the
+                               //   OPEN→IN_PROCESS StartProduction choreography belongs to a service
+                               //   composite OUTSIDE the model (A4 caller-responsibility)
         extends Reason {}
 
 // ── the read API (per-role; L9) ─────────────────────────────────────────────────────────────────
@@ -225,3 +294,18 @@ fun effectiveQtyMap[c: CardCycle]: Unit -> lone Scalar {
 }
 /** qtyMap — a lone Quantity as its keyed map (none = the keyed zero; the kit's uniform encoding). */
 fun qtyMap[q: Quantity]: Unit -> lone Scalar { q.byUnit }
+
+// ── the PD read API (§8.1.2; per-role, L9) ──────────────────────────────────────────────────────
+/** pdPre / pdPost — a PD occurrence's records, TYPED (the DT-017 collision fix, per subject). */
+fun pdPre [o: pdlog/SubjectOcc]: lone PDState { o.pre  & PDState }
+fun pdPost[o: pdlog/SubjectOcc]: lone PDState { o.post & PDState }
+/** deliveryStatusAt — the delivery's status as of `t` (none before genesis). */
+fun deliveryStatusAt[pd: ProductionDelivery, t: Tick]: lone PDStatus {
+  pdlog/recordAt[pd, t].sStatus
+}
+/** contributionsFor — the LIVE (CREATED, un-revoked) deliveries targeting `d` as of `t`: the
+    M:1 functional leg the fulfillment fold rolls up (SET-level here; the quantity fold is
+    read-side/metrics territory — the I3 exclusion). */
+fun contributionsFor[d: DemandItem, t: Tick]: set ProductionDelivery {
+  { pd: ProductionDelivery | pd.demandRef = d.eId and deliveryStatusAt[pd, t] = PD_CREATED }
+}
