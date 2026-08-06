@@ -128,12 +128,14 @@ pred supplierBindingFrozen {
       oPost[o].sSupplier = oPre[o].sSupplier
 }
 
-// ── C9b · the item-descriptor copy-freeze (MP 2026-07-08) — ATOMIC ──────────────────────────────
-/** A line captures the item descriptor COPY at genesis exactly when it orders an Item, and no
-    later occurrence ever changes it — vendor commitments stay repeatable/auditable regardless
-    of later item edits (the §7 COPY form: the frozen denotation lives on the line's own log;
-    the quasi-static item needs no pin model-side, and the IMPLEMENTATION pins — see the item
-    module's scope note). */
+// ── C9b · the item-descriptor pin-freeze (MP 2026-07-08; §7 re-basing 2026-08-05) — ATOMIC ──────
+/** A line captures the item descriptor PIN at genesis exactly when it orders an Item, and no
+    later occurrence ever changes the handle — vendor commitments stay repeatable/auditable
+    regardless of later item edits. §7 canon: the PIN is the canonical freeze — the pinned
+    view's immutability is INHERITED from the insert-only substrate (runtime: the record
+    `rId`); this law frames only the HANDLE. Pin-target agreement (the pin denotes the LINE's
+    item) is type-level and definitional (`ItemLinePinAgrees` in order_types — the service
+    captures what it read; a mismatch is unrepresentable, not refused). */
 pred lineDescriptorFrozen {
   all o: AddLineOcc | committed[o] implies (some lPost[o].sItemData iff some o.subject.itemRef)
   all o: lineOccKinds | (committed[o] and some lPre[o]) implies lPost[o].sItemData = lPre[o].sItemData

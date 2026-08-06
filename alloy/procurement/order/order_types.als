@@ -39,6 +39,7 @@ open meta/subject_log/subject_log[Order, OrderState] as olog          // the ORD
 open meta/subject_log/subject_log[OrderLine, OrderLineState] as llog  // the LINE log spine
 open shared/values                                   // Quantity (+ keyed-map add/negate)
 open operations/demand/demand_types                  // DemandItem + statuses + reads (TYPES only)
+open reference_data/item/item_types                  // Item + ItemDescriptorPin (§7 pin re-basing; previously transitive via demand_types)
 open reference_data/business_affiliate/business_affiliate_types      // SupplierReference [F8/O6]
 
 // ── the status vocabulary ───────────────────────────────────────────────────────────────────────
@@ -76,14 +77,21 @@ fact SupplierBindingExtensional {
     a.name != b.name or a.reference != b.reference or a.base != b.base or a.overrides != b.overrides
 }
 
-// ── the item descriptor copy (MP ruling 2026-07-08) ─────────────────────────────────────────────
-/** ItemDescriptor — the OPAQUE copied item descriptor a line captures at genesis and FREEZES
-    (MP ruling: "lines do freeze the item descriptor, otherwise commitments to/from vendors are
-    not repeatable/auditable" — the §7 COPY form against the quasi-static item; field detail is
-    runtime). Exactly the SupplierData treatment one field over. */
-sig ItemDescriptor {}
-fact NoOrphanItemDescriptor {
-  all d: ItemDescriptor | d in OrderLineState.sItemData + AddLineOcc.itemData
+// ── the item descriptor PIN (MP ruling 2026-07-08; re-based to PIN — §7 canon, 2026-08-05) ──────
+/** The line captures a PIN of the item's descriptor at genesis and freezes it (MP ruling:
+    "lines do freeze the item descriptor, otherwise commitments to/from vendors are not
+    repeatable/auditable"). The §7 re-basing: PIN is the canonical freeze — its immutability is
+    INHERITED from the insert-only substrate, nothing re-legislated per carrier; the former
+    opaque COPY atom was the implementation-shaped stand-in. The handle (`ItemDescriptorPin`)
+    lives with its target in item_types. */
+fact ItemLinePinAgrees {
+  // Definitional capture (the refused-vs-unrepresentable distinction, R1-challenge precedent):
+  // the runtime SERVICE reads the descriptor of the item the line names — the caller never
+  // supplies the pin — so a MISMATCHED pin on an item line is UNREPRESENTABLE (a type-level
+  // fact, not a Reason; no register growth). A descriptor pin on a FREE-FORM line (no itemRef)
+  // stays representable — and guard-REFUSED (RNoDescriptor), preserving that refusal arm.
+  all o: AddLineOcc | (some o.itemData and some o.subject.itemRef) implies
+    o.itemData.pinOf.eId = o.subject.itemRef
 }
 
 // ── the confirmation facet (F3) ─────────────────────────────────────────────────────────────────
@@ -149,7 +157,7 @@ sig OrderLineState extends Snapshot {
   sReceived:     lone Quantity,        // STORED, incrementally maintained (F9); none = the keyed zero
   sLineStatus:   one  OrderLineStatus, // L_OPEN / L_CLOSED (closure by act — F7)
   sDemand:       set  EntityId,        // → DemandItem: the serviced demand (O3: the HOLDER carries the refs)
-  sItemData:     lone ItemDescriptor   // the COPIED item descriptor (present ⟺ the line orders an Item; captured at genesis, frozen for audit — MP 2026-07-08)
+  sItemData:     lone ItemDescriptorPin // the PINNED item descriptor (present ⟺ the line orders an Item; captured at genesis — §7 canon 2026-08-05: the freeze law frames the HANDLE, the pinned view's immutability is inherited)
 }
 fact OrderLineStateExtensional {
   all disj a, b: OrderLineState |
@@ -189,9 +197,10 @@ sig DeleteOrderOcc extends olog/SubjectOcc {} { bindings = subject }
 // ── the kinds — LINE subject ────────────────────────────────────────────────────────────────────
 /** AddLine — line genesis: from a DemandItem, from an Item, or free-form (F6). The on-the-fly
     card-less DemandItem for a naked-item line is the CALLER's demand-side Create — order-side
-    this is just genesis + attach. orderRef/itemRef ride the ENTITY; `itemData` is the COPIED
-    descriptor captured at genesis (present ⟺ the line orders an Item — the audit copy). */
-sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId, itemData: lone ItemDescriptor }
+    this is just genesis + attach. orderRef/itemRef ride the ENTITY; `itemData` is the PINNED
+    descriptor captured at genesis (present ⟺ the line orders an Item — the audit pin;
+    ItemLinePinAgrees ties it to the line's item definitionally). */
+sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId, itemData: lone ItemDescriptorPin }
   { bindings = subject + qty + demand + itemData }
 /** UpdateLine — edit the requested quantity (SET; the item is immutable — O5). */
 sig UpdateLineOcc extends llog/SubjectOcc { qty: one Quantity } { bindings = subject + qty }
@@ -252,9 +261,10 @@ one sig ROrderStarted,      // create: this order already has committed history 
                             //   item, or a free-form target line: no itemRef can never agree)
         RLinesOpen,         // close: a live line is still L_OPEN
         RNoDemand,          // record-receipt: the line is free-form (no received tracking — F7)
-        RNoDescriptor       // add-line: the item descriptor must be captured EXACTLY when the
-                            //   line orders an Item (the copy-freeze — MP 2026-07-08; covers
-                            //   both a missing copy and a descriptor on a free-form line)
+        RNoDescriptor       // add-line: the item descriptor PIN must be captured EXACTLY when
+                            //   the line orders an Item (MP 2026-07-08; §7 pin re-basing
+                            //   2026-08-05; covers both a missing pin and a pin on a
+                            //   free-form line)
         extends Reason {}
 
 // ── the read API (per-role; L9) ─────────────────────────────────────────────────────────────────

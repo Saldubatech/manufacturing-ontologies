@@ -5,7 +5,8 @@ module reference_data/item/item_types
 // omission. The real system's horizon (audit spans) DOES include their changes, so the
 // IMPLEMENTATION MUST provide pinning semantics (record rId / as-of reads) for every frozen
 // holder. Consumer freeze laws to AUDIT if this module gains a log: procurement/order
-// `lineDescriptorFrozen` (copy-covered by design) and every consumer reading item structure
+// `lineDescriptorFrozen` (PIN-covered — §7 re-basing 2026-08-05; the handle is
+// `ItemDescriptorPin` below) and every consumer reading item structure
 // from a frozen document. See modeling-conventions §7.
 
 /*
@@ -57,6 +58,17 @@ sig Item extends Scoped {
 /** inventoryTracked — an Item is inventory-tracked iff it carries a UoM scheme (DT-009). */
 pred inventoryTracked[i: Item] { some i.uom }
 
+/** ItemDescriptorPin — a PINNED view of an Item's descriptive data (§7 pin canon, re-based
+    2026-08-05): the model-side handle for the record `rId` a frozen holder captures at its
+    freeze moment. The target is QUASI-STATIC, so the pin is reified as an uninterpreted
+    handle carrying its target (the Station-stub precedent) — model the PIN, not the log.
+    Atoms are NOMINAL: two pins of the same Item may be distinct captured records, so there
+    is deliberately NO extensional fact. Never dangles by construction (`pinOf` is a direct
+    reference — the canon's "a pin never dangles"). NO orphan fact — the SupplierReference /
+    DT-004 Q8 precedent for shared value sigs (per-consumer orphan facts conflict at the
+    second consumer); roots pin scopes instead. */
+sig ItemDescriptorPin { pinOf: one Item }
+
 // ── definitional facts ───────────────────────────────────────────────────────────────────────────
 // These DEFINE the module's shape (outgoing-ref wiring for the kernel's generic rules; the
 // tight-by-default closed universe, modeling-conventions §6) — they are not promises about
@@ -80,6 +92,8 @@ fact ItemSupplyRefs {
 /** itemCarriedSupplierRefs — the SupplierReference atoms THIS module carries (for root-side
     closure facts — modeling-conventions §6, handles). */
 fun itemCarriedSupplierRefs: set SupplierReference { ItemSupply.supplier }
+// ItemDescriptorPin is likewise SHARED and no-orphan-EXEMPT (declared above; the same Q8 /
+// SupplierReference reasoning) — this module carries none itself.
 fact NoOrphanItemSupplyValues {
   all m: Money    | m in ItemSupply.unitCost
   all d: Duration | d in ItemSupply.averageLeadTime

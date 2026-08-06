@@ -138,8 +138,9 @@ fun addLineViol[o: AddLineOcc]: set Reason {
   + parentGateViol[o]
   + (some o.demand => attachDemandViol[o, o.demand] else none)
   + ((some o.subject.itemRef iff some o.itemData) => none else RNoDescriptor)
-    // the copy-freeze capture (MP 2026-07-08): an item line MUST carry the copied descriptor;
-    // a free-form line must NOT.
+    // the pin capture (MP 2026-07-08; §7 re-basing 2026-08-05): an item line MUST carry the
+    // pinned descriptor; a free-form line must NOT. Pin-TARGET agreement is type-level
+    // (ItemLinePinAgrees — definitional capture, not a Reason).
   // (No item tenancy clause: itemRef is an ENTITY dataRef — kernel isolation makes a
   //  cross-tenant resolution unrepresentable, the demand entity-lift precedent. RForeignRef
   //  here covers the RECORD-carried demand ref via attachDemandViol.)
@@ -208,7 +209,9 @@ fact OrderAdmissionWitness {
 /** sameOrderButStatus — everything except the status is carried over. */
 pred sameOrderButStatus[b, a: OrderState] { a.sSupplier = b.sSupplier }
 /** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed —
-    `sItemData` is framed by EVERY mutator: the copy-freeze, MP 2026-07-08). */
+    `sItemData` (the pin HANDLE) is framed by EVERY mutator: the §7 freeze, MP 2026-07-08 /
+    re-based 2026-08-05; the pinned VIEW's immutability is inherited, only the handle needs
+    carrying). */
 pred sameLineButQuantity[b, a: OrderLineState] {
   a.sConfirmation = b.sConfirmation and a.sReceived = b.sReceived
   and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
@@ -261,7 +264,7 @@ fact OrderEffectWitness {
     no lPost[o].sReceived                          // the keyed zero — accrual starts empty (F9)
     lPost[o].sLineStatus = L_OPEN
     lPost[o].sDemand = o.demand                    // lone → the singleton or empty set
-    lPost[o].sItemData = o.itemData                // the copied descriptor lands at genesis
+    lPost[o].sItemData = o.itemData                // the pinned descriptor lands at genesis
   }
   all o: UpdateLineOcc | committed[o] implies {
     lPost[o].sQuantity = o.qty                     // SET (delta is client sugar)
