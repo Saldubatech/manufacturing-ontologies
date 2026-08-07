@@ -156,6 +156,38 @@ pred deliveryTerminalRevoke {
       implies deliveryStatusAt[pd, t2] = PD_REVOKED
 }
 
+// ── C9 · the exclusivity-lattice row (§8.5.3, DT-020 cut 4) — checks-not-facts ──────────────────
+/** demandPoolGenesis — the §8.5.3 GENESIS PREMISE at demand's visibility (assume when: pools
+    are minted inside their holder's own attach act — the ownership-by-genesis runtime
+    discipline, monitored by the §8.5.3 integrity monitoring / PDEV-1424): no pool is named
+    by two committed pool-attaching acts among the kinds demand can see (cycle
+    StartProcessing, demand StartProduction). A NAMED PREMISE — never a fact: a discipline
+    breach stays representable, and a weakened guard stays refusable (the R1 distinction). */
+pred demandPoolGenesis {
+  all disj a, b: StartProcessingOcc | (committed[a] and committed[b]) implies no (a.pool & b.pool)
+  all disj a, b: StartProductionOcc | (committed[a] and committed[b]) implies no (a.holding & b.holding)
+  all a: StartProcessingOcc, b: StartProductionOcc |
+    (committed[a] and committed[b]) implies no (a.pool & b.holding)
+}
+/** holdingExclusiveWhileLive — the demand LATTICE ROW (§8.5.3): under the genesis premise,
+    time-indexed over live holders, a holding pool is held by at most one LIVE demand and is
+    never simultaneously a LIVE cycle's pool (the kinds demand can see; kanban's own row is
+    `poolExclusiveWhileLive`, receiving's is `linePoolExclusiveWhileLive`, and the global
+    pairwise row is check-only in the system tier). Guard-and-genesis-derived THEOREM —
+    discharged at the INTEGRATION tier (the cross-kind clause needs kanban's EFFECTS tying
+    `sPool` to the attach payload, provenance the kanban contract deliberately does not
+    publish); joins `guarantees` in the same change set as that discharge (the §8.5.3
+    two-role rule). */
+pred holdingExclusiveWhileLive {
+  demandPoolGenesis implies {
+    all t: Tick, p: InventoryPool {
+      lone { d: DemandItem | liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p }
+      (some d: DemandItem | liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p)
+        implies (no c: CardCycle | liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p)
+    }
+  }
+}
+
 // ── C7 · terminal closure (SL-4 instance, R5/R7) — single-log law ───────────────────────────────
 /** Once COMPLETE/CANCELED, forever closed: no later tick shows a live status (Delete/Retire
     keeps the terminal record — tombstoned retirement, II precedent). */
@@ -183,5 +215,6 @@ pred guarantees {
   and terminalClosure
   and createDeliveryGated       // §8.1.4 (vacuous in PD-free consumer universes)
   and deliveryTerminalRevoke    // §8.1.1 (likewise vacuous without PDs)
+  and holdingExclusiveWhileLive // §8.5.3 lattice row (premise-conditional; discharged at the integration tier, cut 4)
   // createRecordsAtomically / revokeExtractsAtomically: deliberately NOT here — see C8.
 }
