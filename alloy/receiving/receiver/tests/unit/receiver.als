@@ -32,12 +32,12 @@ open resources/inventory_item/inventory_item_mock
  * allocation keys at Receive — the order_received ceiling applied guard-side): every scope
  * here stays within the exact cases BY DESIGN.
  *
- * The LATTICE ROW (§8.5.3) is NOT dischargeable in this tier: its cross-kind clauses need
- * the peer implementations' EFFECTS (kanban ties sPool to the StartProcessing payload,
- * demand ties sHolding to StartProduction's — provenance the peer CONTRACTS deliberately
- * do not publish, so under the mocks a record may bind a pool no attach act named and the
- * genesis premise cannot reach it). The row discharges in tests/integration/receiver.als
- * (`int_rcv_contract_linePoolExclusive` + its SAT companion) against the real stacks.
+ * The LATTICE ROW (§8.5.3) discharges HERE since cut 5: kanban and demand publish their
+ * pool-provenance laws (`poolProvenance` / `holdingProvenance`), so the mocks tie record
+ * bindings to attach payloads and the genesis premise reaches them (at cut 4, before the
+ * publication, the row could only discharge at the integration tier — that root now keeps
+ * the composed-arc witnesses). Scope discipline: 2 of the OWN kind + 1 of each visible
+ * kind; the companion needs the peers' attach occurrences in the universe.
  */
 
 // ── CONTRACT DISCHARGE (check; UNSAT = the law holds of the implementation) ─────────────────────
@@ -94,6 +94,30 @@ check unit_rcv_contract_receiverTerminalComplete for 5 but 5 Int, 3 Scalar, 5 St
       2 Receiver, 2 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
       0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin, 6 Occurrence, 8 EntityId, 6 Tick, 8 Snapshot expect 0
+
+// The LATTICE ROW (§8.5.3, unit-dischargeable since cut 5 — see the header):
+assert unit_rcv_contract_linePoolExclusive { linePoolExclusiveWhileLive }
+check unit_rcv_contract_linePoolExclusive for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 2 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 1 DemandItem, 0 ProductionDelivery,
+      1 CardCycle, 1 KanbanCard, 1 InventoryItem, 2 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      8 Occurrence, 12 EntityId, 7 Tick, 10 Snapshot expect 0
+
+// The lattice SAT companion (anti-vacuity, mock peers): the premise + one holder of each
+// kind on three distinct pools — the cycle/demand bindings ride their committed attach
+// occurrences (provenance in the mocks).
+run unit_rcv_latticeCompanion {
+  receivingPoolGenesis
+  some t: Tick, l: ReceivingLine, c: CardCycle, d: DemandItem, disj p1, p2, p3: InventoryPool | {
+    resolve[rlStateAt[l, t].sPool] = p1
+    liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p2
+    liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p3
+  }
+} for 10 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 1 DemandItem, 0 ProductionDelivery,
+      1 CardCycle, 1 KanbanCard, 1 InventoryItem, 3 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      16 EntityId, 10 Tick, 12 Snapshot, 4 Quantity, 10 Occurrence expect 1
 
 // ── SAT witnesses — the S3prep / S3 arc + refusal surfaces ──────────────────────────────────────
 // Smoke/genesis: Create births EDITING.

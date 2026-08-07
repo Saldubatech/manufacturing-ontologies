@@ -210,6 +210,11 @@ assert unit_cyc_poolFrozenOnceAttached { poolFrozenOnceAttached }
 check unit_cyc_poolFrozenOnceAttached for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 0
 
+assert unit_cyc_poolProvenance { poolProvenance }
+check unit_cyc_poolProvenance for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 2 InventoryPool,
+      8 Occurrence, 10 EntityId, 7 Tick, 8 Snapshot expect 0
+
 assert unit_cyc_poolExclusiveWhileLive { poolExclusiveWhileLive }
 check unit_cyc_poolExclusiveWhileLive for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 2 InventoryPool expect 0

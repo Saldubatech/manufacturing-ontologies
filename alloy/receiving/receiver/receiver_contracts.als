@@ -160,8 +160,10 @@ pred receivingPoolGenesis {
     genesis premise, never simultaneously a live cycle's pool or a live demand's holding —
     CROSS-KIND, the layers receiving can see (kanban's own row is `poolExclusiveWhileLive`;
     demand's is `holdingExclusiveWhileLive`; the global row is check-only in the system
-    tier). Joins `guarantees` in the SAME change set as its implementation-tier discharge
-    (the §8.5.3 mock rule). */
+    tier). UNIT-tier dischargeable since cut 5: the peers publish their pool-provenance
+    laws (`poolProvenance`/`holdingProvenance`), tying mock record bindings to attach
+    payloads. Joined `guarantees` in the same change set as its first discharge (the
+    §8.5.3 mock rule). */
 pred linePoolExclusiveWhileLive {
   all t: Tick, p: InventoryPool |
     lone { l: ReceivingLine | resolve[rlStateAt[l, t].sPool] = p }

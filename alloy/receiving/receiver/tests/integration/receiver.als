@@ -2,10 +2,10 @@ module receiving/receiver/tests/integration/receiver
 
 open receiving/receiver/receiver_implementation
 open receiving/receiver/receiver_contracts
-open operations/demand/demand_implementation                 // REAL — the row needs demand's effects
+open operations/demand/demand_implementation                 // REAL — the composed arc runs demand's effects
 open resources/kanban_card/kanban_card_implementation        // REAL — and kanban's
-open reference_data/item/item_mock                           // solver budget: the row reads no item/station
-open resources/processing_network/processing_network_mock    //   machinery (the demand_lattice precedent)
+open reference_data/item/item_mock                           // solver budget: the arc reads no item/station
+open resources/processing_network/processing_network_mock    //   machinery (lean-root discipline)
 
 // SupplierReference CLOSURE (modeling-conventions §6, handles): this cone carries the shared
 // handle through item AND (types-transitively) the order module's bindings; tie it to both
@@ -14,16 +14,13 @@ fact SupplierReferenceClosed { SupplierReference = itemCarriedSupplierRefs + ord
 
 /*
  * INTEGRATION suite for the receiving module (DT-020 cut 4): the real receiving log composed
- * with the REAL demand + kanban stacks (item/station ride their mocks — solver-budget
- * confinement, the demand_lattice-root precedent: the lattice row reads neither, and the
- * real item stack multiplies solve time for nothing). Gate tier. THIS is where the
- * §8.5.3 LATTICE ROW discharges: the cross-kind clauses are theorems of the guards + the
- * genesis premise ONLY where the peer implementations' EFFECTS tie their records to their
- * attach payloads (kanban: sPool = StartProcessing's pool; demand: sHolding =
- * StartProduction's holding) — the peer CONTRACTS deliberately do not publish that
- * provenance, so the unit tier (peer mocks) cannot see it. The row still joins
- * `guarantees`/the mock in this same change set (the §8.5.3 two-role rule — discharged
- * against the real implementations here).
+ * with the REAL demand + kanban stacks (item/station ride their mocks — solver
+ * budget: the composed arc reads neither). Gate tier: the COMPOSED-ARC witnesses — joint
+ * loads and the three-holder lattice companion against the REAL receiving + demand + kanban
+ * machinery. The §8.5.3 lattice ROW discharges at the UNIT tier since cut 5 (kanban and
+ * demand publish their pool-provenance laws, so the mocks tie record bindings to attach
+ * payloads); at cut 4, before that publication, the row's discharge lived here — the
+ * interim is recorded in knowledge-base/pool-lattice-genesis-premise.md.
  *
  * The ORDER module rides this cone TYPES-ONLY (receiving reads no order log); order-cone
  * value sigs are pinned to 0 throughout.
@@ -42,17 +39,9 @@ run int_rcv_loads {
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
       12 EntityId, 8 Tick, 10 Snapshot, 3 Quantity expect 1
 
-// ── THE LATTICE ROW (§8.5.3 — scope discipline: 2 of the OWN kind + 1 of each visible kind;
-// the lower kinds' same-kind pairs are their own rows' scopes) ──────────────────────────────────
-assert int_rcv_contract_linePoolExclusive { linePoolExclusiveWhileLive }
-check int_rcv_contract_linePoolExclusive for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      1 Receiver, 2 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 1 DemandItem, 0 ProductionDelivery,
-      1 CardCycle, 1 KanbanCard, 1 InventoryItem, 2 InventoryPool, 1 Station,
-      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
-      8 Occurrence, 12 EntityId, 7 Tick, 10 Snapshot expect 0
-
-// The SAT companion (anti-vacuity): the genesis premise HOLDS with real multi-kind content —
-// a line holding its pool, a LIVE cycle holding a second, a LIVE demand holding a third.
+// The composed three-holder arc (the S5 scenario as a REAL-machinery witness): the genesis
+// premise HOLDS with a line holding its pool, a LIVE cycle holding a second, and a LIVE
+// demand holding a third — the full call-first chains all the way down.
 run int_rcv_latticeCompanion {
   receivingPoolGenesis
   some t: Tick, l: ReceivingLine, c: CardCycle, d: DemandItem, p1, p2, p3: InventoryPool | {

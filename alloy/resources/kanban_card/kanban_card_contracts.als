@@ -37,6 +37,18 @@ pred poolFrozenOnceAttached {
     implies o.post.sPool = o.pre.sPool
 }
 
+/** poolProvenance — a cycle's attached pool is EXACTLY the pool its committed StartProcessing
+    named (DT-020 cut 5, §8.5.3 L9 publication: the exclusivity-lattice rows in the demand and
+    receiving modules rely on this to reason from attach-act payloads to record bindings —
+    without it, a mock-tier record could bind a pool no act ever named). A theorem of the
+    StartProcessing effect + the frozen frames (ProductionFailure, the one detacher, only
+    CLEARS); holds for closed cycles' frozen records too. */
+pred poolProvenance {
+  all c: CardCycle, t: Tick | some stateOfCycleAt[c, t].sPool implies
+    (some o: StartProcessingOcc | committed[o] and o.subject = c and notAfter[o.tick, t]
+       and stateOfCycleAt[c, t].sPool = o.pool)
+}
+
 /** poolExclusiveWhileLive — at any moment, a pool has at most one LIVE holding cycle — derived
     from the attach guard + the frozen frames + closure semantics. Dismissal is implicit: when
     the holder closes (rollover/withdraw), the pool becomes attachable again. */
@@ -65,6 +77,7 @@ pred guarantees {
   forwardMonotone
   noPoolBeforeInProcess
   poolFrozenOnceAttached
+  poolProvenance
   poolExclusiveWhileLive
   closureIsTerminal
   quantityFixedAtGenesis

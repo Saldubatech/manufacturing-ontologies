@@ -15,25 +15,27 @@ mechanism, never a fact. A discipline breach stays representable (premise false;
 monitoring per PDEV-1424 catches it), and a weakened guard stays refusable. "Guard-and-
 genesis-derived theorem" (§8.5.3's phrase) is literal: guard + premise ⊢ row.
 
-## 2. Cross-kind rows discharge at the INTEGRATION tier only
+## 2. Cross-kind rows need pool PROVENANCE in the peer contracts (published at cut 5)
 
 The premise speaks about occurrence PAYLOADS; records are tied to payloads by the
 implementations' EFFECTS (kanban: `sPool` = StartProcessing's pool; demand: `sHolding` =
-StartProduction's holding). The peer CONTRACTS deliberately do not publish that provenance
-— so under a peer MOCK, a record may bind a pool no attach act named, and the row check
-finds a spurious counterexample. Consequences:
+StartProduction's holding). Until the peer contracts publish that provenance, a mock-tier
+record may bind a pool no attach act named, and a row check finds a spurious
+counterexample — at cut 4 this forced the rows' discharge to the integration tier (real
+peers composed). **Cut 5 (MP ruling, 2026-08-06 evening) published the provenance laws**
+(`poolProvenance` in kanban, `holdingProvenance` in demand — each a theorem of its
+module's attach effect + frames, discharged in its own unit suite), after which:
 
-- the row CHECK lives in the module's `tests/integration/` root (real peers composed);
-- the row still joins `guarantees` (mock-carried) in the same change set — the §8.5.3
-  two-role rule; consumer unit roots ASSUME it, they never re-check it;
-- the whole-system row (`tests/pool_lattice.als`) is the inverse: check-only over the
-  three MOCKS — a contract-composition validation (do the rows compose into global
-  pairwise disjointness?), not an implementation discharge.
-
-If a peer contract ever publishes a pool-provenance law ("an attached pool was named by
-the holder's committed attach act"), the rows become unit-dischargeable — a deliberate
-option, not an oversight (it was weighed and rejected in cut 4 to avoid growing three
-contracts at once).
+- the row CHECKS live in their modules' UNIT suites (dev-loop regression coverage; the
+  678s/82s integration-tier row checks left the gate — `demand_lattice.als` retired,
+  `tests/integration/receiver.als` keeps the composed-arc witnesses);
+- the rows stay in `guarantees` (mock-carried) — the §8.5.3 two-role rule;
+- the whole-system row (`tests/pool_lattice.als`) is unchanged: check-only over the
+  three MOCKS — a contract-composition validation, not an implementation discharge;
+- the rule for the NEXT holder kind: its lattice row needs the provenance law of every
+  kind visible below it; publish provenance the moment a row relies on it (L9), and give
+  each publication its own card + unit discharge. Receiving publishes NO provenance law
+  yet (no consumer relies on it).
 
 ## 3. Check scopes: pin the abstract parents or the check silently passes
 

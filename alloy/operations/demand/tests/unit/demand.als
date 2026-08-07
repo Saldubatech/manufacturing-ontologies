@@ -295,6 +295,33 @@ run unit_dem_unattachedRequestingLegal {
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
+// ── the §8.5.3 lattice row + provenance (DT-020 cut 5) — UNIT-dischargeable since kanban
+// published poolProvenance: the cross-kind clause reasons from attach payloads to record
+// bindings through the mock. Scope discipline: 2 of the OWN kind + 1 cycle; explicit
+// abstract-parent pins (knowledge-base/pool-lattice-genesis-premise.md §3). ────────────────────
+assert unit_dem_contract_holdingProvenance { holdingProvenance }
+check unit_dem_contract_holdingProvenance for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 2 InventoryPool,
+      8 Occurrence, 10 EntityId, 7 Tick, 8 Snapshot expect 0
+
+assert unit_dem_contract_holdingExclusive { holdingExclusiveWhileLive }
+check unit_dem_contract_holdingExclusive for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 DemandItem, 1 CardCycle, 1 KanbanCard, 0 InventoryItem, 2 InventoryPool,
+      8 Occurrence, 10 EntityId, 7 Tick, 8 Snapshot expect 0
+
+// The SAT companion (anti-vacuity): the premise HOLDS with a live demand holding its pool and
+// a live MOCK cycle holding a distinct one (the cycle's binding now needs its committed
+// StartProcessing — poolProvenance in the mock).
+run unit_dem_latticeCompanion {
+  demandPoolGenesis
+  some t: Tick, d: DemandItem, c: CardCycle, disj p1, p2: InventoryPool | {
+    liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p1
+    liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p2
+  }
+} for 8 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem, 2 InventoryPool,
+      12 EntityId, 9 Tick, 10 Snapshot, 9 Occurrence expect 1
+
 // ── the ProductionDelivery subject (§8.1.2/§8.1.4, DT-020 build cut 3) ──────────────────────────
 // Contract discharge — the §8.1.4 gates as theorems of createDeliveryViol:
 assert unit_dem_contract_createDeliveryGated { createDeliveryGated }

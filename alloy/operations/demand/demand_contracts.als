@@ -169,15 +169,24 @@ pred demandPoolGenesis {
   all a: StartProcessingOcc, b: StartProductionOcc |
     (committed[a] and committed[b]) implies no (a.pool & b.holding)
 }
+/** holdingProvenance — a demand item's holding pool is EXACTLY the pool its committed
+    StartProduction named (DT-020 cut 5, the kanban poolProvenance twin — same L9 publication
+    rationale: upper layers reason from attach-act payloads to record bindings). A theorem of
+    the StartProduction effect + the sameHolding frames. */
+pred holdingProvenance {
+  all d: DemandItem, t: Tick | some demandStateAt[d, t].sHolding implies
+    (some o: StartProductionOcc | committed[o] and o.subject = d and notAfter[o.tick, t]
+       and demandStateAt[d, t].sHolding = o.holding)
+}
 /** holdingExclusiveWhileLive — the demand LATTICE ROW (§8.5.3): under the genesis premise,
     time-indexed over live holders, a holding pool is held by at most one LIVE demand and is
     never simultaneously a LIVE cycle's pool (the kinds demand can see; kanban's own row is
     `poolExclusiveWhileLive`, receiving's is `linePoolExclusiveWhileLive`, and the global
     pairwise row is check-only in the system tier). Guard-and-genesis-derived THEOREM —
-    discharged at the INTEGRATION tier (the cross-kind clause needs kanban's EFFECTS tying
-    `sPool` to the attach payload, provenance the kanban contract deliberately does not
-    publish); joins `guarantees` in the same change set as that discharge (the §8.5.3
-    two-role rule). */
+    discharged at the UNIT tier since kanban published `poolProvenance` (cut 5; the cross-kind
+    clause reasons from the attach payload to the record binding through it — before that
+    publication the discharge needed kanban's real effects, the cut-4 integration-tier
+    interim). */
 pred holdingExclusiveWhileLive {
   demandPoolGenesis implies {
     all t: Tick, p: InventoryPool {
@@ -215,6 +224,7 @@ pred guarantees {
   and terminalClosure
   and createDeliveryGated       // §8.1.4 (vacuous in PD-free consumer universes)
   and deliveryTerminalRevoke    // §8.1.1 (likewise vacuous without PDs)
-  and holdingExclusiveWhileLive // §8.5.3 lattice row (premise-conditional; discharged at the integration tier, cut 4)
+  and holdingProvenance         // cut 5 (the kanban poolProvenance twin; L9 publication)
+  and holdingExclusiveWhileLive // §8.5.3 lattice row (premise-conditional; unit-tier discharge since cut 5)
   // createRecordsAtomically / revokeExtractsAtomically: deliberately NOT here — see C8.
 }
