@@ -65,6 +65,12 @@ fun supplierRefViol[b: SupplierBinding, tid: EntityId]: set Reason {
   + ((some a: resolve[b.reference.affiliateRef] & BusinessAffiliate | a.tenantId != tid)
      => RForeignRef else none)
 }
+/** assigneeRefViol — the assignee handle must resolve IN-TENANT (the supplierRefViol
+    precedent: dangling is LEGAL — a soft ref; typing to StaffMember is definitional,
+    OrderAssigneeRefIntegrity). `tid` is the acting subject's tenant. */
+fun assigneeRefViol[m: lone EntityId, tid: EntityId]: set Reason {
+  (some s: resolve[m] & StaffMember | s.tenantId != tid) => RForeignRef else none
+}
 /** parentGateViol — the line-mutator preconditions on the PARENT order: it must be live
     (ROrderClosed) and DRAFT (RFrozen — the F5 freeze family). */
 fun parentGateViol[o: llog/SubjectOcc]: set Reason {
@@ -125,8 +131,13 @@ fun cancelOrderViol[o: CancelOrderOcc]: set Reason {
   ((not liveAtOccO[o]) => ROrderClosed else none)
   + ((liveAtOccO[o] and oPre[o].sStatus != OS_DRAFT) => RBadState else none)   // O4: DRAFT-only; post-submission cancellation is PARKED
 }
+fun updateOrderDetailsViol[o: UpdateOrderDetailsOcc]: set Reason {
+  ((not liveAtOccO[o]) => ROrderClosed else none)
+  + ((liveAtOccO[o] and oPre[o].sStatus != OS_DRAFT) => RFrozen else none)   // the F5 family
+  + assigneeRefViol[o.assignee, o.subject.tenantId]
+}
 fun annotateOrderViol[o: AnnotateOrderOcc]: set Reason {
-  ((not startedBeforeO[o] or deletedBeforeO[o]) => ROrderClosed else none)     // any lifecycle state, but the subject must exist
+  ((not startedBeforeO[o] or deletedBeforeO[o]) => ROrderClosed else none)     // any lifecycle state (TQ-7(c): internal notes edit at ANY time), but the subject must exist
 }
 fun deleteOrderViol[o: DeleteOrderOcc]: set Reason {
   ((not startedBeforeO[o] or deletedBeforeO[o]) => ROrderClosed else none)
@@ -192,6 +203,7 @@ fact OrderAdmissionWitness {
   all o: SubmitOcc             | (o.admission = Accepted iff no submitViol[o])          and (o.admission in Rejected implies o.admission.because = submitViol[o])
   all o: CloseOrderOcc         | (o.admission = Accepted iff no closeOrderViol[o])      and (o.admission in Rejected implies o.admission.because = closeOrderViol[o])
   all o: CancelOrderOcc        | (o.admission = Accepted iff no cancelOrderViol[o])     and (o.admission in Rejected implies o.admission.because = cancelOrderViol[o])
+  all o: UpdateOrderDetailsOcc | (o.admission = Accepted iff no updateOrderDetailsViol[o]) and (o.admission in Rejected implies o.admission.because = updateOrderDetailsViol[o])
   all o: AnnotateOrderOcc      | (o.admission = Accepted iff no annotateOrderViol[o])   and (o.admission in Rejected implies o.admission.because = annotateOrderViol[o])
   all o: DeleteOrderOcc        | (o.admission = Accepted iff no deleteOrderViol[o])     and (o.admission in Rejected implies o.admission.because = deleteOrderViol[o])
   all o: AddLineOcc            | (o.admission = Accepted iff no addLineViol[o])         and (o.admission in Rejected implies o.admission.because = addLineViol[o])
@@ -206,8 +218,14 @@ fact OrderAdmissionWitness {
 }
 
 // ── effects (committed) — per-kind frames on the records ────────────────────────────────────────
+/** sameOrderDetail — the cut-6 header details carried over (priority / assignee / vendor
+    notes / internal notes; the frame fragment every non-detail mutator composes). */
+pred sameOrderDetail[b, a: OrderState] {
+  a.sPriority = b.sPriority and a.sAssignee = b.sAssignee
+  and a.sNotes = b.sNotes and a.sInternalNotes = b.sInternalNotes
+}
 /** sameOrderButStatus — everything except the status is carried over. */
-pred sameOrderButStatus[b, a: OrderState] { a.sSupplier = b.sSupplier }
+pred sameOrderButStatus[b, a: OrderState] { a.sSupplier = b.sSupplier and sameOrderDetail[b, a] }
 /** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed —
     `sItemData` (the pin HANDLE) is framed by EVERY mutator: the §7 freeze, MP 2026-07-08 /
     re-based 2026-08-05; the pinned VIEW's immutability is inherited, only the handle needs
@@ -237,10 +255,15 @@ fact OrderEffectWitness {
   all o: CreateOrderOcc | committed[o] implies {
     oPost[o].sStatus = OS_DRAFT
     oPost[o].sSupplier = o.supplier               // seeds the binding (name may be the only content)
+    oPost[o].sPriority = OP_UNDEFINED             // the seeded default (TQ-7(a), MP 2026-08-08)
+    no oPost[o].sAssignee
+    no oPost[o].sNotes
+    no oPost[o].sInternalNotes
   }
   all o: UpdateSupplierOcc | committed[o] implies {
     oPost[o].sStatus = oPre[o].sStatus
     oPost[o].sSupplier = o.supplier
+    sameOrderDetail[oPre[o], oPost[o]]
   }
   all o: ResetToSupplierOcc | committed[o] implies {
     oPost[o].sStatus = oPre[o].sStatus
@@ -248,6 +271,15 @@ fact OrderEffectWitness {
     oPost[o].sSupplier.reference = oPre[o].sSupplier.reference
     oPost[o].sSupplier.base      = oPre[o].sSupplier.base
     no oPost[o].sSupplier.overrides
+    sameOrderDetail[oPre[o], oPost[o]]
+  }
+  all o: UpdateOrderDetailsOcc | committed[o] implies {          // SET the DRAFT-mutable cluster
+    oPost[o].sStatus = oPre[o].sStatus
+    oPost[o].sSupplier = oPre[o].sSupplier
+    oPost[o].sInternalNotes = oPre[o].sInternalNotes             // NOT this kind's facet
+    oPost[o].sPriority = (some o.priority => o.priority else OP_UNDEFINED)   // absent ⇒ the default
+    oPost[o].sAssignee = o.assignee                              // absent ⇒ cleared
+    oPost[o].sNotes    = o.notes                                 // absent ⇒ cleared
   }
   all o: SubmitOcc | committed[o] implies
     { oPost[o].sStatus = OS_SUBMITTED and sameOrderButStatus[oPre[o], oPost[o]] }   // the freeze instant
@@ -255,7 +287,14 @@ fact OrderEffectWitness {
     { oPost[o].sStatus = OS_CLOSED and sameOrderButStatus[oPre[o], oPost[o]] }
   all o: CancelOrderOcc | committed[o] implies
     { oPost[o].sStatus = OS_CANCELED and sameOrderButStatus[oPre[o], oPost[o]] }
-  all o: AnnotateOrderOcc | committed[o] implies o.post = o.pre   // the note rides the payload
+  all o: AnnotateOrderOcc | committed[o] implies {               // SET the internal notes (any state)
+    oPost[o].sInternalNotes = o.notes
+    oPost[o].sStatus = oPre[o].sStatus
+    oPost[o].sSupplier = oPre[o].sSupplier
+    oPost[o].sPriority = oPre[o].sPriority
+    oPost[o].sAssignee = oPre[o].sAssignee
+    oPost[o].sNotes    = oPre[o].sNotes
+  }
   all o: DeleteOrderOcc   | committed[o] implies o.post = o.pre   // the tombstone
 
   all o: AddLineOcc | committed[o] implies {

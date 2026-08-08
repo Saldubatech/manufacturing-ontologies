@@ -28,9 +28,17 @@ module procurement/order/order_types
  *
  * MODEL SIMPLIFICATIONS (documented, not modeled — design doc §4): orderNumber (identity is the
  * atom; the number is a runtime writer policy), line rank/document ordering, currency/terms,
- * notes-as-record-fields (notes are occurrence payloads), the supplier snapshot's field-level
- * detail (an opaque atom + an overrides marker suffice for the freeze/reset laws — only the
- * NAME is first-class, because Submit's RNoSupplier and F8's "all fields but the name" need it).
+ * LINE notes-as-occurrence-payloads (AnnotateLineOcc — the order-line record carries no note
+ * field yet; PDEV-516 will ride the shared Note mechanism at its own ruling), the supplier
+ * snapshot's field-level detail (an opaque atom + an overrides marker suffice for the
+ * freeze/reset laws — only the NAME is first-class, because Submit's RNoSupplier and F8's
+ * "all fields but the name" need it).
+ *
+ * ORDER-LEVEL notes ARE record fields since cut 6 (DT-022 TQ-7(c), MP 2026-08-07): sNotes
+ * (vendor-facing, frozen at Submit) + sInternalNotes (internal, editable at ANY time — the
+ * one deliberate exemption from every freeze; history rides the log). The same cut added
+ * sPriority (TQ-7(a): ordered vocabulary, UNDEFINED default, frozen at Submit) and sAssignee
+ * (TQ-7(b): → StaffMember, frozen at Submit).
  */
 
 open meta/profiles/domain_log                        // PROFILE (DT-012): log anatomy + group/order premises
@@ -41,6 +49,7 @@ open shared/values                                   // Quantity (+ keyed-map ad
 open operations/demand/demand_types                  // DemandItem + statuses + reads (TYPES only)
 open reference_data/item/item_types                  // Item + ItemDescriptorPin (§7 pin re-basing; previously transitive via demand_types)
 open reference_data/business_affiliate/business_affiliate_types      // SupplierReference [F8/O6]
+open reference_data/staff/staff_types                // StaffMember (sAssignee target — DT-022 TQ-7(b))
 
 // ── the status vocabulary ───────────────────────────────────────────────────────────────────────
 /** OrderStatus — the FOUR stored states (O7); CONFIRMED and RECEIVING are DERIVED READINGS over
@@ -54,6 +63,14 @@ fun liveOrderStatuses: set OrderStatus { OS_DRAFT + OS_SUBMITTED }
 /** OrderLineStatus — the line's closure facet (F7: lines close ONLY by act; "short" is derived). */
 abstract sig OrderLineStatus {}
 one sig L_OPEN, L_CLOSED extends OrderLineStatus {}
+
+/** OrderPriority — the order's vendor-expediting priority (DT-022 TQ-7(a), MP 2026-08-08):
+    a fixed ORDERED vocabulary, UNDEFINED < LOW < NORMAL < HIGH < URGENT (declaration order;
+    easy to add/remove values later — no law reads the order today). OP_UNDEFINED is the
+    SEEDED DEFAULT at Create; the field freezes at Submit (vendor communication — the
+    "re-submitting" workflow that would re-open it is out of scope this version). */
+abstract sig OrderPriority {}
+one sig OP_UNDEFINED, OP_LOW, OP_NORMAL, OP_HIGH, OP_URGENT extends OrderPriority {}
 
 // ── the supplier binding (F8/O6) ────────────────────────────────────────────────────────────────
 /** SupplierName — the vendor's name: the ONE first-class snapshot field (Submit requires it —
@@ -136,10 +153,22 @@ fact OrderLineRefIntegrity {
 /** OrderState — one moment's mutable payload of an Order (a value; extensional). */
 sig OrderState extends Snapshot {
   sStatus:   one OrderStatus,     // where the document stands (F5/O7: the stored core)
-  sSupplier: one SupplierBinding  // the F8 binding (frozen at Submit)
+  sSupplier: one SupplierBinding, // the F8 binding (frozen at Submit)
+  sPriority: one OrderPriority,   // vendor-expediting priority (TQ-7(a)); OP_UNDEFINED default; frozen at Submit
+  sAssignee: lone EntityId,       // → StaffMember: the accountable owner (TQ-7(b)); frozen at Submit
+  sNotes:    lone Note,           // procurement ↔ VENDOR communication (TQ-7(c)); frozen at Submit
+  sInternalNotes: set Note        // INTERNAL notes (TQ-7(c)): editable at ANY time — the one
+                                  //   deliberate exemption from every freeze; history = the log
 }
 fact OrderStateExtensional {
-  all disj a, b: OrderState | a.sStatus != b.sStatus or a.sSupplier != b.sSupplier
+  all disj a, b: OrderState |
+    a.sStatus != b.sStatus or a.sSupplier != b.sSupplier or a.sPriority != b.sPriority
+    or a.sAssignee != b.sAssignee or a.sNotes != b.sNotes or a.sInternalNotes != b.sInternalNotes
+}
+// The assignee is RECORD-carried → tenancy is guard-side (RForeignRef); typing is definitional
+// (the OrderSupplierRefIntegrity precedent). Dangling stays legal (soft ref).
+fact OrderAssigneeRefIntegrity {
+  all s: OrderState | (let m = resolve[s.sAssignee] | some m implies m in StaffMember)
 }
 // The binding's typed handles are RECORD-carried → tenancy/role integrity is guard-side
 // (the DT-015 finding: kernel isolation reaches only entity dataRefs); typing is definitional:
@@ -188,9 +217,17 @@ sig CloseOrderOcc extends olog/SubjectOcc {} { bindings = subject }
 /** Cancel — abandon while composing (DRAFT-ONLY — O4: post-submission cancellation retracts
     vendor commitments; a parked seam, not a casual operation). */
 sig CancelOrderOcc extends olog/SubjectOcc {} { bindings = subject }
-/** Annotate — a note on the order (any live-or-terminal state; the F4 vehicle for
-    out-of-system revisions; payload rides the occurrence, not the record). */
-sig AnnotateOrderOcc extends olog/SubjectOcc {} { bindings = subject }
+/** UpdateOrderDetails — SET the DRAFT-mutable header details as one facet cluster (TQ-7,
+    cut 6): the payload IS the new cluster (the Receiver-header SET precedent — absent
+    priority ⇒ OP_UNDEFINED, absent assignee/notes ⇒ cleared). DRAFT-only (the F5 family). */
+sig UpdateOrderDetailsOcc extends olog/SubjectOcc {
+  priority: lone OrderPriority, assignee: lone EntityId, notes: lone Note
+} { bindings = subject + priority + assignee + notes }
+/** Annotate — SET the order's INTERNAL notes (any live-or-terminal state — TQ-7(c):
+    editable at ANY time; the payload IS the new note set, so add/edit/remove are all this
+    one act; history rides the log). Since cut 6 the notes land on the RECORD
+    (sInternalNotes) — the pre-cut-6 payload-only reading is superseded. */
+sig AnnotateOrderOcc extends olog/SubjectOcc { notes: set Note } { bindings = subject + notes }
 /** Delete — retire the closed order (tombstoned; lines retire with it at runtime). */
 sig DeleteOrderOcc extends olog/SubjectOcc {} { bindings = subject }
 
@@ -236,8 +273,12 @@ fun orderCarriedSupplierRefs: set SupplierReference {
   + CreateOrderOcc.supplier.reference + UpdateSupplierOcc.supplier.reference
 }
 
-/** orderStructuralMutators — the ORDER-subject mutators under the F5 freeze (DRAFT-only). */
-fun orderStructuralMutators: set olog/SubjectOcc { UpdateSupplierOcc + ResetToSupplierOcc }
+/** orderStructuralMutators — the ORDER-subject mutators under the F5 freeze (DRAFT-only).
+    AnnotateOrderOcc is deliberately NOT here — internal notes are editable at any time
+    (TQ-7(c)). */
+fun orderStructuralMutators: set olog/SubjectOcc {
+  UpdateSupplierOcc + ResetToSupplierOcc + UpdateOrderDetailsOcc
+}
 /** lineStructuralMutators — the LINE-subject mutators under the F5 freeze (the parent order
     must be DRAFT; includes line genesis). */
 fun lineStructuralMutators: set llog/SubjectOcc {

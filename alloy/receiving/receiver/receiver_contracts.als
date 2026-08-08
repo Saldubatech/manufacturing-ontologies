@@ -68,6 +68,8 @@ pred capturedFactsFrozen {
     rlPost[o].sReceivedQty  = rlPre[o].sReceivedQty
     rlPost[o].sRejectedQty  = rlPre[o].sRejectedQty
     rlPost[o].sOffManifest  = rlPre[o].sOffManifest
+    rlPost[o].sRejectionReason = rlPre[o].sRejectionReason   // DT-022 TQ-2 (cut 6)
+    rlPost[o].sNote         = rlPre[o].sNote                  // DT-022 TQ-2 (cut 6)
     rlPost[o].sBirthPins    = rlPre[o].sBirthPins
     rlPost[o].sAttributions = rlPre[o].sAttributions
   }
@@ -128,12 +130,18 @@ pred lineForwardMonotone {
     rlStatusAt[l, t1] = RL_DISTRIBUTED implies rlStatusAt[l, t2] = RL_DISTRIBUTED
   }
 }
-/** Once COMPLETE, the Receiver record never changes again (capture is over; there is no
-    reopen — post-freeze corrections are recorded-axis territory). */
+/** Once COMPLETE, the Receiver's CAPTURE record never changes again (capture is over; there
+    is no reopen — post-freeze corrections are recorded-axis territory). Field-wise since
+    cut 6: `sInternalNotes` is the ONE deliberate exemption (DT-022 TQ-7(c) — internal notes
+    are editable at any time; their history rides the log). */
 pred receiverTerminalComplete {
   all r: Receiver, t1, t2: Tick |
-    (notAfter[t1, t2] and receiverStatusAt[r, t1] = RV_COMPLETE) implies
-      receiverStateAt[r, t2] = receiverStateAt[r, t1]
+    (notAfter[t1, t2] and receiverStatusAt[r, t1] = RV_COMPLETE) implies {
+      receiverStateAt[r, t2].sStatus       = receiverStateAt[r, t1].sStatus
+      receiverStateAt[r, t2].sBillOfLading = receiverStateAt[r, t1].sBillOfLading
+      receiverStateAt[r, t2].sCarrier      = receiverStateAt[r, t1].sCarrier
+      receiverStateAt[r, t2].sOperator     = receiverStateAt[r, t1].sOperator
+    }
 }
 
 // ── C9 · the exclusivity-lattice row (§8.5.3) — checks-not-facts, guard-and-genesis-derived ─────

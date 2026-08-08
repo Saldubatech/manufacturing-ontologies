@@ -293,3 +293,57 @@ run unit_rcv_completeRefusedLinesReceiving {
       0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
       8 EntityId, 8 Tick, 8 Snapshot expect 1
+
+// ── CUT 6 (DT-022 TQ-2 / TQ-7(c) / TQ-3) ────────────────────────────────────────────────────────
+// TQ-2: a rejection carries its WHY and the operator's clarification, landing AT Receive with
+// the final counts; both frozen with the captured facts thereafter (capturedFactsFrozen covers
+// them — its existing check re-verifies).
+run unit_rcv_receiveWithReason {
+  some o: ReceiveLineOcc | {
+    committed[o]
+    some o.rejectedQty
+    o.rejectionReason = RR_DAMAGED
+    some o.note
+    rlStateAt[o.subject, o.tick].sRejectionReason = RR_DAMAGED
+    rlStateAt[o.subject, o.tick].sNote = o.note
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 1 InventoryItem, 1 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      12 EntityId, 8 Tick, 10 Snapshot, 3 Quantity, 2 Note expect 1
+
+// TQ-7(c): the Receiver's INTERNAL notes are editable at ANY time — Annotate commits on a
+// COMPLETE receiver and CHANGES the note set (the deliberate terminal-law exemption,
+// witnessed not legislated; settles the D5 sNotes gap).
+run unit_rcv_annotateAfterComplete {
+  some o: AnnotateReceiverOcc | {
+    committed[o]
+    rvPre[o].sStatus = RV_COMPLETE
+    rvPost[o].sInternalNotes != rvPre[o].sInternalNotes
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 0 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      8 EntityId, 7 Tick, 8 Snapshot, 2 Note expect 1
+
+// TQ-3 CONFIRMATION (MP follow-up, 2026-08-08): after release, the line's former pool is AT
+// REST — it persists (the atom outlives the line's custody, §8.5.1: never re-held) and NO
+// holder receiving can see holds it (no line pool-attachment, no live cycle, no live demand
+// holding). The minimal guaranteed state needs no machinery; the items' own availability
+// and location ride the inventory-item module (out of this cone — catalog note).
+run unit_rcv_atRestAfterRelease {
+  some o: ReleaseLineOcc, p: InventoryPool, t: Tick | {
+    committed[o]
+    resolve[rlPre[o].sPool] = p
+    precedes[o.tick, t]
+    no l: ReceivingLine | resolve[rlStateAt[l, t].sPool] = p
+    no c: CardCycle    | liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p
+    no d: DemandItem   | liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 1 InventoryItem, 1 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      12 EntityId, 9 Tick, 10 Snapshot, 3 Quantity expect 1

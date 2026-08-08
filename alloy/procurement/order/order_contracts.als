@@ -141,6 +141,20 @@ pred lineDescriptorFrozen {
   all o: lineOccKinds | (committed[o] and some lPre[o]) implies lPost[o].sItemData = lPre[o].sItemData
 }
 
+// ── C11 · the header-detail freeze (DT-022 TQ-7, cut 6) — ATOMIC ────────────────────────────────
+/** Priority, assignee, and the vendor-facing notes are unchanged by every occurrence that
+    reads a post-DRAFT record (the C9 shape — Submit itself reads DRAFT and carries them
+    over, the freeze instant). sInternalNotes is DELIBERATELY absent: internal notes are
+    editable at any time (TQ-7(c)) — witnessed, not legislated. */
+pred headerDetailFrozen {
+  all o: orderOccKinds |
+    (committed[o] and some oPre[o] and oPre[o].sStatus != OS_DRAFT) implies {
+      oPost[o].sPriority = oPre[o].sPriority
+      oPost[o].sAssignee = oPre[o].sAssignee
+      oPost[o].sNotes    = oPre[o].sNotes
+    }
+}
+
 // ── C10 · terminal closure (SL-4) — ATOMIC ──────────────────────────────────────────────────────
 /** Once CLOSED/CANCELED, forever closed (Delete keeps the terminal record — tombstoned
     retirement). */
@@ -165,6 +179,7 @@ pred guarantees {
   and lineClosureByAct
   and closeRequiresSettled
   and supplierBindingFrozen
+  and headerDetailFrozen
   and lineDescriptorFrozen
   and orderTerminalClosure
 }

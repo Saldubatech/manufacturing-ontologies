@@ -7,6 +7,7 @@ open reference_data/item/item_mock                            // lower layers as
 open reference_data/business_affiliate/business_affiliate_mock
 open resources/processing_network/processing_network_mock
 open resources/kanban_card/kanban_card_mock
+open reference_data/staff/staff_mock                          // StaffMember as CONTRACT (cut 6 — the sAssignee target)
 
 /*
  * UNIT suite for the order module (DT-018; TWO subjects on the spine). Every demand-side state
@@ -431,3 +432,68 @@ run unit_ord_deleteRetiresTerminal {
 } for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       10 Tick, 9 EntityId, 10 Snapshot expect 1
+
+// ── CUT 6 (DT-022 TQ-7): header details + internal notes ────────────────────────────────────────
+// The C11 law: priority / assignee / vendor notes unchanged by every post-DRAFT reader.
+assert unit_ord_contract_headerDetailFrozen { headerDetailFrozen }
+check unit_ord_contract_headerDetailFrozen for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 Order, 2 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      2 StaffMember, 8 EntityId, 7 Tick, 8 Snapshot expect 0
+
+// The seeded default (TQ-7(a), MP 2026-08-08): a committed Create births priority UNDEFINED.
+assert unit_ord_contract_priorityDefault {
+  all o: CreateOrderOcc | committed[o] implies oPost[o].sPriority = OP_UNDEFINED
+}
+check unit_ord_contract_priorityDefault for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      6 EntityId, 6 Tick, 6 Snapshot expect 0
+
+// SET the DRAFT-mutable cluster: priority + assignee + vendor notes land on the record.
+run unit_ord_detailsSetWhileDraft {
+  some o: UpdateOrderDetailsOcc, m: StaffMember | {
+    committed[o]
+    o.priority = OP_HIGH
+    resolve[o.assignee] = m
+    some o.notes
+    oPost[o].sPriority = OP_HIGH
+    oPost[o].sAssignee = o.assignee
+    oPost[o].sNotes = o.notes
+  }
+} for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      1 StaffMember, 8 EntityId, 6 Tick, 6 Snapshot, 2 Note expect 1
+
+// The freeze refusal: details cannot change once SUBMITTED — exactly RFrozen.
+run unit_ord_detailsFrozenRefused {
+  some o: UpdateOrderDetailsOcc | {
+    o.admission in Rejected
+    o.admission.because = RFrozen
+    oPre[o].sStatus = OS_SUBMITTED
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      10 EntityId, 9 Tick, 10 Snapshot expect 1
+
+// A foreign assignee refuses precisely: exactly RForeignRef (cross-tenant StaffMember).
+run unit_ord_assigneeForeignRefused {
+  some o: UpdateOrderDetailsOcc, m: StaffMember | {
+    o.admission in Rejected
+    o.admission.because = RForeignRef
+    resolve[o.assignee] = m
+    m.tenantId != o.subject.tenantId
+  }
+} for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      2 StaffMember, 9 EntityId, 6 Tick, 6 Snapshot expect 1
+
+// INTERNAL notes are editable at ANY time (TQ-7(c)): Annotate commits on a CLOSED order and
+// CHANGES the internal note set — the deliberate exemption, witnessed not legislated.
+run unit_ord_internalNotesAnyTime {
+  some o: AnnotateOrderOcc | {
+    committed[o]
+    oPre[o].sStatus = OS_CLOSED
+    oPost[o].sInternalNotes != oPre[o].sInternalNotes
+  }
+} for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      10 Tick, 9 EntityId, 12 Snapshot, 2 Note expect 1

@@ -99,6 +99,17 @@ sig OperatorName {}
     line classification reading does. */
 one sig OffManifest {}
 
+/** RejectionReason — WHY material was refused at the dock (DT-022 TQ-2, MP 2026-08-07:
+    Option (b) — a SINGLE reason per line, with RR_OTHER_MULTIPLE as the general relief
+    valve for mixed/unlisted causes; the free-form clarification rides the line's `sNote`).
+    INERT like sStatedQty — captured evidence for reporting (vendor scorecards, claims);
+    no law reads it. A reason with no rejected quantity is legal-but-meaningless (the
+    inert-evidence posture). Model enum first; promotable to reference data if tenants
+    need extensibility. */
+abstract sig RejectionReason {}
+one sig RR_DAMAGED, RR_QUALITY, RR_PAPERWORK, RR_OVERAGE_REFUSED, RR_OTHER_MULTIPLE
+  extends RejectionReason {}
+
 // The carried-values closure (modeling-conventions §6 — the PDSourceHandle precedent; scope
 // hygiene: these atoms exist only where carried). CarrierReference/BillOfLading/OperatorName
 // appear on records AND on header-occurrence payloads (a refused create legally carries them).
@@ -148,12 +159,17 @@ sig ReceiverState extends Snapshot {
   sStatus:       one  ReceiverStatus,
   sBillOfLading: lone BillOfLading,
   sCarrier:      lone CarrierReference,
-  sOperator:     lone OperatorName
+  sOperator:     lone OperatorName,
+  sInternalNotes: set Note           // INTERNAL notes (DT-022 TQ-7(c) shared mechanism —
+                                     //   settles the D5 sNotes gap): editable at ANY time,
+                                     //   the one deliberate exemption from the header
+                                     //   freeze AND the terminal law; history = the log
 }
 fact ReceiverStateExtensional {
   all disj a, b: ReceiverState |
     a.sStatus != b.sStatus or a.sBillOfLading != b.sBillOfLading
     or a.sCarrier != b.sCarrier or a.sOperator != b.sOperator
+    or a.sInternalNotes != b.sInternalNotes
 }
 // The carrier's typed handles are RECORD-carried → tenancy is guard-side; typing is definitional
 // (the OrderSupplierRefIntegrity precedent).
@@ -177,6 +193,11 @@ sig ReceivingLineState extends Snapshot {
   sReceivedQty:  lone Quantity,      // OUR count of ACCEPTED material (§8.3.5; none = the keyed zero)
   sRejectedQty:  lone Quantity,      // refused at the dock, never born (§8.3.5; present = rejection happened)
   sOffManifest:  lone OffManifest,   // the §8.4.2 operator assertion (exceptional path only)
+  sRejectionReason: lone RejectionReason, // WHY the dock refused (DT-022 TQ-2 — inert
+                                     //   evidence; lands AT Receive with the final counts)
+  sNote:         lone Note,          // the operator's free-form receiving-time clarification
+                                     //   (DT-022 TQ-2 qual. 2 — the shared Note mechanism;
+                                     //   lands AT Receive; frozen with the captured facts)
   sBirthPins:    set  EntityId,      // → InventoryItem: the born items, PINNED at the line's own
                                      //   Receive tick (§8.3.5/§7 note 3: against a log-carried
                                      //   target the log itself expresses the pin — the pinned
@@ -192,7 +213,8 @@ fact ReceivingLineStateExtensional {
     a.sStatus != b.sStatus or a.sExpectedItem != b.sExpectedItem
     or a.sExpectedQty != b.sExpectedQty or a.sStatedQty != b.sStatedQty
     or a.sReceivedQty != b.sReceivedQty or a.sRejectedQty != b.sRejectedQty
-    or a.sOffManifest != b.sOffManifest or a.sBirthPins != b.sBirthPins
+    or a.sOffManifest != b.sOffManifest or a.sRejectionReason != b.sRejectionReason
+    or a.sNote != b.sNote or a.sBirthPins != b.sBirthPins
     or a.sPool != b.sPool or a.sDeliveries != b.sDeliveries or a.sAttributions != b.sAttributions
 }
 // Record-carried refs are TYPED (soft — dangling/cross-Universe allowed; tenancy is guard-side).
@@ -230,6 +252,11 @@ sig UpdateReceiverOcc extends ReceiverHeaderOcc {} { bindings = subject + carrie
     demand-Complete-settles-members shape, same-module); this commit GATES on no child line
     still RL_RECEIVING. Distribution may continue after (lines RL_RECEIVED stay serviceable). */
 sig CompleteReceiverOcc extends rvlog/SubjectOcc {} { bindings = subject }
+/** Annotate — SET the Receiver's INTERNAL notes (any state, including RV_COMPLETE —
+    DT-022 TQ-7(c): internal notes are editable at ANY time, the one deliberate exemption
+    from the header freeze and the terminal law; the payload IS the new note set, history
+    rides the log). */
+sig AnnotateReceiverOcc extends rvlog/SubjectOcc { notes: set Note } { bindings = subject + notes }
 
 // ── the kinds — LINE subject ────────────────────────────────────────────────────────────────────
 /** AddLine — line genesis (S3prep-A): from scratch (blind when no expected qty — the
@@ -273,10 +300,12 @@ sig RemoveAttributionOcc extends LineAttributionOcc {} { bindings = subject + at
 sig ReceiveLineOcc extends rllog/SubjectOcc {
   receivedQty: lone Quantity,               // the ACCEPTED count (none = the keyed zero)
   rejectedQty: lone Quantity,               // refused at the dock (§8.3.5)
+  rejectionReason: lone RejectionReason,    // WHY (DT-022 TQ-2 — with the final counts; inert)
+  note:        lone Note,                   // the operator's clarification (TQ-2 qual. 2; inert)
   pool:        lone EntityId,               // → InventoryPool — the line's pool, minted in this act
   birthPins:   set  EntityId,               // → InventoryItem — the born items (pin ≡ this tick)
   allocation:  EntityId -> lone Quantity    // attribution → actual (caller-supplied split)
-} { bindings = subject + receivedQty + rejectedQty + pool + birthPins + allocation.Quantity + EntityId.allocation }
+} { bindings = subject + receivedQty + rejectedQty + rejectionReason + note + pool + birthPins + allocation.Quantity + EntityId.allocation }
 /** RecordDelivery — the line's own commit closing the distribute C/OP (§8.1.3): after the
     demand-side PD.Create (the caller's first leg), append the PD ref to `sDeliveries` —
     IDEMPOTENT by set semantics (a retry's re-append is a no-op append, never a refusal). */

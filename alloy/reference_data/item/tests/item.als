@@ -35,3 +35,10 @@ check unit_item_eachConfigured {
 check unit_item_toEachIdentity {
   ringAxioms implies all s: UomScheme, amt: Scalar | toEach[s, Each, amt] = amt
 } for 6 but 3 Scalar expect 0
+
+// ── CUT 6 (DT-022 TQ-4 qualification, MP 2026-08-08) ────────────────────────────────────────────
+// An Item may carry the card-issuance minimum default (copy-at-mint with operator override —
+// caller-side; no law reads it). Distinct from the BANNED InventoryItem minimum (§8.6.2(iv)).
+run unit_item_cardMinimumDefault {
+  some i: Item | some i.cardMinimumQuantity
+} for 5 expect 1

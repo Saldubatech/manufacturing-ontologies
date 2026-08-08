@@ -137,6 +137,9 @@ fun updateReceiverViol[o: UpdateReceiverOcc]: set Reason {
   + ((some o.pre and rvPre[o].sStatus != RV_EDITING) => RFrozen else none)
   + carrierTenancyViol[o]
 }
+fun annotateReceiverViol[o: AnnotateReceiverOcc]: set Reason {
+  ((no o.pre) => RReceiverClosed else none)   // any state incl. RV_COMPLETE (TQ-7(c)); the subject must exist
+}
 fun completeReceiverViol[o: CompleteReceiverOcc]: set Reason {
   ((no o.pre) => RReceiverClosed else none)
   + ((some o.pre and rvPre[o].sStatus != RV_EDITING) => RBadState else none)
@@ -214,6 +217,7 @@ fun detachAttributionViol[o: DetachAttributionOcc]: set Reason {
 fact ReceivingAdmissionWitness {
   all o: CreateReceiverOcc     | (o.admission = Accepted iff no createReceiverViol[o])     and (o.admission in Rejected implies o.admission.because = createReceiverViol[o])
   all o: UpdateReceiverOcc     | (o.admission = Accepted iff no updateReceiverViol[o])     and (o.admission in Rejected implies o.admission.because = updateReceiverViol[o])
+  all o: AnnotateReceiverOcc   | (o.admission = Accepted iff no annotateReceiverViol[o])   and (o.admission in Rejected implies o.admission.because = annotateReceiverViol[o])
   all o: CompleteReceiverOcc   | (o.admission = Accepted iff no completeReceiverViol[o])   and (o.admission in Rejected implies o.admission.because = completeReceiverViol[o])
   all o: AddReceivingLineOcc   | (o.admission = Accepted iff no addLineViol[o])            and (o.admission in Rejected implies o.admission.because = addLineViol[o])
   all o: UpdateReceivingLineOcc | (o.admission = Accepted iff no updateLineViol[o])        and (o.admission in Rejected implies o.admission.because = updateLineViol[o])
@@ -233,6 +237,7 @@ pred sameLineCapture[b, a: ReceivingLineState] {
   a.sExpectedItem = b.sExpectedItem and a.sExpectedQty = b.sExpectedQty
   and a.sStatedQty = b.sStatedQty and a.sReceivedQty = b.sReceivedQty
   and a.sRejectedQty = b.sRejectedQty and a.sOffManifest = b.sOffManifest
+  and a.sRejectionReason = b.sRejectionReason and a.sNote = b.sNote
   and a.sBirthPins = b.sBirthPins
 }
 /** sameLineOperational — pool + deliveries + attributions carried over. */
@@ -242,17 +247,33 @@ pred sameLineOperational[b, a: ReceivingLineState] {
 
 fact ReceivingEffectWitness {
   // RECEIVER subject:
-  all o: CreateReceiverOcc + UpdateReceiverOcc | committed[o] implies {
-    rvPost[o].sStatus = RV_EDITING            // Create births EDITING; Update stays inside it (guard)
+  all o: CreateReceiverOcc | committed[o] implies {
+    rvPost[o].sStatus = RV_EDITING
     rvPost[o].sBillOfLading = o.bol           // SET semantics — the payload IS the header
     rvPost[o].sCarrier = o.carrier
     rvPost[o].sOperator = o.operator
+    no rvPost[o].sInternalNotes               // notes start empty (AnnotateReceiver adds them)
+  }
+  all o: UpdateReceiverOcc | committed[o] implies {
+    rvPost[o].sStatus = RV_EDITING            // Update stays inside the window (guard)
+    rvPost[o].sBillOfLading = o.bol           // SET semantics — the payload IS the header
+    rvPost[o].sCarrier = o.carrier
+    rvPost[o].sOperator = o.operator
+    rvPost[o].sInternalNotes = rvPre[o].sInternalNotes   // NOT this kind's facet
+  }
+  all o: AnnotateReceiverOcc | committed[o] implies {     // SET the internal notes (any state — TQ-7(c))
+    rvPost[o].sInternalNotes = o.notes
+    rvPost[o].sStatus = rvPre[o].sStatus
+    rvPost[o].sBillOfLading = rvPre[o].sBillOfLading
+    rvPost[o].sCarrier = rvPre[o].sCarrier
+    rvPost[o].sOperator = rvPre[o].sOperator
   }
   all o: CompleteReceiverOcc | committed[o] implies {
     rvPost[o].sStatus = RV_COMPLETE
     rvPost[o].sBillOfLading = rvPre[o].sBillOfLading
     rvPost[o].sCarrier = rvPre[o].sCarrier
     rvPost[o].sOperator = rvPre[o].sOperator
+    rvPost[o].sInternalNotes = rvPre[o].sInternalNotes
   }
   // LINE subject:
   all o: AddReceivingLineOcc | committed[o] implies {
@@ -260,7 +281,8 @@ fact ReceivingEffectWitness {
     rlPost[o].sExpectedItem = o.item
     rlPost[o].sExpectedQty = o.expectedQty
     no rlPost[o].sStatedQty and no rlPost[o].sReceivedQty and no rlPost[o].sRejectedQty
-    no rlPost[o].sOffManifest and no rlPost[o].sBirthPins and no rlPost[o].sPool
+    no rlPost[o].sOffManifest and no rlPost[o].sRejectionReason and no rlPost[o].sNote
+    no rlPost[o].sBirthPins and no rlPost[o].sPool
     no rlPost[o].sDeliveries
     rlPost[o].sAttributions = o.attribution   // born WITH its attribution when order-connected (§8.3.1)
   }
@@ -272,6 +294,8 @@ fact ReceivingEffectWitness {
     rlPost[o].sReceivedQty = o.receivedQty    // the capture-window running count (authoritative at Receive)
     rlPost[o].sOffManifest = o.offManifest
     rlPost[o].sRejectedQty = rlPre[o].sRejectedQty
+    rlPost[o].sRejectionReason = rlPre[o].sRejectionReason   // land AT Receive (TQ-2), not here
+    rlPost[o].sNote = rlPre[o].sNote
     rlPost[o].sBirthPins = rlPre[o].sBirthPins
     sameLineOperational[rlPre[o], rlPost[o]]
   }
@@ -295,6 +319,8 @@ fact ReceivingEffectWitness {
     rlPost[o].sOffManifest = rlPre[o].sOffManifest
     rlPost[o].sReceivedQty = o.receivedQty    // the FINAL accepted count (genesis births exactly it)
     rlPost[o].sRejectedQty = o.rejectedQty
+    rlPost[o].sRejectionReason = o.rejectionReason   // WHY — with the final counts (TQ-2)
+    rlPost[o].sNote = o.note                         // the operator's clarification (TQ-2)
     rlPost[o].sBirthPins = o.birthPins        // pinned at THIS tick (§7 note; the audit boundary)
     rlPost[o].sPool = o.pool                  // born with the line's act (§8.5.3)
     rlPost[o].sDeliveries = rlPre[o].sDeliveries

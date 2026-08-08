@@ -55,6 +55,17 @@ sig PhysicalLocator {
   bin:      lone Label
 }
 
+// --- Note: an opaque free-text annotation value --------------------------------
+/** Note — an opaque free-text annotation (content is runtime data); a PURE VALUE with no
+    identity of its own (the Quantity posture — DT-022 TQ-7(c), MP ruling 2026-08-08).
+    Entities adopt it by carrying `lone Note` / `set Note` fields; an entity may carry one
+    or MULTIPLE notes, and future note KINDS remain per-adopter extensions. Atoms are
+    NOMINAL: two Note atoms may carry the same runtime text, so there is deliberately no
+    extensional fact. SHARED and no-orphan-EXEMPT (the SupplierReference / DT-004 Q8
+    precedent for shared value sigs — per-consumer orphan facts conflict at the second
+    consumer); roots pin scopes instead. */
+sig Note {}
+
 // A locator names at least one level (it must point somewhere). The full containment
 // chain (a bin sits within a slot within a tier …) is deferred to the facility module.
 fact LocatorNonEmpty {

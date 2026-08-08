@@ -52,7 +52,14 @@ sig ItemSupply extends Scoped {
 sig Item extends Scoped {
   supplies:      set ItemSupply,   // parent → child aggregation (no backref)
   defaultSupply: lone EntityId,    // soft ref → one of this item's ItemSupply
-  uom:           lone UomScheme    // present ⟺ inventory-TRACKED (DT-009); immutable (no mode change)
+  uom:           lone UomScheme,   // present ⟺ inventory-TRACKED (DT-009); immutable (no mode change)
+  cardMinimumQuantity: lone Quantity  // the CARD-ISSUANCE default for a new KanbanCard's
+                                   // printed minimumQuantity (DT-022 TQ-4 qualification, MP
+                                   // 2026-08-08): copied at mint with operator override —
+                                   // caller-side pre-fill, NO law reads it (the card's
+                                   // printed minimum is whatever the mint act says).
+                                   // Distinct from the BANNED InventoryItem minimum
+                                   // (§8.6.2(iv): category-wrong on physical material).
 }
 
 /** inventoryTracked — an Item is inventory-tracked iff it carries a UoM scheme (DT-009). */
