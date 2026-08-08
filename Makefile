@@ -15,7 +15,7 @@ ALLOY_FLAGS ?= -s glucose
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
 
-.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys report report-examples check clean
+.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak report report-examples check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -49,7 +49,7 @@ check-layering:
 	  echo "FAIL: nothing may open the archived legacy carrier (DT-011 — moved to alloy-sample/inventory_item_legacy)"; fail=1; fi; \
 	if grep -rn '^open .*_mock' alloy --include='*.als' | grep -v '/tests/'; then \
 	  echo "FAIL: only test ROOTS may open a module mock (DT-017 — library files open peers' _types only)"; fail=1; fi; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*'); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*'); do \
 	  for m in $$(grep -E '^open [a-z0-9_/]*_mock' "$$f" | awk '{print $$2}' | sed 's|_mock$$||'); do \
 	    if grep -qE "^open $$m"_implementation "$$f"; then \
 	      echo "FAIL: $$f opens both $${m}_mock and $${m}_implementation (DT-017 — meaningless universe)"; fail=1; fi; \
@@ -60,7 +60,7 @@ check-layering:
 ## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch
 check-alloy: $(ALLOY) check-layering
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
@@ -76,7 +76,7 @@ check-affected: $(ALLOY) check-layering
 	if [ -z "$$files" ]; then echo "check-affected: no changed alloy files — nothing to run"; exit 0; fi; \
 	echo "changed:"; for c in $$files; do echo "  $$c"; done; \
 	mkdir -p $(OUT); fail=0; ran=0; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
 	  cone="$$(tools/cone.sh $$f)"; hit=0; \
 	  for c in $$files; do case "$$cone" in *"$$c"*) hit=1;; esac; done; \
 	  [ $$hit -eq 1 ] || continue; ran=$$((ran+1)); echo "== $$f =="; \
@@ -92,7 +92,7 @@ check-affected: $(ALLOY) check-layering
 PAR ?= 4
 check-alloy-par: $(ALLOY) check-layering
 	@rm -rf out/par; mkdir -p out/par; \
-	roots="$$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort)"; \
+	roots="$$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort)"; \
 	n=$$(echo "$$roots" | grep -c .); \
 	echo "$$roots" | ALLOY_JAR=$(ALLOY) ALLOY_FLAGS='$(ALLOY_FLAGS)' xargs -P $(PAR) -n 1 tools/run-root.sh; \
 	logs=$$(ls out/par/*.log 2>/dev/null | grep -c . || echo 0); \
@@ -113,7 +113,7 @@ check-alloy-par: $(ALLOY) check-layering
 ## default are NOT counted — treat warnings as real, silence as advisory only.
 BUDGET ?= 215
 check-budget:
-	@for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	@for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
 	  ones=$$(tools/cone.sh $$f | xargs grep -hE '^one sig' 2>/dev/null | grep -oE 'one sig [A-Za-z0-9_, ]+' | sed 's/one sig //' | tr ',' '\n' | grep -c . || echo 0); \
 	  max=$$(grep -hoE 'for [0-9]+( but [^{]*)?expect' "$$f" | sed 's/expect//' | \
 	    awk -v ones="$$ones" '{ \
@@ -144,7 +144,7 @@ check-examples: $(ALLOY)
 ## run this module's implementation against peers' MOCKS; minutes, run freely while developing)
 check-units: $(ALLOY) check-layering
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path '*/tests/integration/*' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' ! -path '*/tests/integration/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
@@ -156,7 +156,7 @@ check-units: $(ALLOY) check-layering
 ## composed across layers; big, expensive — run at gates, always before push via check-alloy)
 check-integration: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/integration/*.als' ! -path '*/legacy/*' | sort); do \
+	for f in $$(find alloy -path '*/tests/integration/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
@@ -167,7 +167,7 @@ check-integration: $(ALLOY)
 ## test-unit: run only unit_* commands across all test roots
 test-unit: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path '*/tests/integration/*' | sort); do \
+	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' ! -path '*/tests/integration/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) exec $(ALLOY_FLAGS) -c "unit_*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
@@ -182,9 +182,25 @@ test-sys: $(ALLOY)
 	grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
 	if [ $$rc -ne 0 ]; then echo "FAIL: a command did not match its expect"; exit 1; fi
 
+## soak: the SCOPE-DESCENT tier (DT-022 TQ-5 ruling; scaling-outlook to-do #5, built 2026-08-08)
+## — the gate's key laws re-checked at GENEROUS scopes (alloy/soak/tests/*.als; excluded from
+## every regular tier by the '! -path alloy/soak/*' filters above). Hunts counterexamples the
+## dev-loop's census-tuned pins cannot represent (the starved-scope folklore). HOURS-long;
+## run scheduled/overnight, NEVER on the push path — the push gate stays check-alloy.
+## Sequential by design: one JVM at a time gets the machine's full memory.
+soak: $(ALLOY)
+	@mkdir -p $(OUT); fail=0; \
+	for f in $$(find alloy/soak -path '*/tests/*.als' | sort); do \
+	  echo "== $$f =="; \
+	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.soak.log 2>&1 || fail=1; \
+	  grep -iE 'SAT|UNSAT|error|against expectation' out/.soak.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "SOAK FAIL: a command did not match its expect (a law may have a counterexample past the gate scopes)"; exit 1; fi; \
+	echo "OK: soak tier matched every expect"
+
 ## profiles: per gate root, print the adopted modeling profiles (transitive open walk — DT-012)
 profiles:
-	@for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' | sort); do \
+	@for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
 	  seen=""; queue="$$f"; \
 	  while [ -n "$$queue" ]; do \
 	    cur=$$(echo "$$queue" | head -1); queue=$$(echo "$$queue" | tail -n +2); \
