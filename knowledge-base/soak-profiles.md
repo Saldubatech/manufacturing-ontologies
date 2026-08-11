@@ -30,6 +30,7 @@ every domain-law soak run in a universe with that concern sliced out.
 | **Depth vs breadth** | — (a profile split, not a lemma) | freeze/monotone/terminal families: Tick/Snapshot DEEP, entities few; exclusivity/provenance rows: entities BROAD, time shallow | a law's counterexample needs long chains OR many holders, not both |
 | **Arithmetic** | Σ-law family with rich Quantity/Scalar | minimal Quantity/Scalar in structural-law roots | structural counterexamples don't compute |
 | **Dense traces** (CAUTION) | — | `#Tick = #Occurrence`-style packing for OCCURRENCE-indexed laws only | UNSOUND for t-indexed laws (`all t: Tick …` — lattice rows, terminal closures: idle ticks are where LOCF drift would show). Per-family only; never global |
+| **Inert values** (Note-class) | — (definitional: the laws read only presence/equality — no field, no inter-atom relation, no content) | `2 Note` everywhere a note-bearing cone is checked (1 to exist + 1 to witness replace-with-different; add/remove need only 1); NEVER default-scoped | a counterexample can differ in a note field in exactly three ways — add, remove, replace — and 2 atoms exhibit all three. Structural companion (2026-08-10): `Note` lives in its own `shared/note` module opened only by consumers, so non-note cones carry ZERO Note atoms instead of the default scope |
 
 ## v1 cost data (the evidence for the retune)
 

@@ -57,6 +57,7 @@ open meta/subject_log/subject_log[Receiver, ReceiverState] as rvlog          // 
 open meta/subject_log/subject_log[ReceivingLine, ReceivingLineState] as rllog // the LINE log spine
 open meta/subject_log/subject_log[OrderAttribution, AttributionState] as oalog // the ATTRIBUTION log spine
 open shared/values                                   // Quantity, PhysicalLocator
+open shared/note                                     // Note (sNote/sInternalNotes — record-carried; pin `2 Note`)
 open meta/keyed_value_algebra/keyed_order            // lte — the Σ-invariant comparisons (§8.3.3 d)
 open reference_data/item/item_types                  // Item — the expected-item target (TYPES only)
 open reference_data/business_affiliate/business_affiliate_types  // BusinessRole(CARRIER) + BusinessAffiliate — the carrier handles
@@ -301,11 +302,11 @@ sig ReceiveLineOcc extends rllog/SubjectOcc {
   receivedQty: lone Quantity,               // the ACCEPTED count (none = the keyed zero)
   rejectedQty: lone Quantity,               // refused at the dock (§8.3.5)
   rejectionReason: lone RejectionReason,    // WHY (DT-022 TQ-2 — with the final counts; inert)
-  note:        lone Note,                   // the operator's clarification (TQ-2 qual. 2; inert)
+  lineNote:    lone Note,                   // the operator's clarification (TQ-2 qual. 2; inert)
   pool:        lone EntityId,               // → InventoryPool — the line's pool, minted in this act
   birthPins:   set  EntityId,               // → InventoryItem — the born items (pin ≡ this tick)
   allocation:  EntityId -> lone Quantity    // attribution → actual (caller-supplied split)
-} { bindings = subject + receivedQty + rejectedQty + rejectionReason + note + pool + birthPins + allocation.Quantity + EntityId.allocation }
+} { bindings = subject + receivedQty + rejectedQty + rejectionReason + lineNote + pool + birthPins + allocation.Quantity + EntityId.allocation }
 /** RecordDelivery — the line's own commit closing the distribute C/OP (§8.1.3): after the
     demand-side PD.Create (the caller's first leg), append the PD ref to `sDeliveries` —
     IDEMPOTENT by set semantics (a retry's re-append is a no-op append, never a refusal). */

@@ -31,7 +31,7 @@ run int_ord_loads {
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      9 Tick, 10 EntityId, 10 Snapshot expect 1
+      9 Tick, 10 EntityId, 10 Snapshot, 2 Note expect 1
 
 // ── the O2 Submit arc on the REAL demand log: demand Create → Release (real chaining/effects),
 // order AddLine attaches the RELEASED item, demand StartProduction (the saga's first leg — its
@@ -52,7 +52,7 @@ run int_ord_submitArc {
   }
 } for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      12 Tick, 12 EntityId, 12 Snapshot expect 1
+      12 Tick, 12 EntityId, 12 Snapshot, 2 Note expect 1
 
 // ── the cancel arc on the real stack: the hold dies with the order; the item is STILL RELEASED
 // on its own (sovereign) log and back in the queue. ─────────────────────────────────────────────
@@ -66,13 +66,13 @@ run int_ord_cancelReturnsToQueue {
   }
 } for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      10 Tick, 11 EntityId, 11 Snapshot expect 1
+      10 Tick, 11 EntityId, 11 Snapshot, 2 Note expect 1
 
 // ── law re-discharge on the composed stack ──────────────────────────────────────────────────────
 assert int_ord_contract_demandIndivisible { demandIndivisible }
 check int_ord_contract_demandIndivisible for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station expect 0
+      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 2 Note expect 0
 
 assert int_ord_contract_frozenOutsideDraft { frozenOutsideDraft }
 check int_ord_contract_frozenOutsideDraft for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station expect 0
+      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 2 Note expect 0

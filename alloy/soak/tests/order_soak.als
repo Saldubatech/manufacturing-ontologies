@@ -19,19 +19,19 @@ open reference_data/staff/staff_mock
 assert soak_ord_frozenOutsideDraft { frozenOutsideDraft }
 check soak_ord_frozenOutsideDraft for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 Order, 4 OrderLine, 3 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      2 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot expect 0
+      2 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
 
 assert soak_ord_supplierBindingFrozen { supplierBindingFrozen }
 check soak_ord_supplierBindingFrozen for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 Order, 4 OrderLine, 3 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      2 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot expect 0
+      2 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
 
 assert soak_ord_headerDetailFrozen { headerDetailFrozen }
 check soak_ord_headerDetailFrozen for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 Order, 3 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      3 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 3 Note expect 0
+      3 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
 
 assert soak_ord_terminalClosure { orderTerminalClosure }
 check soak_ord_terminalClosure for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 Order, 4 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      2 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot expect 0
+      2 StaffMember, 11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0

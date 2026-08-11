@@ -46,6 +46,7 @@ open meta/kernel                                     // Scoped, EntityId, resolv
 open meta/subject_log/subject_log[Order, OrderState] as olog          // the ORDER log spine
 open meta/subject_log/subject_log[OrderLine, OrderLineState] as llog  // the LINE log spine
 open shared/values                                   // Quantity (+ keyed-map add/negate)
+open shared/note                                     // Note (sNotes/sInternalNotes — record-carried; pin `2 Note`)
 open operations/demand/demand_types                  // DemandItem + statuses + reads (TYPES only)
 open reference_data/item/item_types                  // Item + ItemDescriptorPin (§7 pin re-basing; previously transitive via demand_types)
 open reference_data/business_affiliate/business_affiliate_types      // SupplierReference [F8/O6]

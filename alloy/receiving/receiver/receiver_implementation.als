@@ -320,7 +320,7 @@ fact ReceivingEffectWitness {
     rlPost[o].sReceivedQty = o.receivedQty    // the FINAL accepted count (genesis births exactly it)
     rlPost[o].sRejectedQty = o.rejectedQty
     rlPost[o].sRejectionReason = o.rejectionReason   // WHY — with the final counts (TQ-2)
-    rlPost[o].sNote = o.note                         // the operator's clarification (TQ-2)
+    rlPost[o].sNote = o.lineNote                         // the operator's clarification (TQ-2)
     rlPost[o].sBirthPins = o.birthPins        // pinned at THIS tick (§7 note; the audit boundary)
     rlPost[o].sPool = o.pool                  // born with the line's act (§8.5.3)
     rlPost[o].sDeliveries = rlPre[o].sDeliveries

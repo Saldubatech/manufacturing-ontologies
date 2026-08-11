@@ -37,7 +37,7 @@ run int_rcv_loads {
       1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
       0 CardCycle, 0 KanbanCard, 1 InventoryItem, 1 InventoryPool, 0 Station,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
-      12 EntityId, 8 Tick, 10 Snapshot, 3 Quantity expect 1
+      12 EntityId, 8 Tick, 10 Snapshot, 3 Quantity, 2 Note expect 1
 
 // The composed three-holder arc (the S5 scenario as a REAL-machinery witness): the genesis
 // premise HOLDS with a line holding its pool, a LIVE cycle holding a second, and a LIVE
@@ -54,4 +54,4 @@ run int_rcv_latticeCompanion {
       1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 1 DemandItem, 0 ProductionDelivery,
       1 CardCycle, 1 KanbanCard, 1 InventoryItem, 3 InventoryPool, 1 Station,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
-      16 EntityId, 12 Tick, 14 Snapshot, 4 Quantity, 12 Occurrence expect 1
+      16 EntityId, 12 Tick, 14 Snapshot, 4 Quantity, 12 Occurrence, 2 Note expect 1

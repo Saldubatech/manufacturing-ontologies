@@ -12,9 +12,17 @@ module meta/occurrence/occurrence
 
 open meta/model_time/model_time   // Tick, precedes, follows, notAfter
 
-/** Occurrence — something that happens: a model-time (causal) position in the log. */
+/** Occurrence — something that happens: a model-time (causal) position in the log, with an
+    optional free-text annotation of the act itself. */
 abstract sig Occurrence {
-  tick: one Tick         // model time — WHERE in the causal order
+  tick: one Tick,        // model time — WHERE in the causal order
+  note: lone String      // occurrence-level annotation (MP unification ruling, 2026-08-10):
+                         //   an INERT, uninterpreted payload — no law may read its content.
+                         //   Built-in String: ZERO atoms in any command without string
+                         //   literals, so the whole log cone carries the seat for free.
+                         //   Immutable with the occurrence (acts never change after commit).
+                         //   Distinct from RECORD-carried notes (shared/note's `Note` atoms
+                         //   on state records — LOCF-read, freeze-governed).
 }
 
 /** Ticks linearize occurrences — at most one occurrence per tick — so the causal order is a strict
