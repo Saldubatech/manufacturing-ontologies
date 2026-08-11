@@ -41,6 +41,12 @@ breadth simultaneously. Mock-composition roots are an order of magnitude cheaper
 implementation roots at comparable entity census (translation dominates: >1h CNF
 translation observed on the implementation cones).
 
+**REALIZED at DT-023 cut 7c (2026-08-11):** the lemma-then-slice shape is now BUILT for
+reference data — `soak/tests/reference_data_dynamics.als` is the version-dynamics LEMMA
+root (lifecycle shapes wide, current-uniqueness, pinned-vs-floating divergence), and all
+six operational soak roots carry the CREATED-ONLY slice fact (each reference-data subject
+= exactly its Create) with the lemma as justification.
+
 **DT-023 cut 7a data point — census growth can DEMOTE a unit-tier check to soak-class:**
 `unit_rcv_contract_linePoolExclusive` (the §8.5.3 lattice row at UNIT scopes) solved in
 minutes at cuts 5/6 but blew past 9h CPU once the item log (`ItemOcc`/`ItemState`) rode
@@ -58,3 +64,13 @@ widen the reference-data cones.
   OVERNIGHT (+1-notch sliced census — the schedulable default). `make soak` should gain
   a PAR fan-out like the gate (the v1 sequential form wasted the idle machine — fixed
   by hand mid-run, 2026-08-08).
+
+**A KILLED gate has performed NO verification (2026-08-11 lesson):** `check-alloy-par`'s
+per-root "== X done" lines prove nothing — `run-root.sh` logs "done" on PARSE FAILURES
+too (a root with a syntax error produces a log with zero solver verdicts and a clean-
+looking done line). The gate's verdict lives ONLY in its final scan loop (missing-log
+count, no-SAT/UNSAT-output, "against expectation", `[main] ERROR`). If a gate is killed
+before that loop, re-run the scan manually over `out/par/*.log`; an interim grep must
+include the parse-failure patterns (`Syntax error`, `[main] ERROR`), not just
+expectation mismatches. (How the 7b `s.supplier.vendorRef` straggler survived one killed
+gate and a five-JVM re-run scored from incomplete patterns.)

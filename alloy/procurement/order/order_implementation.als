@@ -65,11 +65,13 @@ fun supplierRefViol[b: SupplierBinding, tid: EntityId, t: Tick]: set Reason {
   ((some b.vendorPin and b.vendorPin.subject.tenantId != tid) => RForeignRef else none)
   + ((some b.vendorPin and not baLiveAt[b.vendorPin.subject, t]) => RRetiredRef else none)
 }
-/** assigneeRefViol — the assignee handle must resolve IN-TENANT (the supplierRefViol
-    precedent: dangling is LEGAL — a soft ref; typing to StaffMember is definitional,
-    OrderAssigneeRefIntegrity). `tid` is the acting subject's tenant. */
-fun assigneeRefViol[m: lone EntityId, tid: EntityId]: set Reason {
-  (some s: resolve[m] & StaffMember | s.tenantId != tid) => RForeignRef else none
+/** assigneeRefViol — DT-023 cut 7c (the pin form): the assignee PIN must be IN-TENANT
+    (RForeignRef) and its member LIVE at the introducing write (RRetiredRef — the D3
+    pre-Submit new-ref row; an absent assignee stays LEGAL). `tid` is the acting subject's
+    tenant; `t` the write's tick. */
+fun assigneeRefViol[m: lone StaffOcc, tid: EntityId, t: Tick]: set Reason {
+  ((some m and m.subject.tenantId != tid) => RForeignRef else none)
+  + ((some m and not staffLiveAt[m.subject, t]) => RRetiredRef else none)
 }
 /** parentGateViol — the line-mutator preconditions on the PARENT order: it must be live
     (ROrderClosed) and DRAFT (RFrozen — the F5 freeze family). */
@@ -142,7 +144,7 @@ fun cancelOrderViol[o: CancelOrderOcc]: set Reason {
 fun updateOrderDetailsViol[o: UpdateOrderDetailsOcc]: set Reason {
   ((not liveAtOccO[o]) => ROrderClosed else none)
   + ((liveAtOccO[o] and oPre[o].sStatus != OS_DRAFT) => RFrozen else none)   // the F5 family
-  + assigneeRefViol[o.assignee, o.subject.tenantId]
+  + assigneeRefViol[o.assignee, o.subject.tenantId, o.tick]
 }
 fun annotateOrderViol[o: AnnotateOrderOcc]: set Reason {
   ((not startedBeforeO[o] or deletedBeforeO[o]) => ROrderClosed else none)     // any lifecycle state (TQ-7(c): internal notes edit at ANY time), but the subject must exist
@@ -177,6 +179,12 @@ fact BindingPinCurrency {
     pinsCurrentBa[o.supplier.vendorPin, o.tick]
   all o: UpdateSupplierOcc  | (committed[o] and some o.supplier.vendorPin) implies
     pinsCurrentBa[o.supplier.vendorPin, o.tick]
+}
+// DT-023 cut 7c: a committed details write's assignee pin is THEN-CURRENT (floats pre-Submit;
+// the headerDetailFrozen freeze then freezes the pin at Submit).
+fact AssigneePinCurrency {
+  all o: UpdateOrderDetailsOcc | (committed[o] and some o.assignee) implies
+    pinsCurrentStaff[o.assignee, o.tick]
 }
 fun updateLineViol[o: UpdateLineOcc]: set Reason {
   ((not usableLineAtOcc[o]) => RLineClosed else none)

@@ -28,10 +28,10 @@ run int_ii_supplyChainLoads {
     ii.itemPin.subject = i
     // the default supply is VERSION-CARRIED since DT-023 cut 7a: read it off the item's state
     resolve[itemStateAt[i, t].sDefaultSupply] = s
-    some resolve[s.supplier.vendorRef]
+    some s.supplierPin   // the vendor VERSION pin (DT-023 cut 7b — was resolve[s.supplier.vendorRef])
     some o: CreateOcc | committed[o] and o.target = ii
   }
-} for 6 but 3 Scalar, 5 Int, 9 EntityId expect 1
+} for 6 but 3 Scalar, 5 Int, 11 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence expect 1
 
 // ── contract re-discharge on the composed stack (UNSAT = holds with the real lower layer) ───────
 assert int_ii_contract_stateFunction { stateIsFunctionOnceStarted }

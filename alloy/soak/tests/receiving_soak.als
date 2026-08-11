@@ -29,3 +29,13 @@ check soak_rcv_linePoolExclusive for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8
       2 CardCycle, 2 KanbanCard, 2 InventoryItem, 3 InventoryPool, 0 Station,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
       11 Occurrence, 16 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
+
+// CREATED-ONLY SLICE (DT-023 Q-D / DT-024, closing pass 7c): reference-data version
+// dynamics are proven WIDE in soak/tests/reference_data_dynamics — this root reads
+// reference data only through the pin/liveness API, so each subject carries exactly its
+// Create and no Update/Delete atoms inflate the census (the lemma-then-slice retune).
+fact CreatedOnlySlice {
+  ItemOcc in CreateItemOcc
+  BaOcc in CreateBaOcc
+  StaffOcc in CreateStaffOcc
+}

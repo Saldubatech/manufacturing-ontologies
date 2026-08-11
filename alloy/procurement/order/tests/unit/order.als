@@ -486,12 +486,13 @@ check unit_ord_contract_priorityDefault for 5 but 5 Int, 3 Scalar, 5 State, 8 Si
       2 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       6 EntityId, 6 Tick, 6 Snapshot, 2 Note expect 0
 
-// SET the DRAFT-mutable cluster: priority + assignee + vendor notes land on the record.
+// SET the DRAFT-mutable cluster: priority + assignee PIN + vendor notes land on the record
+// (DT-023 cut 7c: the assignee is a staff VERSION pin — current-and-Live at the write).
 run unit_ord_detailsSetWhileDraft {
-  some o: UpdateOrderDetailsOcc, m: StaffMember | {
+  some o: UpdateOrderDetailsOcc | {
     committed[o]
     o.priority = OP_HIGH
-    resolve[o.assignee] = m
+    some o.assignee and staffPinnableAt[o.assignee, o.tick]
     some o.notes
     oPost[o].sPriority = OP_HIGH
     oPost[o].sAssignee = o.assignee
@@ -499,7 +500,7 @@ run unit_ord_detailsSetWhileDraft {
   }
 } for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      1 StaffMember, 8 EntityId, 6 Tick, 6 Snapshot, 2 Note expect 1
+      1 StaffMember, 8 EntityId, 6 Tick, 6 Snapshot, 5 Occurrence, 2 Note expect 1
 
 // The freeze refusal: details cannot change once SUBMITTED — exactly RFrozen.
 run unit_ord_detailsFrozenRefused {
@@ -512,17 +513,30 @@ run unit_ord_detailsFrozenRefused {
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       10 EntityId, 9 Tick, 10 Snapshot, 2 Note expect 1
 
-// A foreign assignee refuses precisely: exactly RForeignRef (cross-tenant StaffMember).
+// A foreign assignee refuses precisely: exactly RForeignRef (a cross-tenant staff PIN —
+// the cut-7c form of the cross-tenant soft ref).
 run unit_ord_assigneeForeignRefused {
-  some o: UpdateOrderDetailsOcc, m: StaffMember | {
+  some o: UpdateOrderDetailsOcc | {
     o.admission in Rejected
     o.admission.because = RForeignRef
-    resolve[o.assignee] = m
-    m.tenantId != o.subject.tenantId
+    some o.assignee and o.assignee.subject.tenantId != o.subject.tenantId
   }
 } for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      2 StaffMember, 9 EntityId, 6 Tick, 6 Snapshot, 2 Note expect 1
+      2 StaffMember, 9 EntityId, 6 Tick, 6 Snapshot, 5 Occurrence, 2 Note expect 1
+
+// DT-023 cut 7c (the D3 pre-Submit new-ref row): assigning a RETIRED staff member refuses
+// with exactly RRetiredRef. Fixture: staff Create → staff Delete → details write refused.
+run unit_ord_assigneeRetiredRefused {
+  some o: UpdateOrderDetailsOcc, d: DeleteStaffOcc | {
+    committed[d]
+    some o.assignee and o.assignee.subject = d.subject
+    o.admission in Rejected
+    o.admission.because = RRetiredRef
+  }
+} for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      1 StaffMember, 9 EntityId, 7 Tick, 6 Snapshot, 6 Occurrence, 2 Note expect 1
 
 // INTERNAL notes are editable at ANY time (TQ-7(c)): Annotate commits on a CLOSED order and
 // CHANGES the internal note set — the deliberate exemption, witnessed not legislated.

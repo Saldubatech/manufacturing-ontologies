@@ -50,7 +50,7 @@ open shared/note                                     // Note (sNotes/sInternalNo
 open operations/demand/demand_types                  // DemandItem + statuses + reads (TYPES only)
 open reference_data/item/item_types                  // Item + ItemOcc pins + itemLiveAt (DT-023; previously transitive via demand_types)
 open reference_data/business_affiliate/business_affiliate_types      // BaOcc + BusinessRole — the binding's vendor PIN + role selector (DT-023 cut 7b; was SupplierReference [F8/O6])
-open reference_data/staff/staff_types                // StaffMember (sAssignee target — DT-022 TQ-7(b))
+open reference_data/staff/staff_types                // StaffOcc — the assignee VERSION PIN (DT-023 cut 7c; was the sAssignee soft ref, DT-022 TQ-7(b))
 
 // ── the status vocabulary ───────────────────────────────────────────────────────────────────────
 /** OrderStatus — the FOUR stored states (O7); CONFIRMED and RECEIVING are DERIVED READINGS over
@@ -160,7 +160,10 @@ sig OrderState extends Snapshot {
   sStatus:   one OrderStatus,     // where the document stands (F5/O7: the stored core)
   sSupplier: one SupplierBinding, // the F8 binding (frozen at Submit)
   sPriority: one OrderPriority,   // vendor-expediting priority (TQ-7(a)); OP_UNDEFINED default; frozen at Submit
-  sAssignee: lone EntityId,       // → StaffMember: the accountable owner (TQ-7(b)); frozen at Submit
+  sAssignee: lone StaffOcc,       // → StaffMember VERSION PIN (DT-023 cut 7c; was a soft
+                                  //   EntityId ref): the accountable owner (TQ-7(b));
+                                  //   floats pre-Submit (each details write re-pins
+                                  //   current); frozen at Submit (headerDetailFrozen)
   sNotes:    lone Note,           // procurement ↔ VENDOR communication (TQ-7(c)); frozen at Submit
   sInternalNotes: set Note        // INTERNAL notes (TQ-7(c)): editable at ANY time — the one
                                   //   deliberate exemption from every freeze; history = the log
@@ -170,11 +173,8 @@ fact OrderStateExtensional {
     a.sStatus != b.sStatus or a.sSupplier != b.sSupplier or a.sPriority != b.sPriority
     or a.sAssignee != b.sAssignee or a.sNotes != b.sNotes or a.sInternalNotes != b.sInternalNotes
 }
-// The assignee is RECORD-carried → tenancy is guard-side (RForeignRef); typing is definitional
-// (the OrderSupplierRefIntegrity precedent). Dangling stays legal (soft ref).
-fact OrderAssigneeRefIntegrity {
-  all s: OrderState | (let m = resolve[s.sAssignee] | some m implies m in StaffMember)
-}
+// (OrderAssigneeRefIntegrity DISSOLVED at DT-023 cut 7c: the assignee is a TYPED staff
+// version pin — soft-ref typing is unrepresentable; tenancy stays guard-side.)
 // (OrderSupplierRefIntegrity DISSOLVED at DT-023 cut 7b: the binding's vendor link is a TYPED
 // pin + selector — soft-ref typing clauses are unrepresentable; agreement is the definitional
 // SupplierBindingPinAgrees above; tenancy stays guard-side — supplierRefViol.)
@@ -221,7 +221,7 @@ sig CancelOrderOcc extends olog/SubjectOcc {} { bindings = subject }
     cut 6): the payload IS the new cluster (the Receiver-header SET precedent — absent
     priority ⇒ OP_UNDEFINED, absent assignee/notes ⇒ cleared). DRAFT-only (the F5 family). */
 sig UpdateOrderDetailsOcc extends olog/SubjectOcc {
-  priority: lone OrderPriority, assignee: lone EntityId, notes: lone Note
+  priority: lone OrderPriority, assignee: lone StaffOcc, notes: lone Note
 } { bindings = subject + priority + assignee + notes }
 /** Annotate — SET the order's INTERNAL notes (any live-or-terminal state — TQ-7(c):
     editable at ANY time; the payload IS the new note set, so add/edit/remove are all this

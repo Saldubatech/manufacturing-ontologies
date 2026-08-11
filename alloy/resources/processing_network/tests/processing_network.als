@@ -28,3 +28,19 @@ run unit_pnet_selfLoopImpossible {
 run unit_pnet_crossTenantLoopImpossible {
   some l: Loop | l.source.tenantId != l.tenantId or l.sink.tenantId != l.tenantId
 } for 4 expect 0
+
+// ── DT-023 cut 7c: the retirement LATCH (own atoms — R2 structural independence) ───────────────
+
+// The retirement boundary is expressible: a station live at one tick, retired at a later one
+// — what the (deferred) consumer guards will read at the Loop build-out.
+run unit_pnet_retirementBoundary {
+  some s: Station, t1, t2: Tick {
+    precedes[t1, t2]
+    stationLiveAt[s, t1] and not stationLiveAt[s, t2]
+  }
+} for 4 but 4 Tick expect 1
+
+// An unretired station is live at EVERY tick (the latch's benign default).
+check unit_pnet_unretiredAlwaysLive {
+  all s: Station, t: Tick | no s.retiredAt implies stationLiveAt[s, t]
+} for 4 but 4 Tick expect 0
