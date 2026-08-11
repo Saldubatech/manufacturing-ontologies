@@ -94,11 +94,12 @@ pred startedBeforeOA[o: oalog/SubjectOcc] {
 pred detachedBeforeOA[o: oalog/SubjectOcc] {
   some b: DetachAttributionOcc | committed[b] and b.subject = o.subject and precedes[b.tick, o.tick]
 }
-/** carrierTenancyViol — the resolved carrier handles must be in-tenant (record-carried refs:
-    tenancy is guard-side; the OrderSupplierRefIntegrity note). */
+/** carrierTenancyViol — DT-023 cut 7b (the dissolved-handle form): the carrier PIN must be
+    in-tenant (record-carried — tenancy is guard-side; role/type agreement is definitional,
+    ReceiverCarrierPinAgrees). Deliberately NO RRetiredRef — the carrier is CAPTURE (who
+    physically delivered), the D3 Receiver.sCarrier KEEP row. */
 fun carrierTenancyViol[o: ReceiverHeaderOcc]: set Reason {
-  (((some c: resolve[o.carrier.carrierRef]   & Scoped | c.tenantId != o.subject.tenantId)
-    or (some b: resolve[o.carrier.affiliateRef] & Scoped | b.tenantId != o.subject.tenantId))
+  ((some o.carrierPin and o.carrierPin.subject.tenantId != o.subject.tenantId)
    => RForeignRef else none)
 }
 /** attachSumViol — the §8.3.3(d) Σ-expected clause, CASE-WISE (exact at 0/1 pre-existing
@@ -181,6 +182,12 @@ fun updateLineViol[o: UpdateReceivingLineOcc]: set Reason {
 fact LineExpectedItemPinCurrency {
   all o: AddReceivingLineOcc    | (committed[o] and some o.item) implies pinsCurrentItem[o.item, o.tick]
   all o: UpdateReceivingLineOcc | (committed[o] and some o.item) implies pinsCurrentItem[o.item, o.tick]
+}
+// DT-023 cut 7b: a committed header write's carrier pin is THEN-CURRENT (capture re-pins
+// current; the COMPLETE freeze then freezes the pin with the other captured facts).
+fact CarrierPinCurrency {
+  all o: ReceiverHeaderOcc | (committed[o] and some o.carrierPin) implies
+    pinsCurrentBa[o.carrierPin, o.tick]
 }
 fun appendAttributionViol[o: AppendAttributionOcc]: set Reason {
   ((no o.pre) => RLineClosed else none)
@@ -272,14 +279,16 @@ fact ReceivingEffectWitness {
   all o: CreateReceiverOcc | committed[o] implies {
     rvPost[o].sStatus = RV_EDITING
     rvPost[o].sBillOfLading = o.bol           // SET semantics — the payload IS the header
-    rvPost[o].sCarrier = o.carrier
+    rvPost[o].sCarrierPin  = o.carrierPin
+    rvPost[o].sCarrierRole = o.carrierRole
     rvPost[o].sOperator = o.operator
     no rvPost[o].sInternalNotes               // notes start empty (AnnotateReceiver adds them)
   }
   all o: UpdateReceiverOcc | committed[o] implies {
     rvPost[o].sStatus = RV_EDITING            // Update stays inside the window (guard)
     rvPost[o].sBillOfLading = o.bol           // SET semantics — the payload IS the header
-    rvPost[o].sCarrier = o.carrier
+    rvPost[o].sCarrierPin  = o.carrierPin
+    rvPost[o].sCarrierRole = o.carrierRole
     rvPost[o].sOperator = o.operator
     rvPost[o].sInternalNotes = rvPre[o].sInternalNotes   // NOT this kind's facet
   }
@@ -287,13 +296,15 @@ fact ReceivingEffectWitness {
     rvPost[o].sInternalNotes = o.notes
     rvPost[o].sStatus = rvPre[o].sStatus
     rvPost[o].sBillOfLading = rvPre[o].sBillOfLading
-    rvPost[o].sCarrier = rvPre[o].sCarrier
+    rvPost[o].sCarrierPin  = rvPre[o].sCarrierPin
+    rvPost[o].sCarrierRole = rvPre[o].sCarrierRole
     rvPost[o].sOperator = rvPre[o].sOperator
   }
   all o: CompleteReceiverOcc | committed[o] implies {
     rvPost[o].sStatus = RV_COMPLETE
     rvPost[o].sBillOfLading = rvPre[o].sBillOfLading
-    rvPost[o].sCarrier = rvPre[o].sCarrier
+    rvPost[o].sCarrierPin  = rvPre[o].sCarrierPin
+    rvPost[o].sCarrierRole = rvPre[o].sCarrierRole
     rvPost[o].sOperator = rvPre[o].sOperator
     rvPost[o].sInternalNotes = rvPre[o].sInternalNotes
   }

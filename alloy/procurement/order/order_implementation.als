@@ -56,14 +56,14 @@ fun parentStatusAtOcc[o: llog/SubjectOcc]: lone OrderStatus {
 }
 
 // ── shared guard fragments ──────────────────────────────────────────────────────────────────────
-/** supplierRefViol — the binding's typed handles must resolve IN-TENANT and, for the vendor
-    handle, to a VENDOR role (the PDEV-928 resolution-integrity precedent). Dangling handles are
-    LEGAL (PDEV-241: name-only/unlinked). `tid` is the acting subject's tenant. */
-fun supplierRefViol[b: SupplierBinding, tid: EntityId]: set Reason {
-  ((some r: resolve[b.reference.vendorRef] & BusinessRole |
-      r.tenantId != tid or r.role != VENDOR) => RForeignRef else none)
-  + ((some a: resolve[b.reference.affiliateRef] & BusinessAffiliate | a.tenantId != tid)
-     => RForeignRef else none)
+/** supplierRefViol — DT-023 cut 7b (the dissolved-handle form): the binding's vendor PIN must
+    be IN-TENANT (RForeignRef — role/type agreement is definitional, SupplierBindingPinAgrees)
+    and its affiliate LIVE at the introducing write (RRetiredRef — the C-law: no committed
+    introducing occurrence pins a retired-current target; a name-only/unpinned binding stays
+    LEGAL, PDEV-241). `tid` is the acting subject's tenant; `t` the write's tick. */
+fun supplierRefViol[b: SupplierBinding, tid: EntityId, t: Tick]: set Reason {
+  ((some b.vendorPin and b.vendorPin.subject.tenantId != tid) => RForeignRef else none)
+  + ((some b.vendorPin and not baLiveAt[b.vendorPin.subject, t]) => RRetiredRef else none)
 }
 /** assigneeRefViol — the assignee handle must resolve IN-TENANT (the supplierRefViol
     precedent: dangling is LEGAL — a soft ref; typing to StaffMember is definitional,
@@ -106,12 +106,12 @@ fun attachDemandViol[o: llog/SubjectOcc, m: EntityId]: set Reason {
 // ORDER subject:
 fun createOrderViol[o: CreateOrderOcc]: set Reason {
   (startedBeforeO[o] => ROrderStarted else none)
-  + supplierRefViol[o.supplier, o.subject.tenantId]
+  + supplierRefViol[o.supplier, o.subject.tenantId, o.tick]
 }
 fun updateSupplierViol[o: UpdateSupplierOcc]: set Reason {
   ((not liveAtOccO[o]) => ROrderClosed else none)
   + ((liveAtOccO[o] and oPre[o].sStatus != OS_DRAFT) => RFrozen else none)
-  + supplierRefViol[o.supplier, o.subject.tenantId]
+  + supplierRefViol[o.supplier, o.subject.tenantId, o.tick]
 }
 fun resetToSupplierViol[o: ResetToSupplierOcc]: set Reason {
   ((not liveAtOccO[o]) => ROrderClosed else none)
@@ -122,6 +122,10 @@ fun submitViol[o: SubmitOcc]: set Reason {
   + ((liveAtOccO[o] and oPre[o].sStatus != OS_DRAFT) => RBadState else none)
   + ((liveAtOccO[o] and no liveLinesOf[o.subject, o.tick]) => RNoLines else none)
   + ((liveAtOccO[o] and no oPre[o].sSupplier.name) => RNoSupplier else none)
+  + ((liveAtOccO[o] and some oPre[o].sSupplier.vendorPin
+      and not baLiveAt[oPre[o].sSupplier.vendorPin.subject, o.tick])
+     => RRetiredRef else none)   // DT-023 D3: Submit is the VENDOR commitment point — a draft
+                                 //   against a since-retired vendor must not go out
   + ((liveAtOccO[o] and some d: servicedOf[o.subject, o.tick] | demandStatusAt[d, o.tick] != DS_IN_PROCESS)
      => RDemandIneligible else none)   // C/OP gate: every serviced item's StartProduction (saga's first legs) already committed
 }
@@ -165,6 +169,14 @@ fun addLineViol[o: AddLineOcc]: set Reason {
 fact LinePinCurrency {
   all o: AddLineOcc | (committed[o] and some o.subject.itemPin) implies
     pinsCurrentItem[o.subject.itemPin, o.tick]
+}
+// DT-023 cut 7b: a committed binding write's vendor pin is THEN-CURRENT (Q-A floating during
+// DRAFT — each choose/override re-pins current; the Submit freeze then freezes the pin).
+fact BindingPinCurrency {
+  all o: CreateOrderOcc     | (committed[o] and some o.supplier.vendorPin) implies
+    pinsCurrentBa[o.supplier.vendorPin, o.tick]
+  all o: UpdateSupplierOcc  | (committed[o] and some o.supplier.vendorPin) implies
+    pinsCurrentBa[o.supplier.vendorPin, o.tick]
 }
 fun updateLineViol[o: UpdateLineOcc]: set Reason {
   ((not usableLineAtOcc[o]) => RLineClosed else none)
@@ -277,9 +289,10 @@ fact OrderEffectWitness {
   }
   all o: ResetToSupplierOcc | committed[o] implies {
     oPost[o].sStatus = oPre[o].sStatus
-    oPost[o].sSupplier.name      = oPre[o].sSupplier.name       // F8: overrides drop, the rest carries
-    oPost[o].sSupplier.reference = oPre[o].sSupplier.reference
-    oPost[o].sSupplier.base      = oPre[o].sSupplier.base
+    oPost[o].sSupplier.name       = oPre[o].sSupplier.name      // F8: overrides drop, the rest carries
+    oPost[o].sSupplier.vendorPin  = oPre[o].sSupplier.vendorPin
+    oPost[o].sSupplier.vendorRole = oPre[o].sSupplier.vendorRole
+    oPost[o].sSupplier.base       = oPre[o].sSupplier.base
     no oPost[o].sSupplier.overrides
     sameOrderDetail[oPre[o], oPost[o]]
   }

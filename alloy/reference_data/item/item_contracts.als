@@ -36,19 +36,17 @@ fun itemSuppliesOf[i: Item]: set ItemSupply {
     well-formedness is definitional and rides with the vocabulary (uom.als UomSchemeWF). */
 pred uomSchemesSound { all s: UomScheme | one i: Item | i.uom = s }
 
-// ── C3: supplier references are sound ───────────────────────────────────────────────────────────
-/** Tight by default (modeling-conventions §6): a supplier's vendor ref, when it resolves in
-    scope, is a VENDOR BusinessRole; a resolved affiliate ref is a BusinessAffiliate; and when
-    both resolve, the vendor role belongs to that affiliate. Dangling refs are allowed — the
-    'soft' (cross-Universe) case. (Dissolves into a BA version pin at cut 7b.) */
-pred supplierRefsSound {
-  all s: ItemSupply | let v = resolve[s.supplier.vendorRef] |
-    some v implies (v in BusinessRole and v.role = VENDOR)
-  all s: ItemSupply |
-    let ar = resolve[s.supplier.affiliateRef], vr = resolve[s.supplier.vendorRef] {
-      some ar implies ar in BusinessAffiliate
-      (some vr and some ar) implies vr in ar.roles
-    }
+// ── C3: supplier PINS are sound (DT-023 cut 7b — the dissolved-handle form) ─────────────────────
+/** The supply row's vendor is a BA VERSION PIN + role selector (was the denormalized
+    SupplierReference handle): a selector requires its pin; a pin is in-tenant; when the
+    selector is present it is a VENDOR role of the PINNED version. Typed pins cannot dangle —
+    the former soft-ref soundness clauses are unrepresentable. */
+pred supplierPinsSound {
+  all s: ItemSupply {
+    some s.supplierRole implies some s.supplierPin
+    some s.supplierPin implies s.supplierPin.subject.tenantId = s.tenantId
+    some s.supplierRole implies roleSelectorAgrees[s.supplierPin, s.supplierRole, VENDOR]
+  }
 }
 
 // ── C4: the lifecycle shape (DT-023 R1 — theorem of guards + effects) ──────────────────────────
@@ -58,7 +56,7 @@ pred supplierRefsSound {
 pred itemLifecycleShape {
   all o: ItemOcc | committed[o] implies {
     ((no ilog/priorOn[o]) iff o in CreateItemOcc)
-    (some ilog/priorOn[o] implies ilog/priorOn[o].post.sStatus = RD_LIVE)
+    (some ilog/priorOn[o] implies (ilog/priorOn[o].post & ItemState).sStatus = RD_LIVE)
   }
 }
 
@@ -69,6 +67,6 @@ pred itemLogChained { ilog/chained }
 // ── the promise ──────────────────────────────────────────────────────────────────────────────────
 /** guarantees — the module's full promise: the conjunction of the published laws. */
 pred guarantees {
-  supplyOwnership and uomSchemesSound and supplierRefsSound
+  supplyOwnership and uomSchemesSound and supplierPinsSound
   and itemLifecycleShape and itemLogChained
 }

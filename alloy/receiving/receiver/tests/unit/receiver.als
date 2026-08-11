@@ -127,6 +127,22 @@ run unit_rcv_createEditing {
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
       7 EntityId, 2 Note expect 1
 
+// DT-023 cut 7b: the header captures a PINNED carrier — pin + CARRIER role selector, the pin
+// current-and-Live at capture (CarrierPinCurrency + ReceiverCarrierPinAgrees jointly
+// satisfiable). Fixture: reference-data-first — the BA Create precedes the receiver Create.
+run unit_rcv_carrierPinnedCapture {
+  some o: CreateReceiverOcc | {
+    committed[o]
+    some o.carrierPin and some o.carrierRole
+    baPinnableAt[o.carrierPin, o.tick]
+    receiverStateAt[o.subject, o.tick].sCarrierRole = o.carrierRole
+  }
+} for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 0 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
+      1 BusinessAffiliate, 1 BusinessRole, 9 EntityId, 5 Tick, 5 Snapshot, 5 Occurrence, 2 Note expect 1
+
 // S3prep-A (from scratch): a blind line — no order linkage, no expectation; the BLIND and
 // Undetermined readings hold (the benign, manifest-backed default — §8.4.2).
 run unit_rcv_addLineBlind {
@@ -228,7 +244,7 @@ run unit_rcv_poolInUseRefused {
 run unit_rcv_blindRetiredItemRefused {
   some o: AddReceivingLineOcc, c: CreateItemOcc, d: DeleteItemOcc | {
     committed[c] and committed[d]
-    c.subject = d.subject and d.post.sStatus = RD_RETIRED
+    c.subject = d.subject and (d.post & ItemState).sStatus = RD_RETIRED
     no o.attribution and o.item = d
     itemStateAt[d.subject, o.tick].sStatus = RD_RETIRED
     receiverStatusAt[parentReceiverOf[o.subject], o.tick] = RV_EDITING

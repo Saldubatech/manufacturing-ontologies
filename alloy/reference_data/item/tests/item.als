@@ -89,3 +89,27 @@ run unit_item_pinSurvivesRetirement {
     some p.post
   }
 } for 6 but 5 Tick, 4 Snapshot, 3 Occurrence expect 1
+
+// ── DT-023 cut 7b: the supply rows' vendor PIN (handle dissolution) ────────────────────────────
+
+// A committed Create carries a vendor-pinned, role-selected supply row; the pin is current
+// and Live at the write (the currency fact + supplierPinsSound jointly satisfiable).
+// Fixture: reference-data-first — the BA Create precedes the item Create.
+run unit_item_supplyVendorPinned {
+  some o: CreateItemOcc, s: o.supplies {
+    committed[o]
+    some s.supplierPin and some s.supplierRole
+    baPinnableAt[s.supplierPin, o.tick]
+  }
+} for 6 but 5 Tick, 4 Snapshot, 4 Occurrence expect 1
+
+// Reason-precise refusal (the D3 new-supply-row gate, model-realized at 7b): a write
+// INTRODUCING a row pinned to a RETIRED affiliate refuses with exactly RRetiredRef.
+// Fixture: BA Create → BA Delete → item Create carrying the pin.
+run unit_item_supplyRetiredVendorRefused {
+  some o: CreateItemOcc, s: o.supplies, d: DeleteBaOcc {
+    committed[d]
+    some s.supplierPin and s.supplierPin.subject = d.subject
+    o.admission in Rejected and o.admission.because = RRetiredRef
+  }
+} for 6 but 6 Tick, 5 Snapshot, 4 Occurrence expect 1

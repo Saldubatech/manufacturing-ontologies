@@ -33,7 +33,7 @@ open meta/subject_log/subject_log[Item, ItemState] as ilog   // the log SPINE (D
 open reference_data/shared/lifecycle // RdStatus (RD_LIVE/RD_RETIRED) + RRetiredRef (DT-023)
 open shared/values                   // Quantity, Money, Unit
 open reference_data/item/uom         // UomScheme, Each, toEach, units (internal vocabulary, DT-009)
-open reference_data/business_affiliate/business_affiliate_types   // SupplierReference (ItemSupply field type; dissolves into a BA pin at cut 7b)
+open reference_data/business_affiliate/business_affiliate_types   // BaOcc + BusinessRole — the supply rows' vendor PIN + role selector (DT-023 cut 7b)
 
 // ── supply sources ───────────────────────────────────────────────────────────────────────────────
 /** OrderMethod — how an item is ordered from a supplier. */
@@ -46,7 +46,10 @@ enum OrderMethod {
     a supply is replacing its row in the next ItemState — and membership is version-carried
     (`ItemState.sSupplies`). Keeps its own eId (the default-supply target). */
 sig ItemSupply extends Scoped {
-  supplier:        one SupplierReference,
+  supplierPin:     lone BaOcc,          // → BusinessAffiliate VERSION PIN (DT-023 cut 7b; was
+                                        //   the denormalized SupplierReference handle) — absent
+                                        //   = an unlinked supply row
+  supplierRole:    lone BusinessRole,   // the VENDOR role selector within the pinned version
   orderMethod:     lone OrderMethod,
   orderQuantity:   lone Quantity,
   unitCost:        lone Money,
@@ -61,17 +64,14 @@ sig Item extends Scoped {
   uom: lone UomScheme   // present ⟺ inventory-TRACKED (DT-009); immutable (no mode change)
 }
 fact ItemRefs { all i: Item | no i.dataRefs }
-fact ItemSupplyRefs {
-  all s: ItemSupply | s.dataRefs = s.supplier.vendorRef + s.supplier.affiliateRef
-}
+// The supply's vendor is a typed PIN since cut 7b — no soft EntityId refs remain.
+fact ItemSupplyRefs { all s: ItemSupply | no s.dataRefs }
 
 /** inventoryTracked — an Item is inventory-tracked iff it carries a UoM scheme (DT-009). */
 pred inventoryTracked[i: Item] { some i.uom }
 
-/** itemCarriedSupplierRefs — the SupplierReference atoms THIS module carries (for root-side
-    closure facts — modeling-conventions §6, handles; unchanged by the cut-7a log conversion:
-    supply rows still embed the handle until the 7b dissolution). */
-fun itemCarriedSupplierRefs: set SupplierReference { ItemSupply.supplier }
+// (`itemCarriedSupplierRefs` — the SupplierReference closure export — DIED at cut 7b with the
+// handle itself: pins are typed occurrence references, no orphan-closure obligation exists.)
 
 // ── the state record ────────────────────────────────────────────────────────────────────────────
 /** ItemState — one moment's versioned payload of an Item (a value; extensional): the
@@ -131,4 +131,4 @@ pred pinsCurrentItem[p: ItemOcc, t: Tick] { p = itemVersionAt[p.subject, t] }
 /** itemPinnableAt — the D2 guard in one read: `p` is current at `t` AND its version is
     Live — the version a committed introducing occurrence may pin; anything else refuses
     with `RRetiredRef` (retired-current) or is unrepresentable (stale pin). */
-pred itemPinnableAt[p: ItemOcc, t: Tick] { pinsCurrentItem[p, t] and p.post.sStatus = RD_LIVE }
+pred itemPinnableAt[p: ItemOcc, t: Tick] { pinsCurrentItem[p, t] and (p.post & ItemState).sStatus = RD_LIVE }

@@ -7,10 +7,8 @@ open resources/kanban_card/kanban_card_implementation        // REAL — and kan
 open reference_data/item/item_mock                           // solver budget: the arc reads no item/station
 open resources/processing_network/processing_network_mock    //   machinery (lean-root discipline)
 
-// SupplierReference CLOSURE (modeling-conventions §6, handles): this cone carries the shared
-// handle through item AND (types-transitively) the order module's bindings; tie it to both
-// carrier sets so universes stay tight (the demand-integration precedent, one carrier wider).
-fact SupplierReferenceClosed { SupplierReference = itemCarriedSupplierRefs + orderCarriedSupplierRefs }
+// (The SupplierReference CLOSURE fact DIED at DT-023 cut 7b: the handle dissolved into typed
+// BA version pins — no orphan-closure obligation exists for typed occurrence references.)
 
 /*
  * INTEGRATION suite for the receiving module (DT-020 cut 4): the real receiving log composed

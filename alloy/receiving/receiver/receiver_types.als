@@ -78,15 +78,11 @@ one sig RV_EDITING, RV_COMPLETE extends ReceiverStatus {}
 abstract sig ReceivingLineStatus {}
 one sig RL_RECEIVING, RL_RECEIVED, RL_DISTRIBUTED extends ReceivingLineStatus {}
 
-// ── the carrier reference + header values (§8.2 field list) ─────────────────────────────────────
-/** CarrierReference — a denormalized handle (soft EntityId refs) to a CARRIER BusinessRole and
-    its affiliate — the SupplierReference/VENDOR precedent, one role value over. Declared HERE
-    (single consumer today); promotes to business_affiliate_types when a second consumer
-    appears (the shared/ promotion path). */
-sig CarrierReference {
-  carrierRef:   lone EntityId,     // → BusinessRole(CARRIER)
-  affiliateRef: lone EntityId      // → BusinessAffiliate
-}
+// ── the carrier pin + header values (§8.2 field list) ───────────────────────────────────────────
+// (`CarrierReference` — the denormalized handle — DISSOLVED at DT-023 cut 7b into the
+// pin + role-selector pair on the state record and header payloads: sCarrierPin/sCarrierRole
+// and carrierPin/carrierRole. Captured facts freeze the PIN — the carrier as it was at
+// capture; a retired carrier's past deliveries keep reading their pinned version.)
 /** BillOfLading — the shipment document identity (opaque capture value; field-level detail is
     runtime). */
 sig BillOfLading {}
@@ -112,9 +108,9 @@ one sig RR_DAMAGED, RR_QUALITY, RR_PAPERWORK, RR_OVERAGE_REFUSED, RR_OTHER_MULTI
   extends RejectionReason {}
 
 // The carried-values closure (modeling-conventions §6 — the PDSourceHandle precedent; scope
-// hygiene: these atoms exist only where carried). CarrierReference/BillOfLading/OperatorName
-// appear on records AND on header-occurrence payloads (a refused create legally carries them).
-fact NoOrphanCarrierReference { all c: CarrierReference | c in ReceiverState.sCarrier + ReceiverHeaderOcc.carrier }
+// hygiene: these atoms exist only where carried). BillOfLading/OperatorName appear on records
+// AND on header-occurrence payloads (a refused create legally carries them). The carrier's
+// closure fact died with the handle (pins are typed occurrence references).
 fact NoOrphanBillOfLading     { all b: BillOfLading     | b in ReceiverState.sBillOfLading + ReceiverHeaderOcc.bol }
 fact NoOrphanOperatorName     { all n: OperatorName     | n in ReceiverState.sOperator + ReceiverHeaderOcc.operator }
 
@@ -159,7 +155,10 @@ fact OrderAttributionRefIntegrity {
 sig ReceiverState extends Snapshot {
   sStatus:       one  ReceiverStatus,
   sBillOfLading: lone BillOfLading,
-  sCarrier:      lone CarrierReference,
+  sCarrierPin:   lone BaOcc,          // → BusinessAffiliate VERSION PIN (DT-023 cut 7b; was
+                                      //   the CarrierReference handle) — frozen with the
+                                      //   captured facts: the carrier AS IT WAS at capture
+  sCarrierRole:  lone BusinessRole,   // the CARRIER role selector within the pinned version
   sOperator:     lone OperatorName,
   sInternalNotes: set Note           // INTERNAL notes (DT-022 TQ-7(c) shared mechanism —
                                      //   settles the D5 sNotes gap): editable at ANY time,
@@ -169,16 +168,16 @@ sig ReceiverState extends Snapshot {
 fact ReceiverStateExtensional {
   all disj a, b: ReceiverState |
     a.sStatus != b.sStatus or a.sBillOfLading != b.sBillOfLading
-    or a.sCarrier != b.sCarrier or a.sOperator != b.sOperator
+    or a.sCarrierPin != b.sCarrierPin or a.sCarrierRole != b.sCarrierRole
+    or a.sOperator != b.sOperator
     or a.sInternalNotes != b.sInternalNotes
 }
-// The carrier's typed handles are RECORD-carried → tenancy is guard-side; typing is definitional
-// (the OrderSupplierRefIntegrity precedent).
-fact ReceiverCarrierRefIntegrity {
-  all s: ReceiverState {
-    (let c = resolve[s.sCarrier.carrierRef]   | some c implies c in BusinessRole)
-    (let b = resolve[s.sCarrier.affiliateRef] | some b implies b in BusinessAffiliate)
-  }
+// Pin-target agreement is DEFINITIONAL (the SupplierBindingPinAgrees precedent): a present
+// selector requires its pin and is a CARRIER role of the PINNED version. Tenancy stays
+// guard-side (carrierTenancyViol).
+fact ReceiverCarrierPinAgrees {
+  all s: ReceiverState | some s.sCarrierRole implies
+    (some s.sCarrierPin and roleSelectorAgrees[s.sCarrierPin, s.sCarrierRole, CARRIER])
 }
 
 /** ReceivingLineState — one moment's payload of a ReceivingLine (a value; extensional). The
@@ -240,15 +239,16 @@ fact AttributionStateExtensional { all disj a, b: AttributionState | a.sActual !
     payload declared ONCE (SET semantics — the payload IS the new header, the AdjustQty
     precedent; absent = cleared). */
 abstract sig ReceiverHeaderOcc extends rvlog/SubjectOcc {
-  carrier:  lone CarrierReference,
+  carrierPin:  lone BaOcc,           // → BA VERSION PIN (DT-023 cut 7b; was CarrierReference)
+  carrierRole: lone BusinessRole,    // the CARRIER role selector within the pinned version
   bol:      lone BillOfLading,
   operator: lone OperatorName
 }
 /** Create — start a receiving episode (births EDITING; the locator rides the ENTITY —
     immutable, NORMATIVE §8.2.1). */
-sig CreateReceiverOcc extends ReceiverHeaderOcc {} { bindings = subject + carrier + bol + operator }
+sig CreateReceiverOcc extends ReceiverHeaderOcc {} { bindings = subject + carrierPin + carrierRole + bol + operator }
 /** Update — edit the header while capturing (every edit an occurrence — audit free; §8.2). */
-sig UpdateReceiverOcc extends ReceiverHeaderOcc {} { bindings = subject + carrier + bol + operator }
+sig UpdateReceiverOcc extends ReceiverHeaderOcc {} { bindings = subject + carrierPin + carrierRole + bol + operator }
 /** Complete — END CAPTURE by explicit operator act (§8.2): the capture-finalization cascade
     is the CALLER's composite (drive each not-yet-finalized line's Receive first — the
     demand-Complete-settles-members shape, same-module); this commit GATES on no child line

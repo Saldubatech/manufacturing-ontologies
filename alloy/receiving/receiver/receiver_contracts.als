@@ -139,7 +139,8 @@ pred receiverTerminalComplete {
     (notAfter[t1, t2] and receiverStatusAt[r, t1] = RV_COMPLETE) implies {
       receiverStateAt[r, t2].sStatus       = receiverStateAt[r, t1].sStatus
       receiverStateAt[r, t2].sBillOfLading = receiverStateAt[r, t1].sBillOfLading
-      receiverStateAt[r, t2].sCarrier      = receiverStateAt[r, t1].sCarrier
+      receiverStateAt[r, t2].sCarrierPin   = receiverStateAt[r, t1].sCarrierPin
+      receiverStateAt[r, t2].sCarrierRole  = receiverStateAt[r, t1].sCarrierRole
       receiverStateAt[r, t2].sOperator     = receiverStateAt[r, t1].sOperator
     }
 }

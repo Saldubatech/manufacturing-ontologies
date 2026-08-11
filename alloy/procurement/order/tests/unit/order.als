@@ -215,7 +215,8 @@ run unit_ord_resetToSupplier {
     committed[r]
     some oPre[r].sSupplier.overrides
     no oPost[r].sSupplier.overrides
-    oPost[r].sSupplier.reference = oPre[r].sSupplier.reference
+    oPost[r].sSupplier.vendorPin  = oPre[r].sSupplier.vendorPin
+    oPost[r].sSupplier.vendorRole = oPre[r].sSupplier.vendorRole
     oPost[r].sSupplier.name = oPre[r].sSupplier.name
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
@@ -271,15 +272,17 @@ run unit_ord_noSupplierRefused {
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       0 SupplierName, 9 EntityId, 8 Snapshot, 2 Note expect 1
 
-// PDEV-928 resolution integrity: the vendor handle resolves to a role that is NOT a VENDOR.
+// DT-023 cut 7b re-shape of the PDEV-928 resolution-integrity refusal: a non-VENDOR selector
+// became UNREPRESENTABLE (definitional SupplierBindingPinAgrees), so the refusal seat is now
+// TENANCY — a cross-tenant vendor PIN refuses with exactly RForeignRef.
 run unit_ord_foreignRefRefused {
   some o: CreateOrderOcc | {
     refusedAtAdmission[o] and o.admission.because = RForeignRef
-    some r: resolve[o.supplier.reference.vendorRef] & BusinessRole | r.role != VENDOR
+    some o.supplier.vendorPin and o.supplier.vendorPin.subject.tenantId != o.subject.tenantId
   }
 } for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      1 BusinessRole, 1 BusinessAffiliate, 10 EntityId, 2 Note expect 1
+      1 BusinessRole, 1 BusinessAffiliate, 10 EntityId, 6 Tick, 4 Snapshot, 4 Occurrence, 2 Note expect 1
 
 run unit_ord_demandHeldRefused {
   some o: AttachDemandOcc | refusedAtAdmission[o] and o.admission.because = RDemandHeld
@@ -377,16 +380,47 @@ run unit_ord_freeFormLineLegal {
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       8 EntityId, 8 Snapshot, 2 Note expect 1
 
-// PDEV-241: a name-only, UNLINKED supplier is legal from genesis (both handles dangle-free empty).
+// PDEV-241: a name-only, UNLINKED supplier is legal from genesis (no pin, no selector — the
+// cut-7b form of "both handles empty").
 run unit_ord_nameOnlySupplierLegal {
   some o: CreateOrderOcc | {
     committed[o]
     some o.supplier.name
-    no o.supplier.reference.vendorRef and no o.supplier.reference.affiliateRef
+    no o.supplier.vendorPin and no o.supplier.vendorRole
   }
 } for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       0 BusinessRole, 0 BusinessAffiliate, 7 EntityId, 2 Note expect 1
+
+// ── DT-023 cut 7b: the vendor pin at the Submit gate ───────────────────────────────────────────
+
+// Reason-precise refusal (the D3 Submit row): a DRAFT whose pinned vendor retires before
+// Submit refuses with exactly RRetiredRef — a draft against a dropped vendor must not go out.
+// Fixture: BA Create → order Create (pin, name, line) → BA Delete → Submit refused.
+run unit_ord_submitRetiredVendorRefused {
+  some sub: SubmitOcc, d: DeleteBaOcc {
+    committed[d] and precedes[d.tick, sub.tick]
+    oPre[sub].sSupplier.vendorPin.subject = d.subject
+    refusedAtAdmission[sub] and sub.admission.because = RRetiredRef
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      1 BusinessAffiliate, 0 BusinessRole, 12 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence, 2 Note expect 1
+
+// Grandfather (the D3 SUBMITTED+ row): an order SUBMITTED against a live vendor stays legally
+// SUBMITTED after the vendor retires — the frozen binding's PIN keeps serving the agreed
+// version; no reactive law exists.
+run unit_ord_submittedSurvivesVendorRetirement {
+  some sub: SubmitOcc, d: DeleteBaOcc, t: Tick {
+    committed[sub] and committed[d]
+    precedes[sub.tick, d.tick] and precedes[d.tick, t]
+    some oPost[sub].sSupplier.vendorPin
+    orderStatusAt[sub.subject, t] = OS_SUBMITTED
+    not baLiveAt[oPost[sub].sSupplier.vendorPin.subject, t]
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      1 BusinessAffiliate, 0 BusinessRole, 12 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence, 2 Note expect 1
 
 // Over-receipt is admissible (the advisory stance): two postings commit; the line stays open.
 run unit_ord_overReceiptLegal {

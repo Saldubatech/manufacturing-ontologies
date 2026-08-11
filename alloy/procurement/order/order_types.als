@@ -49,7 +49,7 @@ open shared/values                                   // Quantity (+ keyed-map ad
 open shared/note                                     // Note (sNotes/sInternalNotes — record-carried; pin `2 Note`)
 open operations/demand/demand_types                  // DemandItem + statuses + reads (TYPES only)
 open reference_data/item/item_types                  // Item + ItemOcc pins + itemLiveAt (DT-023; previously transitive via demand_types)
-open reference_data/business_affiliate/business_affiliate_types      // SupplierReference [F8/O6]
+open reference_data/business_affiliate/business_affiliate_types      // BaOcc + BusinessRole — the binding's vendor PIN + role selector (DT-023 cut 7b; was SupplierReference [F8/O6])
 open reference_data/staff/staff_types                // StaffMember (sAssignee target — DT-022 TQ-7(b))
 
 // ── the status vocabulary ───────────────────────────────────────────────────────────────────────
@@ -79,20 +79,29 @@ one sig OP_UNDEFINED, OP_LOW, OP_NORMAL, OP_HIGH, OP_URGENT extends OrderPriorit
 sig SupplierName {}
 /** SupplierData — the OPAQUE snapshot/override content (field-level detail is runtime — §4). */
 sig SupplierData {}
-/** SupplierBinding — snapshot + typed reference + per-order overrides (F8): chooseable and
+/** SupplierBinding — snapshot + vendor VERSION PIN + per-order overrides (F8): chooseable and
     overridable while DRAFT; `ResetToSupplier` discards `overrides`; FROZEN at Submit. The
-    reference is the EXISTING SupplierReference value (O6) — both handles lone INSIDE it, so an
-    unlinked, name-only supplier stays legal (PDEV-241). */
+    vendor link is a BA version pin + role selector since DT-023 cut 7b (the SupplierReference
+    handle DISSOLVED) — both lone, so an unlinked, name-only supplier stays legal (PDEV-241).
+    The frozen binding freezes the PIN: what was agreed with the vendor is the pinned version. */
 sig SupplierBinding {
-  name:      lone SupplierName,      // may be the ONLY content (PDEV-241)
-  reference: one  SupplierReference, // typed handles → BusinessRole(VENDOR) + BusinessAffiliate
-  base:      one  SupplierData,      // the snapshot taken at choose time
-  overrides: lone SupplierData       // present iff any field is overridden (F8)
+  name:       lone SupplierName,     // may be the ONLY content (PDEV-241)
+  vendorPin:  lone BaOcc,            // → BusinessAffiliate VERSION PIN (DT-023 R3)
+  vendorRole: lone BusinessRole,     // the VENDOR role selector within the pinned version
+  base:       one  SupplierData,     // the snapshot taken at choose time
+  overrides:  lone SupplierData      // present iff any field is overridden (F8)
 }
 // Value semantics: a binding IS its fields.
 fact SupplierBindingExtensional {
   all disj a, b: SupplierBinding |
-    a.name != b.name or a.reference != b.reference or a.base != b.base or a.overrides != b.overrides
+    a.name != b.name or a.vendorPin != b.vendorPin or a.vendorRole != b.vendorRole
+    or a.base != b.base or a.overrides != b.overrides
+}
+// Pin-target agreement is DEFINITIONAL (the ItemLinePinAgrees precedent): a present selector
+// requires its pin and is a VENDOR role of the PINNED version. Tenancy stays guard-side.
+fact SupplierBindingPinAgrees {
+  all b: SupplierBinding | some b.vendorRole implies
+    (some b.vendorPin and roleSelectorAgrees[b.vendorPin, b.vendorRole, VENDOR])
 }
 
 // ── the item descriptor PIN — SUBSUMED BY THE IDENTITY PIN (DT-023 R3, cut 7a) ──────────────────
@@ -166,14 +175,9 @@ fact OrderStateExtensional {
 fact OrderAssigneeRefIntegrity {
   all s: OrderState | (let m = resolve[s.sAssignee] | some m implies m in StaffMember)
 }
-// The binding's typed handles are RECORD-carried → tenancy/role integrity is guard-side
-// (the DT-015 finding: kernel isolation reaches only entity dataRefs); typing is definitional:
-fact OrderSupplierRefIntegrity {
-  all s: OrderState {
-    (let v = resolve[s.sSupplier.reference.vendorRef]    | some v implies v in BusinessRole)
-    (let a = resolve[s.sSupplier.reference.affiliateRef] | some a implies a in BusinessAffiliate)
-  }
-}
+// (OrderSupplierRefIntegrity DISSOLVED at DT-023 cut 7b: the binding's vendor link is a TYPED
+// pin + selector — soft-ref typing clauses are unrepresentable; agreement is the definitional
+// SupplierBindingPinAgrees above; tenancy stays guard-side — supplierRefViol.)
 
 /** OrderLineState — one moment's mutable payload of an OrderLine (a value; extensional). */
 sig OrderLineState extends Snapshot {
@@ -261,13 +265,9 @@ sig CloseLineOcc extends llog/SubjectOcc {} { bindings = subject }
 /** AnnotateLine — a note on the line (any state). */
 sig AnnotateLineOcc extends llog/SubjectOcc {} { bindings = subject }
 
-/** orderCarriedSupplierRefs — the SupplierReference atoms THIS module carries: record state
-    AND occurrence payloads (a refused create legally carries a binding no record ever held).
-    For root-side closure facts — modeling-conventions §6, handles (MP ruling 2026-07-08). */
-fun orderCarriedSupplierRefs: set SupplierReference {
-  OrderState.sSupplier.reference
-  + CreateOrderOcc.supplier.reference + UpdateSupplierOcc.supplier.reference
-}
+// (`orderCarriedSupplierRefs` — the SupplierReference closure export — DIED at DT-023 cut 7b
+// with the handle itself: the binding's vendor link is a typed pin + selector, no
+// orphan-closure obligation exists.)
 
 /** orderStructuralMutators — the ORDER-subject mutators under the F5 freeze (DRAFT-only).
     AnnotateOrderOcc is deliberately NOT here — internal notes are editable at any time

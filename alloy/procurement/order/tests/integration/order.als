@@ -8,9 +8,8 @@ open reference_data/business_affiliate/business_affiliate_implementation
 open resources/processing_network/processing_network_implementation
 open resources/kanban_card/kanban_card_implementation
 
-// SupplierReference CLOSURE (modeling-conventions §6, handles — MP 2026-07-08): the union of
-// this cone's carriers (item supplies + order bindings, record AND payload).
-fact SupplierReferenceClosed { SupplierReference = itemCarriedSupplierRefs + orderCarriedSupplierRefs }
+// (The SupplierReference CLOSURE fact DIED at DT-023 cut 7b: the handle dissolved into typed
+// BA version pins — no orphan-closure obligation exists for typed occurrence references.)
 
 /*
  * INTEGRATION suite for the order module (DT-018/DT-017): the two order logs composed with the

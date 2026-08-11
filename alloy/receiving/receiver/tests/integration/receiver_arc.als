@@ -7,9 +7,8 @@ open resources/kanban_card/kanban_card_mock                  // lean-root discip
 open reference_data/item/item_mock                           //   cycle/item/station machinery (laws via mocks;
 open resources/processing_network/processing_network_mock    //   the cut-5 solver-budget lesson)
 
-// SupplierReference CLOSURE (modeling-conventions §6, handles): the cone carries the shared
-// handle through item AND (types-transitively) the order module's bindings.
-fact SupplierReferenceClosed { SupplierReference = itemCarriedSupplierRefs + orderCarriedSupplierRefs }
+// (The SupplierReference CLOSURE fact DIED at DT-023 cut 7b: the handle dissolved into typed
+// BA version pins — no orphan-closure obligation exists for typed occurrence references.)
 
 /*
  * DEDICATED integration root (DT-022 TQ-5, cut 6): the receive → PD.Create → RecordDelivery →
