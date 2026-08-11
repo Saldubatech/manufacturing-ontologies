@@ -23,7 +23,7 @@ fact SupplierReferenceClosed { SupplierReference = itemCarriedSupplierRefs }
 run int_dem_loads {
   some o: CreateWithCycleOcc | {
     committed[o]
-    some resolve[o.subject.itemRef] & Item
+    itemLiveAt[o.subject.itemPin.subject, o.tick]
     some resolve[o.subject.stationRef] & Station
     some resolve[o.member] & CardCycle
   }

@@ -31,12 +31,12 @@ run int_rcv_loads {
   some o: ReceiveLineOcc | {
     committed[o] and some o.pool
     some resolve[o.pool] & InventoryPool
-    some resolve[rlPre[o].sExpectedItem] & Item
+    some rlPre[o].sExpectedItem
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
       0 CardCycle, 0 KanbanCard, 1 InventoryItem, 1 InventoryPool, 0 Station,
-      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
       12 EntityId, 8 Tick, 10 Snapshot, 3 Quantity, 2 Note expect 1
 
 // The composed three-holder arc (the S5 scenario as a REAL-machinery witness): the genesis
@@ -53,5 +53,5 @@ run int_rcv_latticeCompanion {
 } for 10 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 1 DemandItem, 0 ProductionDelivery,
       1 CardCycle, 1 KanbanCard, 1 InventoryItem, 3 InventoryPool, 1 Station,
-      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
       16 EntityId, 12 Tick, 14 Snapshot, 4 Quantity, 12 Occurrence, 2 Note expect 1

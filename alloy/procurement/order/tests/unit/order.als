@@ -61,10 +61,9 @@ assert unit_ord_contract_orderTerminalClosure { orderTerminalClosure }
 check unit_ord_contract_orderTerminalClosure for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 2 Note expect 0
 
-assert unit_ord_contract_lineDescriptorFrozen { lineDescriptorFrozen }
-check unit_ord_contract_lineDescriptorFrozen for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      3 ItemDescriptorPin, 2 Note expect 0
+// (unit_ord_contract_lineDescriptorFrozen RETIRED at DT-023 cut 7a: the law dissolved — the
+//  descriptor pin is the line's IDENTITY `itemPin`, immutable by construction. Its spirit is
+//  witnessed by unit_ord_descriptorCapturedFrozen below.)
 
 // ── SAT witnesses — the §2 scenarios ────────────────────────────────────────────────────────────
 // Smoke/genesis: Create births DRAFT.
@@ -117,7 +116,9 @@ run unit_ord_receiptSettles {
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      9 Tick, 10 EntityId, 10 Snapshot, 4 Quantity, 2 Note expect 1
+      10 Tick, 11 EntityId, 11 Snapshot, 4 Quantity, 2 Note, 8 Occurrence expect 1
+      // census +1 at DT-023 cut 7a: the item-log fixture behind the attach agreement pushed
+      // this deep witness past the old default-6 occurrence ceiling
 
 // Scenario 4b (the C/NOTIF MISSED-NOTIFICATION WINDOW — must be LEGAL): an accrual committed,
 // no posting yet, the quiescence law FALSE. The emitter cannot fix it; the listener/probe will.
@@ -182,30 +183,31 @@ run unit_ord_cancelReturnsToQueue {
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       9 Tick, 10 EntityId, 10 Snapshot, 2 Note expect 1
 
-// The pin-freeze arc (MP 2026-07-08; §7 re-basing 2026-08-05): the pinned descriptor lands at genesis and survives a later
-// mutation untouched — the frozen denotation lives on the line's OWN log.
+// The pin-freeze arc (DT-023 cut 7a — the identity pin subsumes the old sItemData handle):
+// the line pins a version at genesis; a LATER item Update moves the current version on —
+// the line's frozen denotation stays at the pinned version (repeatable/auditable vendor
+// commitments with nothing legislated).
 run unit_ord_descriptorCapturedFrozen {
-  some a: AddLineOcc, u: UpdateLineOcc | {
+  some a: AddLineOcc, u: UpdateItemOcc | {
     committed[a] and committed[u]
-    a.subject = u.subject and precedes[a.tick, u.tick]
-    some a.itemData
-    lineStateAt[a.subject, u.tick].sItemData = a.itemData
+    a.subject.itemPin.subject = u.subject and precedes[a.tick, u.tick]
+    a.subject.itemPin != itemVersionAt[u.subject, u.tick]
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      2 ItemDescriptorPin, 9 Tick, 9 EntityId, 9 Snapshot, 3 Quantity, 2 Note expect 1
+      9 Tick, 9 EntityId, 9 Snapshot, 3 Quantity, 2 Note, 7 Occurrence expect 1
 
-// The §7 re-basing witness (2026-08-05): the captured pin DENOTES the line's item
-// (ItemLinePinAgrees — definitional capture; also exercises the pin's direct never-dangling ref).
+// The pin-currency witness (DT-023 Q-A): a committed line genesis pins the item's CURRENT
+// version at its tick (LinePinCurrency in action; the pin's never-dangling typing rides free).
 run unit_ord_pinDenotesLineItem {
   some a: AddLineOcc | {
     committed[a]
-    some a.itemData
-    a.itemData.pinOf.eId = a.subject.itemRef
+    some a.subject.itemPin
+    pinsCurrentItem[a.subject.itemPin, a.tick]
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      2 ItemDescriptorPin, 9 Tick, 10 EntityId, 8 Snapshot, 2 Note expect 1
+      9 Tick, 10 EntityId, 8 Snapshot, 2 Note, 6 Occurrence expect 1
 
 // The F8 arc: choose → override → ResetToSupplier discards the overrides, keeps the identity.
 run unit_ord_resetToSupplier {
@@ -302,12 +304,13 @@ run unit_ord_wrongItemRefused {
     refusedAtAdmission[o] and o.admission.because = RDemandIneligible
     resolve[o.demand] = d
     demandStatusAt[d, o.tick] = DS_RELEASED
-    some o.subject.itemRef
-    d.itemRef != o.subject.itemRef
+    some o.subject.itemPin
+    d.itemPin.subject != o.subject.itemPin.subject
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      10 EntityId, 8 Snapshot, 2 Note expect 1
+      12 EntityId, 10 Snapshot, 10 Tick, 9 Occurrence, 2 Note expect 1
+      // census +: two item logs (the line's and the demand's) ride the trace since cut 7a
 
 // C3b corollary — the FREE-FORM target: attaching ANY demand (even RELEASED) to a line with no
 // itemRef refuses RDemandIneligible. "Documentary only, no demand pairing" (F7 flag 3) is now a
@@ -350,15 +353,16 @@ run unit_ord_notTerminalRefused {
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       7 EntityId, 2 Note expect 1
 
-// The pin capture refusal (MP 2026-07-08): an ITEM line without its pinned descriptor.
-run unit_ord_noDescriptorRefused {
+// DT-023 D2/D3: LINE-ADD on a retired item refuses with exactly RRetiredRef (the
+// new-commitment gate; replaces the retired RNoDescriptor arm — the pin capture is identity).
+run unit_ord_lineRetiredItemRefused {
   some o: AddLineOcc | {
-    refusedAtAdmission[o] and o.admission.because = RNoDescriptor
-    some o.subject.itemRef and no o.itemData
+    refusedAtAdmission[o] and o.admission.because = RRetiredRef
+    some o.subject.itemPin
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      0 ItemDescriptorPin, 9 EntityId, 8 Snapshot, 2 Note expect 1
+      9 EntityId, 8 Snapshot, 8 Tick, 6 Occurrence, 2 Note expect 1
 
 // ── boundary witnesses (must be LEGAL — never UNSAT) ────────────────────────────────────────────
 // A free-form line: documentary only — no item, no demand, no received tracking.
@@ -399,7 +403,7 @@ run unit_ord_overReceiptLegal {
 // pair — demandIndivisible constrains ITEMS, not identity pairs.
 run unit_ord_samePairDifferentItemsLegal {
   some disj l1, l2: OrderLine, disj d1, d2: DemandItem, t: Tick | {
-    d1.itemRef = d2.itemRef and d1.stationRef = d2.stationRef
+    d1.itemPin.subject = d2.itemPin.subject and d1.stationRef = d2.stationRef
     liveLineAt[l1, t] and liveLineAt[l2, t]
     d1 in servicedAt[l1, t] and d2 in servicedAt[l2, t]
   }

@@ -58,7 +58,10 @@ enum AdministrativeState { UNLOCKED, LOCKED }
     Item; its mutable payload lives on `InventoryItemState` records in the occurrence log,
     surfaced here as the derived observables `stateRel`/`liveTicks`. */
 sig InventoryItem extends Scoped {
-  itemRef:         one EntityId,          // → Item (required, immutable — D1/G7)
+  itemPin:         one ItemOcc,           // → Item VERSION PIN (DT-023 R3; was itemRef: EntityId).
+                                          //   Required, immutable (D1/G7). FLOATING reads go
+                                          //   entity-wise via `.subject` (current-at-read);
+                                          //   the pin records the version at genesis.
   licensePlate:    one LicensePlate,      // handling-unit identity (D9); immutable, globally unique
   serialNumber:    lone SerialNumber,     // D10 individualizer; immutable, persists (even through empty)
   minQuantity:     one Quantity,          // reorder threshold (default zero); not used by Fill
@@ -134,13 +137,13 @@ fun InventoryItemState.sOperationalState: one OperationalState {
 }
 
 // ── definitional structural facts (all identity fields immutable — plain, non-temporal) ─────────
-// Outgoing soft references: the classifier only.
-fact InventoryItemRefs { all ii: InventoryItem | ii.dataRefs = ii.itemRef }
+// The classifier is a PIN (typed, never dangles) — no soft dataRefs remain on the identity.
+fact InventoryItemRefs { all ii: InventoryItem | no ii.dataRefs }
 
-// A resolved classifier is actually an Item (dangling/cross-Universe allowed — soft ref).
-fact ItemClassifierIntegrity {
-  all ii: InventoryItem | let i = resolve[ii.itemRef] | some i implies i in Item
-}
+// Pin tenancy (DT-023): the kernel's isolation reaches only EntityId dataRefs, so the pin's
+// in-tenant discipline is stated here — unrepresentable-style, exactly what kernel isolation
+// gave the old soft ref.
+fact ItemPinTenancy { all ii: InventoryItem | ii.itemPin.subject.tenantId = ii.tenantId }
 
 // D9 / G5 — license plates are unique (no two items EVER share one); non-reusability comes from the
 // log's no-resurrection guard (implementation) rather than a Retired axis.
@@ -149,7 +152,7 @@ fact LicensePlateUnique { all disj a, b: InventoryItem | a.licensePlate != b.lic
 // D10 / G6 — a present serialNumber is unique within (tenant, Item).
 fact SerialNumberUniquePerItem {
   all disj a, b: InventoryItem |
-    (a.tenantId = b.tenantId and a.itemRef = b.itemRef and some a.serialNumber)
+    (a.tenantId = b.tenantId and a.itemPin.subject = b.itemPin.subject and some a.serialNumber)
       implies a.serialNumber != b.serialNumber
 }
 
@@ -229,10 +232,9 @@ fun preFor[o: IIOcc, ii: InventoryItem]: lone InventoryItemState {
   else none
 }
 
-/** schemeOf — the target's UomScheme, when its classifier resolves to a TRACKED Item (dangling /
-    cross-Universe classifiers and untracked Items yield none — the valid-UoM rule cannot and does
-    not apply). */
-fun schemeOf[ii: InventoryItem]: lone UomScheme { (resolve[ii.itemRef] & Item).uom }
+/** schemeOf — the target's UomScheme, when its classifier is a TRACKED Item (the pin never
+    dangles — DT-023; identity-carried `uom` makes the read version-independent). */
+fun schemeOf[ii: InventoryItem]: lone UomScheme { ii.itemPin.subject.uom }
 
 /** unitsOk — the amount's units are all configured in the target's scheme (vacuously true when the
     target is untracked or its classifier dangles) — DT-009's valid-UoM rule. */

@@ -82,7 +82,8 @@ fun parentGateViol[o: llog/SubjectOcc]: set Reason {
 /** attachDemandViol — the C/OP attach gate (order-side ONLY — O3): the demand item must resolve
     IN-TENANT (RForeignRef), be live and standing at RELEASED (RDemandIneligible — dangling
     refuses conservatively), be DENOMINATED in the line's item (RDemandIneligible — C3b: wrong
-    item, or a FREE-FORM target line whose empty itemRef can never agree), and be serviced by
+    item, or a FREE-FORM target line whose empty itemPin can never agree), retirement-guarded
+    (RRetiredRef — DT-023 D3), and be serviced by
     NO live line (RDemandHeld; `self` excludes the acting line — its read at o.tick would be
     strictly-before anyway, but the acting line's own pre-membership is the separate
     double-attach check). */
@@ -91,8 +92,11 @@ fun attachDemandViol[o: llog/SubjectOcc, m: EntityId]: set Reason {
     ((some d and d.tenantId != o.subject.tenantId) => RForeignRef else none)
     + ((no d or not liveDemandAt[d, o.tick] or demandStatusAt[d, o.tick] != DS_RELEASED)
        => RDemandIneligible else none)
-    + ((some d and d.itemRef != o.subject.itemRef)
+    + ((some d and d.itemPin.subject != o.subject.itemPin.subject)
        => RDemandIneligible else none)   // C3b item-agreement (MP 2026-07-10): wrong item OR free-form target
+    + ((some d and not itemLiveAt[d.itemPin.subject, o.tick])
+       => RRetiredRef else none)   // DT-023 D3 (the demand row): order-ATTACH is the new-commitment
+                                   //   point for an OPEN demand — a retired item's demand attaches nowhere
     + ((some d and some (holdingLineOf[d, o.tick] - o.subject))
        => RDemandHeld else none)   // the hold reading — parent-live lines only (a canceled order's holds are gone)
     + ((m in lPre[o].sDemand) => RDemandHeld else none))
@@ -148,13 +152,19 @@ fun addLineViol[o: AddLineOcc]: set Reason {
   (startedBeforeL[o] => RLineStarted else none)
   + parentGateViol[o]
   + (some o.demand => attachDemandViol[o, o.demand] else none)
-  + ((some o.subject.itemRef iff some o.itemData) => none else RNoDescriptor)
-    // the pin capture (MP 2026-07-08; §7 re-basing 2026-08-05): an item line MUST carry the
-    // pinned descriptor; a free-form line must NOT. Pin-TARGET agreement is type-level
-    // (ItemLinePinAgrees — definitional capture, not a Reason).
-  // (No item tenancy clause: itemRef is an ENTITY dataRef — kernel isolation makes a
-  //  cross-tenant resolution unrepresentable, the demand entity-lift precedent. RForeignRef
-  //  here covers the RECORD-carried demand ref via attachDemandViol.)
+  // DT-023 D2/D3: LINE-ADD is a new-commitment point — an item line on a retired item
+  // refuses (free-form lines skip; the descriptor-pin capture is now IDENTITY, so the
+  // former RNoDescriptor arm is structural).
+  + ((some o.subject.itemPin and not itemLiveAt[o.subject.itemPin.subject, o.tick])
+     => RRetiredRef else none)
+  // (No item tenancy clause: the itemPin rides LineItemPinTenancy — unrepresentable, the
+  //  kernel posture. RForeignRef here covers the RECORD-carried demand ref via
+  //  attachDemandViol.)
+}
+// DT-023 cut 7a: a committed line genesis pins the item's CURRENT version at its tick.
+fact LinePinCurrency {
+  all o: AddLineOcc | (committed[o] and some o.subject.itemPin) implies
+    pinsCurrentItem[o.subject.itemPin, o.tick]
 }
 fun updateLineViol[o: UpdateLineOcc]: set Reason {
   ((not usableLineAtOcc[o]) => RLineClosed else none)
@@ -226,29 +236,29 @@ pred sameOrderDetail[b, a: OrderState] {
 }
 /** sameOrderButStatus — everything except the status is carried over. */
 pred sameOrderButStatus[b, a: OrderState] { a.sSupplier = b.sSupplier and sameOrderDetail[b, a] }
-/** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed —
-    `sItemData` (the pin HANDLE) is framed by EVERY mutator: the §7 freeze, MP 2026-07-08 /
-    re-based 2026-08-05; the pinned VIEW's immutability is inherited, only the handle needs
-    carrying). */
+/** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed.
+    The descriptor pin needs NO framing since DT-023 cut 7a — it is the line's IDENTITY
+    `itemPin`, immutable by construction; the pinned VIEW's immutability is inherited from the
+    insert-only substrate). */
 pred sameLineButQuantity[b, a: OrderLineState] {
   a.sConfirmation = b.sConfirmation and a.sReceived = b.sReceived
-  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
+  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
 }
 pred sameLineButDemand[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sConfirmation = b.sConfirmation
-  and a.sReceived = b.sReceived and a.sLineStatus = b.sLineStatus and a.sItemData = b.sItemData
+  and a.sReceived = b.sReceived and a.sLineStatus = b.sLineStatus
 }
 pred sameLineButConfirmation[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sReceived = b.sReceived
-  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
+  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
 }
 pred sameLineButReceived[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sConfirmation = b.sConfirmation
-  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand and a.sItemData = b.sItemData
+  and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
 }
 pred sameLineButStatus[b, a: OrderLineState] {
   a.sQuantity = b.sQuantity and a.sConfirmation = b.sConfirmation
-  and a.sReceived = b.sReceived and a.sDemand = b.sDemand and a.sItemData = b.sItemData
+  and a.sReceived = b.sReceived and a.sDemand = b.sDemand
 }
 
 fact OrderEffectWitness {
@@ -303,7 +313,6 @@ fact OrderEffectWitness {
     no lPost[o].sReceived                          // the keyed zero — accrual starts empty (F9)
     lPost[o].sLineStatus = L_OPEN
     lPost[o].sDemand = o.demand                    // lone → the singleton or empty set
-    lPost[o].sItemData = o.itemData                // the pinned descriptor lands at genesis
   }
   all o: UpdateLineOcc | committed[o] implies {
     lPost[o].sQuantity = o.qty                     // SET (delta is client sugar)

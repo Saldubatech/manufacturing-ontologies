@@ -49,15 +49,15 @@ fun liveStatuses: set DemandStatus { DS_OPEN + DS_RELEASED + DS_IN_PROCESS }
     Production/Source Station. Identity only; everything else rides the log (DemandState
     records + occurrences). */
 sig DemandItem extends Scoped {
-  itemRef:    one EntityId,   // → Item: WHAT is produced (immutable identity-structure — MP 2026-07-06: entity = identity + immutable structure, log = mutable state; the CardCycle.precededBy precedent)
+  itemPin:    one ItemOcc,    // → Item VERSION PIN (DT-023 R3; was itemRef): WHAT is produced
+                              //   (immutable identity-structure); entity-wise reads via `.subject`
   stationRef: one EntityId    // → Station: the PRODUCTION/SOURCE station (never a destination)
 }
-fact DemandItemRefs { all d: DemandItem | d.dataRefs = d.itemRef + d.stationRef }   // kernel isolation covers them
+fact DemandItemRefs { all d: DemandItem | d.dataRefs = d.stationRef }   // kernel isolation covers it
+// Pin tenancy (DT-023): kernel isolation reaches only EntityId dataRefs — stated here instead.
+fact DemandItemPinTenancy { all d: DemandItem | d.itemPin.subject.tenantId = d.tenantId }
 fact DemandItemRefIntegrity {
-  all d: DemandItem {
-    (let i = resolve[d.itemRef]     | some i implies i in Item)
-    (let st = resolve[d.stationRef] | some st implies st in Station)
-  }
+  all d: DemandItem | let st = resolve[d.stationRef] | some st implies st in Station
 }
 
 // ── the state record ────────────────────────────────────────────────────────────────────────────
@@ -279,8 +279,8 @@ fun demandOf[c: CardCycle, t: Tick]: set DemandItem {
 /** demandsFor — the live DemandItems for an (Item, Source Station) identity pair: the CALLER's
     read for its collation policy (single-OPEN, round-robin, …) — the module does NOT enforce
     uniqueness (R1 amended). */
-fun demandsFor[item, station: EntityId, t: Tick]: set DemandItem {
-  { d: DemandItem | liveDemandAt[d, t] and d.itemRef = item and d.stationRef = station }
+fun demandsFor[i: Item, station: EntityId, t: Tick]: set DemandItem {
+  { d: DemandItem | liveDemandAt[d, t] and d.itemPin.subject = i and d.stationRef = station }
 }
 
 // ── the effective quantity (R7: FIXED AT GENESIS) ───────────────────────────────────────────────

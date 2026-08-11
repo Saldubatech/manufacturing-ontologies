@@ -221,7 +221,10 @@ sig CardSerial {}
 sig KanbanCard extends Scoped {
   // identity & durable configuration (administrative edits only)
   serialNumber:    one CardSerial,               // CardSerial: distinct from inventory_item's SerialNumber
-  itemRef:         one EntityId,                 // → Item (immutable classifier)
+  itemPin:         one ItemOcc,                  // → Item VERSION PIN (DT-023 R3; was itemRef):
+                                                 //   print-immutable classifier; entity-wise reads
+                                                 //   via `.subject`; mint-time currency is runtime
+                                                 //   (cards have no mint kind in the model)
   nominalQuantity: lone Quantity,                // durable target (overridable per cycle — CycleState.sQuantityOverride)
   loopRef:         lone EntityId,                // → Loop [KC-MH-5 / KD11]
   // the physical/print artifact (durable; spans cycles)
@@ -231,11 +234,14 @@ sig KanbanCard extends Scoped {
   cycles:          set CardCycle                 // direct containment (no back-ref)
 }
 
-// Outgoing soft references (cycles is a direct relation, kept in-tenant by CardCycleOwnership).
-fact KanbanCardRefs { all k: KanbanCard | k.dataRefs = k.itemRef + k.loopRef }
+// Outgoing soft references (cycles is a direct relation, kept in-tenant by CardCycleOwnership;
+// the item classifier is a PIN — typed, never dangles — since DT-023 cut 7a).
+fact KanbanCardRefs { all k: KanbanCard | k.dataRefs = k.loopRef }
 
-// A resolved item handle is an Item; a resolved loop handle is a Loop (dangling allowed — soft ref).
-fact ItemRefIntegrity { all k: KanbanCard | let i = resolve[k.itemRef] | some i implies i in Item }
+// Pin tenancy (DT-023): kernel isolation reaches only EntityId dataRefs — stated here instead.
+fact CardItemPinTenancy { all k: KanbanCard | k.itemPin.subject.tenantId = k.tenantId }
+
+// A resolved loop handle is a Loop (dangling allowed — soft ref; Loop stays EntityId until 7c).
 fact LoopRefIntegrity { all k: KanbanCard | let l = resolve[k.loopRef] | some l implies l in Loop }
 
 // Serial numbers are unique within a tenant.

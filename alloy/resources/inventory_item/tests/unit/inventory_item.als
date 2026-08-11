@@ -281,7 +281,7 @@ run unit_occ_splitSerializedRefused {
 } for 6 but 3 Scalar, 5 Int expect 1
 run unit_occ_mergeDifferentItemRefused {
   some o: MergeOcc | refusedAtAdmission[o] and o.admission.because = RIncompatible
-    and o.target.itemRef != o.absorbed.itemRef
+    and o.target.itemPin.subject != o.absorbed.itemPin.subject
 } for 6 but 3 Scalar, 5 Int expect 1
 run unit_occ_sealEmptyRefused {
   some o: SealOcc | refusedAtAdmission[o] and o.admission.because = REmpty
@@ -301,12 +301,12 @@ run unit_occ_lpnClashImpossible {
   some disj a, b: InventoryItem | a.licensePlate = b.licensePlate
 } for 5 but 3 Scalar, 5 Int expect 0
 run unit_occ_serialClashImpossible {
-  some disj a, b: InventoryItem | a.tenantId = b.tenantId and a.itemRef = b.itemRef
+  some disj a, b: InventoryItem | a.tenantId = b.tenantId and a.itemPin.subject = b.itemPin.subject
     and some a.serialNumber and a.serialNumber = b.serialNumber
 } for 5 but 3 Scalar, 5 Int expect 0
 run unit_occ_crossTenantClassifierImpossible {
-  some ii: InventoryItem | let i = resolve[ii.itemRef] |
-    some i and i in Item and i.tenantId != ii.tenantId
+  some ii: InventoryItem | let i = ii.itemPin.subject |
+    i.tenantId != ii.tenantId
 } for 5 but 3 Scalar, 5 Int expect 0
 
 // End-to-end lifecycle (the legacy lifecycle suite's spine): create → consume-to-zero (LIVE husk) →

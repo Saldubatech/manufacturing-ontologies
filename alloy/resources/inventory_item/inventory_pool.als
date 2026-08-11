@@ -39,14 +39,18 @@ open meta/subject_log/subject_log[InventoryPool, PoolState] as plog
 /** InventoryPool — the IDENTITY of a tenant-scoped set of InventoryItems under one Item; its
     membership lives on PoolState records in the occurrence log. */
 sig InventoryPool extends Scoped {
-  itemRef: one EntityId             // → Item; constrains membership (immutable)
+  itemPin: one ItemOcc              // → Item VERSION PIN (DT-023 R3; was itemRef): constrains
+                                    //   membership (immutable); entity-wise reads via `.subject`.
+                                    //   Genesis is runtime-side (no create kind), so pin CURRENCY
+                                    //   anchors at the minting process (receiving) — here only
+                                    //   typing + tenancy.
 }
 
-/** Outgoing soft references: the classifier only. (Membership is record-carried, not a soft ref.) */
-fact InventoryPoolRefs { all p: InventoryPool | p.dataRefs = p.itemRef }
+// The classifier is a PIN (typed, never dangles) — no soft dataRefs remain on the identity.
+fact InventoryPoolRefs { all p: InventoryPool | no p.dataRefs }
 
-/** The pool's Item resolves to an actual Item (soft ref — dangling / cross-Universe allowed). */
-fact PoolItemIntegrity { all p: InventoryPool | let i = resolve[p.itemRef] | some i implies i in Item }
+// Pin tenancy (DT-023): kernel isolation reaches only EntityId dataRefs — stated here instead.
+fact PoolPinTenancy { all p: InventoryPool | p.itemPin.subject.tenantId = p.tenantId }
 
 // ── the state record ─────────────────────────────────────────────────────────────────────────────
 /** PoolState — one moment's membership of a pool (a value; extensional). */
@@ -73,7 +77,7 @@ fact PoolChaining      { plog/chained }
 
 // ── reason-precise admission guards (Accepted ⟺ ∅; because = EXACTLY the set) ────────────────────
 fun poolAddViol[o: PoolAddOcc]: set Reason {
-  ((o.item.itemRef != o.pool.itemRef)     => RWrongItem     else none)
+  ((o.item.itemPin.subject != o.pool.itemPin.subject) => RWrongItem else none)
   + ((o.item.tenantId != o.pool.tenantId) => RWrongTenant   else none)
   + ((o.item in o.pre.holds)              => RAlreadyMember else none)
 }

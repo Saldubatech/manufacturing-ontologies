@@ -1,34 +1,39 @@
 module reference_data/item/item_types
 
-// QUASI-STATIC SCOPE (MP ruling 2026-07-08): this module is modeled IMMUTABLE because items are
-// SLOW-CHANGING relative to the model's trace window — a timescale scope decision, not an
-// omission. The real system's horizon (audit spans) DOES include their changes, so the
-// IMPLEMENTATION MUST provide pinning semantics (record rId / as-of reads) for every frozen
-// holder. Consumer freeze laws to AUDIT if this module gains a log: procurement/order
-// `lineDescriptorFrozen` (PIN-covered — §7 re-basing 2026-08-05; the handle is
-// `ItemDescriptorPin` below) and every consumer reading item structure
-// from a frozen document. See modeling-conventions §7.
+// LOG-CARRIED since DT-023 cut 7a (MP ruling 2026-08-10; supersedes the QUASI-STATIC scope
+// ruling of 2026-07-08): the Item rides the subject_log spine with the SIMPLE reference-data
+// lifecycle — Create -> Live, Update -> Live, Delete -> Retired (terminal). WHY the log form:
+// it resolves the standing reference irregularities — references become VERSION PINS
+// (occurrence references into this log): the former `ItemDescriptorPin` device DISSOLVES into
+// a pin, frozen holders (order line descriptor, receiving expected item) pin at their freeze,
+// floating references read the current version at read time. The §7.1 "implementation MUST
+// provide pinning" obligation is discharged BY CONSTRUCTION (runtime pin coordinate:
+// (entityId, rId) — recorded-axis-exact).
 
 /*
  * ITEM — TYPES (DT-017 four-file architecture: types / contracts / implementation / mock).
- * The naked signatures, fields, and read-API of the item module: what any consumer may see.
- * NO laws here beyond field typing — the module's laws are named predicates in
- * `item_contracts.als`, asserted by `item_implementation.als` (integration) and
- * `item_mock.als` (consumer unit roots).
+ * The naked signatures, the state record, the operation kinds, the Reason taxonomy, and the
+ * read API of the item module: what any consumer may see. Laws are named predicates in
+ * `item_contracts.als`; machinery in `item_implementation.als`; consumers' unit roots open
+ * `item_mock.als`.
  *
- * Absorbs the former item.als + item_supply.als (strict renames, 2026-07-03); the UoM vocabulary
- * stays in uom.als as an INTERNAL VOCABULARY file opened here — so the arity-4 collapse root can
- * depend on it without paying this file's full cone (a DT-017 finding: types may be layered from
- * internal vocabulary files; value well-formedness like UomSchemeWF is DEFINITIONAL and rides
- * with the vocabulary, not the contract). NB a STATIC reference module has no time-indexed
- * observables to reify — its fields ARE its observables.
+ * IDENTITY vs STATE (DT-011: entity = identity + immutable structure; log = mutable state):
+ * `uom` stays IDENTITY — the tracking mode never changes (DT-009: no mode change), so
+ * consumers' `schemeOf`-style reads are version-independent. Supplies, the default supply,
+ * and the card-issuance default are VERSIONED state (`ItemState`), folded per DT-023 Q-C:
+ * a supply change IS an item version.
+ *
+ * The UoM vocabulary stays in uom.als as an INTERNAL VOCABULARY file opened here — so the
+ * arity-4 collapse root can depend on it without paying this file's full cone (DT-017).
  */
 
-open meta/profiles/baseline          // PROFILE (DT-012): structural — identity/refs/tenancy
+open meta/profiles/domain_log        // PROFILE (DT-012): log anatomy + group/order premises
 open meta/kernel                     // Scoped, EntityId, resolve
+open meta/subject_log/subject_log[Item, ItemState] as ilog   // the log SPINE (DT-015 Q5)
+open reference_data/shared/lifecycle // RdStatus (RD_LIVE/RD_RETIRED) + RRetiredRef (DT-023)
 open shared/values                   // Quantity, Money, Unit
 open reference_data/item/uom         // UomScheme, Each, toEach, units (internal vocabulary, DT-009)
-open reference_data/business_affiliate/business_affiliate_types   // SupplierReference (ItemSupply field type; laws via root mock/impl — DT-017)
+open reference_data/business_affiliate/business_affiliate_types   // SupplierReference (ItemSupply field type; dissolves into a BA pin at cut 7b)
 
 // ── supply sources ───────────────────────────────────────────────────────────────────────────────
 /** OrderMethod — how an item is ordered from a supplier. */
@@ -36,8 +41,10 @@ enum OrderMethod {
   UNKNOWN, PURCHASE_ORDER, EMAIL, PHONE, IN_STORE, ONLINE, RFQ, PRODUCTION, TASK, THIRD_PARTY, OTHER
 }
 
-/** ItemSupply — a supply source for an Item (vendor, order method, cost, lead time);
-    a child entity of Item, first-class as the target of Item.defaultSupply. */
+/** ItemSupply — a supply source for an Item (vendor, order method, cost, lead time); a child
+    entity FOLDED into the item's versioned state (DT-023 Q-C): rows are IMMUTABLE — changing
+    a supply is replacing its row in the next ItemState — and membership is version-carried
+    (`ItemState.sSupplies`). Keeps its own eId (the default-supply target). */
 sig ItemSupply extends Scoped {
   supplier:        one SupplierReference,
   orderMethod:     lone OrderMethod,
@@ -46,62 +53,82 @@ sig ItemSupply extends Scoped {
   averageLeadTime: lone Duration
 }
 
-// ── the Item ─────────────────────────────────────────────────────────────────────────────────────
-/** Item — reference-data master for a material/product (the TYPE); InventoryItems and
-    supply records classify against it. Tenant-scoped. */
+// ── the entity: IDENTITY + immutable structure only (log-carried, DT-011) ───────────────────────
+/** Item — reference-data master for a material/product (the TYPE); InventoryItems and supply
+    records classify against it. Tenant-scoped. Identity carries only the immutable tracking
+    mode; everything else rides the log (ItemState records + occurrences). */
 sig Item extends Scoped {
-  supplies:      set ItemSupply,   // parent → child aggregation (no backref)
-  defaultSupply: lone EntityId,    // soft ref → one of this item's ItemSupply
-  uom:           lone UomScheme,   // present ⟺ inventory-TRACKED (DT-009); immutable (no mode change)
-  cardMinimumQuantity: lone Quantity  // the CARD-ISSUANCE default for a new KanbanCard's
-                                   // printed minimumQuantity (DT-022 TQ-4 qualification, MP
-                                   // 2026-08-08): copied at mint with operator override —
-                                   // caller-side pre-fill, NO law reads it (the card's
-                                   // printed minimum is whatever the mint act says).
-                                   // Distinct from the BANNED InventoryItem minimum
-                                   // (§8.6.2(iv): category-wrong on physical material).
+  uom: lone UomScheme   // present ⟺ inventory-TRACKED (DT-009); immutable (no mode change)
+}
+fact ItemRefs { all i: Item | no i.dataRefs }
+fact ItemSupplyRefs {
+  all s: ItemSupply | s.dataRefs = s.supplier.vendorRef + s.supplier.affiliateRef
 }
 
 /** inventoryTracked — an Item is inventory-tracked iff it carries a UoM scheme (DT-009). */
 pred inventoryTracked[i: Item] { some i.uom }
 
-/** ItemDescriptorPin — a PINNED view of an Item's descriptive data (§7 pin canon, re-based
-    2026-08-05): the model-side handle for the record `rId` a frozen holder captures at its
-    freeze moment. The target is QUASI-STATIC, so the pin is reified as an uninterpreted
-    handle carrying its target (the Station-stub precedent) — model the PIN, not the log.
-    Atoms are NOMINAL: two pins of the same Item may be distinct captured records, so there
-    is deliberately NO extensional fact. Never dangles by construction (`pinOf` is a direct
-    reference — the canon's "a pin never dangles"). NO orphan fact — the SupplierReference /
-    DT-004 Q8 precedent for shared value sigs (per-consumer orphan facts conflict at the
-    second consumer); roots pin scopes instead. */
-sig ItemDescriptorPin { pinOf: one Item }
-
-// ── definitional facts ───────────────────────────────────────────────────────────────────────────
-// These DEFINE the module's shape (outgoing-ref wiring for the kernel's generic rules; the
-// tight-by-default closed universe, modeling-conventions §6) — they are not promises about
-// content. Laws about content live in item_contracts.als.
-
-// Outgoing soft references (the parent→child `supplies` is a direct relation, not a soft ref).
-fact ItemRefs { all i: Item | i.dataRefs = i.defaultSupply }
-fact ItemSupplyRefs {
-  all s: ItemSupply | s.dataRefs = s.supplier.vendorRef + s.supplier.affiliateRef
-}
-
-// Tight by default: no orphan value/handle atoms. Money/Duration remain ItemSupply-exclusive
-// (within this module's view). Quantity is SHARED and no-orphan-EXEMPT (DT-004 Q8; see
-// modeling-conventions §6). SupplierReference became a SHARED HANDLE at the DT-018 order
-// build (2026-07-08): the former module-local NoOrphanSupplierReference fact was RETIRED
-// (it forced every order-carried reference to ALSO be an item supply's supplier, where
-// supplierRefsSound then outlawed the order module's wrong-role refusal witness model-wide).
-// Per the §6 handle-closure REFINEMENT (MP ruling): this module EXPORTS its carrier set;
-// heavy ROOTS assert the closure over their cone's carriers. Each consumer states its own
-// soundness over the references it carries (item: supplierRefsSound; order: its guard).
 /** itemCarriedSupplierRefs — the SupplierReference atoms THIS module carries (for root-side
-    closure facts — modeling-conventions §6, handles). */
+    closure facts — modeling-conventions §6, handles; unchanged by the cut-7a log conversion:
+    supply rows still embed the handle until the 7b dissolution). */
 fun itemCarriedSupplierRefs: set SupplierReference { ItemSupply.supplier }
-// ItemDescriptorPin is likewise SHARED and no-orphan-EXEMPT (declared above; the same Q8 /
-// SupplierReference reasoning) — this module carries none itself.
-fact NoOrphanItemSupplyValues {
-  all m: Money    | m in ItemSupply.unitCost
-  all d: Duration | d in ItemSupply.averageLeadTime
+
+// ── the state record ────────────────────────────────────────────────────────────────────────────
+/** ItemState — one moment's versioned payload of an Item (a value; extensional): the
+    lifecycle status and the folded supply content. */
+sig ItemState extends Snapshot {
+  sStatus:              one  RdStatus,    // Live / Retired (DT-023 R1)
+  sSupplies:            set  ItemSupply,  // the folded children (Q-C)
+  sDefaultSupply:       lone EntityId,    // soft ref → one of sSupplies
+  sCardMinimumQuantity: lone Quantity     // card-issuance default (DT-022 TQ-4): pre-fills a
+                                          //   new card's printed minimum, operator-overridable
+                                          //   at mint; NO law reads it
 }
+// Value semantics: a state IS its fields.
+fact ItemStateExtensional {
+  all disj a, b: ItemState |
+    a.sStatus != b.sStatus or a.sSupplies != b.sSupplies
+    or a.sDefaultSupply != b.sDefaultSupply or a.sCardMinimumQuantity != b.sCardMinimumQuantity
+}
+// Record-carried refs are TYPED (soft; tenancy/containment are law-side — item_contracts C1).
+fact ItemStateRefIntegrity {
+  all s: ItemState | let d = resolve[s.sDefaultSupply] | some d implies d in ItemSupply
+}
+
+// ── the kinds — the reference-data lifecycle (DT-023 R1) ────────────────────────────────────────
+/** ItemOcc — the item log's occurrence family; the PIN TYPE (DT-023 R3): a version pin is a
+    reference to one of these atoms (the version it created). */
+abstract sig ItemOcc extends ilog/SubjectOcc {}
+
+/** ItemWriteOcc — the content-carrying kinds' shared payload (SET semantics — the
+    UpdateOrderDetails precedent): the full versioned content each write states. */
+abstract sig ItemWriteOcc extends ItemOcc {
+  supplies:            set  ItemSupply,
+  defaultSupply:       lone EntityId,
+  cardMinimumQuantity: lone Quantity
+} { bindings = subject + supplies + defaultSupply + cardMinimumQuantity }
+
+/** Create — births the Item LIVE with its initial content. */
+sig CreateItemOcc extends ItemWriteOcc {}
+/** Update — SETs the versioned content; the item stays LIVE. */
+sig UpdateItemOcc extends ItemWriteOcc {}
+/** Delete — retires the Item (terminal; content carried forward for history). */
+sig DeleteItemOcc extends ItemOcc {} { bindings = subject }
+
+// ── the Reason taxonomy (module-sovereign atoms; RRetiredRef is shared via lifecycle) ───────────
+one sig RItemExists, RItemNotCreated, RItemRetired extends Reason {}
+
+// ── the read API ────────────────────────────────────────────────────────────────────────────────
+/** itemStateAt — the item's versioned content as of `t` (LOCF; none before Create). */
+fun itemStateAt[i: Item, t: Tick]: lone ItemState { ilog/recordAt[i, t] }
+/** itemVersionAt — the item's CURRENT VERSION at `t`: the occurrence a new pin must
+    reference (DT-023 Q-A "compatible and current"). */
+fun itemVersionAt[i: Item, t: Tick]: lone ItemOcc { ilog/lastTouch[i, t] & ItemOcc }
+/** itemLiveAt — the item exists and is Live at `t` (the reference-target guard read). */
+pred itemLiveAt[i: Item, t: Tick] { itemStateAt[i, t].sStatus = RD_LIVE }
+/** pinsCurrentItem — `p` is the current version of its own item at `t` (pin currency). */
+pred pinsCurrentItem[p: ItemOcc, t: Tick] { p = itemVersionAt[p.subject, t] }
+/** itemPinnableAt — the D2 guard in one read: `p` is current at `t` AND its version is
+    Live — the version a committed introducing occurrence may pin; anything else refuses
+    with `RRetiredRef` (retired-current) or is unrepresentable (stale pin). */
+pred itemPinnableAt[p: ItemOcc, t: Tick] { pinsCurrentItem[p, t] and p.post.sStatus = RD_LIVE }

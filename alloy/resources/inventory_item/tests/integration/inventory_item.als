@@ -18,15 +18,16 @@ open reference_data/item/item_implementation       // the LOWER LAYER for real (
 // item laws — the composition actually loads.
 run int_ii_loads {
   some o: CreateOcc | committed[o]
-    and (let i = resolve[o.target.itemRef] | some i and some (i & Item).uom)
+    and some o.target.itemPin.subject.uom
     and liveAt[o.target, o.tick]
 } for 5 but 3 Scalar, 5 Int expect 1
 
 // ── cross-layer composition: the deep supplier chain resolves in one universe with a live log ───
 run int_ii_supplyChainLoads {
-  some ii: InventoryItem, i: Item, s: ItemSupply | {
-    resolve[ii.itemRef] = i
-    resolve[i.defaultSupply] = s
+  some ii: InventoryItem, i: Item, s: ItemSupply, t: Tick | {
+    ii.itemPin.subject = i
+    // the default supply is VERSION-CARRIED since DT-023 cut 7a: read it off the item's state
+    resolve[itemStateAt[i, t].sDefaultSupply] = s
     some resolve[s.supplier.vendorRef]
     some o: CreateOcc | committed[o] and o.target = ii
   }

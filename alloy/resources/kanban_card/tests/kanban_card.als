@@ -26,7 +26,7 @@ run unit_kc_twoCycleChainCurrent {
     no c1.precededBy and c2.precededBy = c1
     r2.cycle = c2 and committed[r2]
     currentCycleAt[k, r2.tick] = c2
-    some i: Item | resolve[k.itemRef] = i
+    some k.itemPin.subject
   }
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
@@ -115,7 +115,7 @@ run unit_kc_serialClashImpossible {
 
 // Cross-tenant item reference (kernel isolation).
 run unit_kc_crossTenantItemImpossible {
-  some k: KanbanCard | let i = resolve[k.itemRef] | some i and i in Item and i.tenantId != k.tenantId
+  some k: KanbanCard | k.itemPin.subject.tenantId != k.tenantId
 } for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 0
 
 // ── machine-level checks (the PRINT machine — the op machine retired with DT-015 Phase B) ────

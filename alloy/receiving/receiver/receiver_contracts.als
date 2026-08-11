@@ -81,8 +81,8 @@ pred capturedFactsFrozen {
     Both compared fields are immutable identity-structure, so the gate cannot go stale. */
 pred receiveSameItemPool {
   all o: ReceiveLineOcc | (committed[o] and some o.pool) implies {
-    some resolve[rlPre[o].sExpectedItem] & Item
-    (resolve[o.pool] & InventoryPool).itemRef = rlPre[o].sExpectedItem
+    some rlPre[o].sExpectedItem
+    (resolve[o.pool] & InventoryPool).itemPin.subject = rlPre[o].sExpectedItem.subject
   }
 }
 

@@ -201,8 +201,8 @@ run unit_dem_twoOpenSameIdentityLegal {
   some disj a, b: DemandItem, t: Tick | {
     a.tenantId = b.tenantId
     demandStatusAt[a, t] = DS_OPEN and demandStatusAt[b, t] = DS_OPEN
-    a.itemRef = b.itemRef and a.stationRef = b.stationRef
-    a + b in demandsFor[a.itemRef, a.stationRef, t]
+    a.itemPin.subject = b.itemPin.subject and a.stationRef = b.stationRef
+    a + b in demandsFor[a.itemPin.subject, a.stationRef, t]
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem, 9 EntityId expect 1
@@ -224,7 +224,7 @@ run unit_dem_badStateRefused {
       1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem expect 1
 
 // RForeignRef guards the RECORD-carried refs only (holding/delivery) — the entity's
-// itemRef/stationRef are kernel-covered post-lift (cross-tenant = unrepresentable).
+// stationRef is kernel-covered; the itemPin rides DemandItemPinTenancy (cross-tenant = unrepresentable).
 run unit_dem_foreignRefRefused {
   some o: StartProductionOcc | refusedAtAdmission[o] and RForeignRef in o.admission.because
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
@@ -387,4 +387,7 @@ run unit_dem_revokeRevokedRefused {
     and some o.pre and pdPre[o].sStatus = PD_REVOKED
 } for 8 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
-      10 Tick, 10 EntityId, 9 Snapshot expect 1
+      11 Tick, 11 EntityId, 10 Snapshot, 10 Occurrence expect 1
+      // census +1 across the board at DT-023 cut 7a: the trace's item-log fixture (the
+      // committed CreateItemOcc behind the demand genesis guard) pushed the occurrence
+      // count past the old for-8 default this deep witness sat exactly at

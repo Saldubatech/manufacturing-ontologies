@@ -26,7 +26,7 @@ run unit_pool_remove {
 
 // Homogeneity at every moment — now a THEOREM derived from the add guard (was an `always` fact).
 assert unit_pool_homogeneous {
-  all p: InventoryPool, t: Tick, ii: heldAt[p, t] | ii.itemRef = p.itemRef
+  all p: InventoryPool, t: Tick, ii: heldAt[p, t] | ii.itemPin.subject = p.itemPin.subject
 }
 check unit_pool_homogeneous for 6 but 2 Scalar, 3 Int expect 0
 

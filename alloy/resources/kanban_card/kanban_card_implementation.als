@@ -34,6 +34,10 @@ fun requestViol[o: RequestOcc]: set Reason {
   + ((some o.subject.precededBy and not rolloverEligible[o.subject.precededBy, o.tick])
      => RCardInCirculation else none)
   + ((REQUESTING not in LifecycleConfig.active) => RInactiveTarget else none)
+  // DT-023 D2/D3 (the kanban matrix row): cycle GENESIS is where the card starts a NEW
+  // replenishment episode — scan-to-order of a retired item refuses; the live cycle,
+  // once started, completes (grandfathered — no other cycle kind reads item liveness).
+  + ((not itemLiveAt[(cycles.(o.subject)).itemPin.subject, o.tick]) => RRetiredRef else none)
 }
 /** forwardViol — the forward-skip discipline (KD9): strictly forward, into an active status,
     skipping only inactive ones. */
@@ -59,7 +63,7 @@ fun startViol[o: StartProcessingOcc]: set Reason {
   + ((some p: resolve[o.pool] & InventoryPool | some c2: CardCycle - o.subject |
         liveCycleAt[c2, o.tick] and resolve[stateOfCycleAt[c2, o.tick].sPool] = p)
      => RPoolInUse else none)
-  + ((some p: resolve[o.pool] & InventoryPool | p.itemRef != (cycles.(o.subject)).itemRef)
+  + ((some p: resolve[o.pool] & InventoryPool | p.itemPin.subject != (cycles.(o.subject)).itemPin.subject)
      => RPoolWrongItem else none)
 }
 /** shelveViol — the sanctioned backward operation: exactly REQUESTED → REQUESTING. */

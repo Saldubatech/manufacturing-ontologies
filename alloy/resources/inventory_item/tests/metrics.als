@@ -43,7 +43,7 @@ run unit_invmet_retiredExcluded {
   clocksAligned
   some c: CountCell, m: InventoryItem, d: DeleteOcc | {
     committed[d] and d.target = m and atOrBefore[d.at, c.cAsOf]
-    no c.cLevel and m.tenantId = c.cTenant and resolve[m.itemRef] = c.cItem
+    no c.cLevel and m.tenantId = c.cTenant and m.itemPin.subject = c.cItem
     m not in membersOf[c]
   }
 } for 4 but 4 Int, 3 Scalar, 8 Quantity, 3 Unit, 8 EntityId, 2 Item, 2 ItemSupply, 2 UomScheme, 5 InventoryItemState, 3 LicensePlate, 0 SerialNumber, 0 Individualizer, 0 LotNumber, 0 Text, 0 Money, 0 Currency, 3 PhysicalLocator, 5 Label, 5 Tick, 5 Instant, 1 Duration, 0 TimeInterval, 0 Metric, 0 Report, 2 InventoryItem, 1 CountCell, 2 TLine, 2 DLine, 0 PeriodSpec, 0 TimeZone, 0 Signal, 0 Measurement
@@ -56,7 +56,7 @@ run unit_invmet_locatorCellLoads {
   some c: CountCell, disj m1, m2: InventoryItem | {
     c.cLevel = LFacility
     m1 in membersOf[c]
-    liveAsOf[m2, c.cAsOf] and m2.tenantId = c.cTenant and resolve[m2.itemRef] = c.cItem
+    liveAsOf[m2, c.cAsOf] and m2.tenantId = c.cTenant and m2.itemPin.subject = c.cItem
     m2 not in membersOf[c]
   }
 } for 4 but 4 Int, 3 Scalar, 8 Quantity, 3 Unit, 8 EntityId, 2 Item, 2 ItemSupply, 2 UomScheme, 5 InventoryItemState, 3 LicensePlate, 0 SerialNumber, 0 Individualizer, 0 LotNumber, 0 Text, 0 Money, 0 Currency, 3 PhysicalLocator, 5 Label, 5 Tick, 5 Instant, 1 Duration, 0 TimeInterval, 0 Metric, 0 Report, 2 InventoryItem, 1 CountCell, 2 TLine, 2 DLine, 0 PeriodSpec, 0 TimeZone, 0 Signal, 0 Measurement

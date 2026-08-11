@@ -26,5 +26,5 @@ assert soak_sys_poolLatticeGlobal {
 check soak_sys_poolLatticeGlobal for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Receiver, 3 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 3 DemandItem, 0 ProductionDelivery,
       3 CardCycle, 2 KanbanCard, 0 InventoryItem, 3 InventoryPool, 0 Station,
-      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 0 ItemDescriptorPin,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
       10 Occurrence, 15 EntityId, 8 Tick, 12 Snapshot, 2 Note expect 0

@@ -188,7 +188,9 @@ fact ReceiverCarrierRefIntegrity {
     release) and sDeliveries (append-only until RL_DISTRIBUTED — §8.1.3 field-scoped). */
 sig ReceivingLineState extends Snapshot {
   sStatus:       one  ReceivingLineStatus,
-  sExpectedItem: lone EntityId,      // → Item (§8.3.2: optional at creation; resolved by Receive)
+  sExpectedItem: lone ItemOcc,       // → Item VERSION PIN (DT-023 R3; §8.3.2: optional at creation;
+                                     //   floating in the capture window — each write re-pins current —
+                                     //   FROZEN with the captured facts at Receive)
   sExpectedQty:  lone Quantity,      // the ORDER's position (open qty at creation; absent = blind)
   sStatedQty:    lone Quantity,      // the VENDOR's claim (§8.3.4 — optional, INERT: no law reads it)
   sReceivedQty:  lone Quantity,      // OUR count of ACCEPTED material (§8.3.5; none = the keyed zero)
@@ -221,7 +223,6 @@ fact ReceivingLineStateExtensional {
 // Record-carried refs are TYPED (soft — dangling/cross-Universe allowed; tenancy is guard-side).
 fact ReceivingLineStateRefIntegrity {
   all s: ReceivingLineState {
-    (let i = resolve[s.sExpectedItem] | some i implies i in Item)
     (let p = resolve[s.sPool]         | some p implies p in InventoryPool)
     all b: s.sBirthPins    | let ii = resolve[b] | some ii implies ii in InventoryItem
     all d: s.sDeliveries   | let pd = resolve[d] | some pd implies pd in ProductionDelivery
@@ -266,7 +267,7 @@ sig AnnotateReceiverOcc extends rvlog/SubjectOcc { notes: set Note } { bindings 
     atom whose AttachAttribution genesis pairs with this commit — the same-module pairing,
     enforced in the implementation). */
 sig AddReceivingLineOcc extends rllog/SubjectOcc {
-  item:        lone EntityId,    // → Item (optional at creation — §8.3.2)
+  item:        lone ItemOcc,     // → Item VERSION PIN (DT-023 R3; optional at creation — §8.3.2)
   expectedQty: lone Quantity,    // the order's open quantity at creation (absent = blind)
   attribution: lone EntityId     // → OrderAttribution (present ⟺ order-connected birth)
 } { bindings = subject + item + expectedQty + attribution }
@@ -274,7 +275,7 @@ sig AddReceivingLineOcc extends rllog/SubjectOcc {
     §8.3.4 stated facet, §8.4.2 off-manifest assertion, the running received count; SET
     semantics — the payload IS the new cluster). */
 sig UpdateReceivingLineOcc extends rllog/SubjectOcc {
-  item:        lone EntityId,
+  item:        lone ItemOcc,
   expectedQty: lone Quantity,
   statedQty:   lone Quantity,
   receivedQty: lone Quantity,

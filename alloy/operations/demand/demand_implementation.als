@@ -52,9 +52,18 @@ pred deletedBeforeD[o: dlog/SubjectOcc] {
     deployment wants it, is CALLER policy over the `demandsFor` read.) */
 fun createGenesisViol[o: dlog/SubjectOcc]: set Reason {
   (startedBeforeD[o] => RDemandStarted else none)
-  // (No item/station tenancy clause: itemRef/stationRef are ENTITY dataRefs post-lift — the
-  //  kernel's CrossTenantIsolation makes a cross-tenant resolution UNREPRESENTABLE. RForeignRef
-  //  remains for the RECORD-carried refs: holding, delivery.)
+  // (No item/station tenancy clause: stationRef is an ENTITY dataRef — kernel isolation makes a
+  //  cross-tenant resolution UNREPRESENTABLE; the itemPin's tenancy is the DemandItemPinTenancy
+  //  fact (DT-023 — same unrepresentable posture). RForeignRef remains for the RECORD-carried
+  //  refs: holding, delivery.)
+  // DT-023 D2 (the demand row): demand GENESIS is a new-commitment point — creating an intent
+  // to produce a retired item refuses; live demands complete (grandfathered downstream).
+  + ((not itemLiveAt[o.subject.itemPin.subject, o.tick]) => RRetiredRef else none)
+}
+// DT-023 cut 7a: a committed genesis pins the item's CURRENT version at its tick (Q-A currency).
+fact DemandItemPinCurrency {
+  all o: CreateDemandOcc + CreateWithCycleOcc | committed[o] implies
+    pinsCurrentItem[o.subject.itemPin, o.tick]
 }
 /** attachCycleViol — the SAGA COMMIT GATE for attach (C/OP call-first): the member must be an
     in-tenant, live cycle standing at REQUESTED (its Accept — the saga's first leg — already
@@ -144,7 +153,7 @@ fun createDeliveryViol[o: CreateDeliveryOcc]: set Reason {
   (startedBeforePD[o] => RDeliveryStarted else none)
   + ((demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] != DS_IN_PROCESS)
      => RTargetNotInProcess else none)
-  + ((o.item != (resolve[o.subject.demandRef] & DemandItem).itemRef)
+  + ((o.item != (resolve[o.subject.demandRef] & DemandItem).itemPin.subject.eId)
      => RWrongItem else none)   // §8.1.4 item agreement — the pool module's reason REUSED
 }
 /** revokeDeliveryViol — §8.1.1: subject live + DI live. The content clause (holding content ≥

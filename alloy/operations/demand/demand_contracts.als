@@ -119,7 +119,7 @@ pred withdrawnDetachReconciles {
 pred createDeliveryGated {
   all o: CreateDeliveryOcc | committed[o] implies {
     demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] = DS_IN_PROCESS
-    o.item = (resolve[o.subject.demandRef] & DemandItem).itemRef
+    o.item = (resolve[o.subject.demandRef] & DemandItem).itemPin.subject.eId
   }
 }
 /** Create COMPOSES with RecordProduction (§8.1.2 compose-don't-subsume — ONE atomic demand

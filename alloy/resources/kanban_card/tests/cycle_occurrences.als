@@ -233,7 +233,7 @@ check unit_cyc_quantityFixedAtGenesis for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 S
 // poolFrozenOnceAttached + the ProductionFailure detach (both itemRefs are immutable).
 assert unit_cyc_poolItemHomogeneous {
   all c: CardCycle, t: Tick | let p = resolve[stateOfCycleAt[c, t].sPool] & InventoryPool |
-    some p implies p.itemRef = (cycles.c).itemRef
+    some p implies p.itemPin.subject = (cycles.c).itemPin.subject
 }
 check unit_cyc_poolItemHomogeneous for 5 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 CardCycle, 2 KanbanCard, 2 InventoryItem, 2 InventoryPool expect 0

@@ -13,7 +13,7 @@ open reference_data/business_affiliate/business_affiliate_implementation
 // A fully-linked single-tenant instance exists — the whole chain is satisfiable (not over-constrained).
 pred coherent {
   some i: Item, s: ItemSupply, ba: BusinessAffiliate, r: BusinessRole |
-    s in i.supplies
+    s in itemSuppliesOf[i]   // version-carried since DT-023 cut 7a (the supply rides i's log)
     and r in ba.roles
     and r.role = VENDOR
     and s.supplier.vendorRef = r.eId

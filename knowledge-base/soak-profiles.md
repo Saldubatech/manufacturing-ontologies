@@ -41,6 +41,14 @@ breadth simultaneously. Mock-composition roots are an order of magnitude cheaper
 implementation roots at comparable entity census (translation dominates: >1h CNF
 translation observed on the implementation cones).
 
+**DT-023 cut 7a data point — census growth can DEMOTE a unit-tier check to soak-class:**
+`unit_rcv_contract_linePoolExclusive` (the §8.5.3 lattice row at UNIT scopes) solved in
+minutes at cuts 5/6 but blew past 9h CPU once the item log (`ItemOcc`/`ItemState`) rode
+the receiver cone via the pin re-point. Relocated verbatim to
+`soak/tests/receiver_pool_exclusive.als` (`soak_rcv_linePoolExclusiveUnitScope`) — tier
+change only. Watch the other multi-holder exclusivity checks for the same cliff as 7b/7c
+widen the reference-data cones.
+
 ## Operational shape (target)
 
 - `alloy/soak/tests/` splits into LEMMA roots (isolation, item agreement, binding

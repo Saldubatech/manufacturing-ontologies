@@ -56,19 +56,20 @@ pred attachRequiresReleased {
 
 // ── C3b · the attach item-agreement (MP ruling 2026-07-10, PR operations#225) — ATOMIC ──────────
 /** A committed demand pairing (AttachDemand, or AddLine's demand arm) is DENOMINATED in the
-    line's item: the serviced DemandItem's itemRef equals the line's itemRef. Corollary: a
-    FREE-FORM line (no itemRef) services NOTHING — the design's "documentary only, no demand
-    pairing" (F7 flag 3) is now structural, since a DemandItem always carries exactly ONE
-    itemRef and the equality can never hold against an empty one. The guard refuses
+    line's item: the serviced DemandItem's pinned item equals the line's pinned item
+    (ENTITY-level — versions may differ; DT-023 cut 7a). Corollary: a FREE-FORM line (no
+    itemPin) services NOTHING — the design's "documentary only, no demand pairing" (F7 flag 3)
+    is structural, since a DemandItem always carries exactly ONE
+    itemPin and the equality can never hold against an empty one. The guard refuses
     RDemandIneligible (wrong item, or a free-form target line). Unlike C3's status read, both
     compared fields are IMMUTABLE identity-structure, so the gate cannot go stale — no
     convergence window, no probe obligation. The invariant protects the line's own arithmetic
     (sReceived accrual, openOf, the receipts drill-down all denominate in the line's item). */
 pred attachItemAgrees {
   all o: AttachDemandOcc | committed[o] implies
-    (resolve[o.demand] & DemandItem).itemRef = o.subject.itemRef
+    (resolve[o.demand] & DemandItem).itemPin.subject = o.subject.itemPin.subject
   all o: AddLineOcc | (committed[o] and some o.demand) implies
-    (resolve[o.demand] & DemandItem).itemRef = o.subject.itemRef
+    (resolve[o.demand] & DemandItem).itemPin.subject = o.subject.itemPin.subject
 }
 
 // ── C4 · the Submit gate (O2) — CONVERGENT/OPERATION, call-first ────────────────────────────────
@@ -128,18 +129,12 @@ pred supplierBindingFrozen {
       oPost[o].sSupplier = oPre[o].sSupplier
 }
 
-// ── C9b · the item-descriptor pin-freeze (MP 2026-07-08; §7 re-basing 2026-08-05) — ATOMIC ──────
-/** A line captures the item descriptor PIN at genesis exactly when it orders an Item, and no
-    later occurrence ever changes the handle — vendor commitments stay repeatable/auditable
-    regardless of later item edits. §7 canon: the PIN is the canonical freeze — the pinned
-    view's immutability is INHERITED from the insert-only substrate (runtime: the record
-    `rId`); this law frames only the HANDLE. Pin-target agreement (the pin denotes the LINE's
-    item) is type-level and definitional (`ItemLinePinAgrees` in order_types — the service
-    captures what it read; a mismatch is unrepresentable, not refused). */
-pred lineDescriptorFrozen {
-  all o: AddLineOcc | committed[o] implies (some lPost[o].sItemData iff some o.subject.itemRef)
-  all o: lineOccKinds | (committed[o] and some lPre[o]) implies lPost[o].sItemData = lPre[o].sItemData
-}
+// ── C9b · the item-descriptor pin-freeze — DISSOLVED (DT-023 cut 7a) ────────────────────────────
+// The former `lineDescriptorFrozen` law is now STRUCTURAL: the descriptor pin is the line's
+// IDENTITY `itemPin` — immutable by construction, captured current at genesis
+// (`LinePinCurrency`, implementation), present ⟺ the line orders an Item, by the one field.
+// Vendor commitments stay repeatable/auditable with nothing legislated; runtime coordinate
+// (entityId, rId). LC-ORD-09b's card records the dissolution.
 
 // ── C11 · the header-detail freeze (DT-022 TQ-7, cut 6) — ATOMIC ────────────────────────────────
 /** Priority, assignee, and the vendor-facing notes are unchanged by every occurrence that
@@ -180,6 +175,5 @@ pred guarantees {
   and closeRequiresSettled
   and supplierBindingFrozen
   and headerDetailFrozen
-  and lineDescriptorFrozen
   and orderTerminalClosure
 }

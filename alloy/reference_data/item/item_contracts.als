@@ -4,40 +4,43 @@ module reference_data/item/item_contracts
  * ITEM — CONTRACTS (DT-017). The module's laws as NAMED predicates: everything a consumer may
  * rely on, and nothing else. types + contracts = the DOMAIN statement of this module.
  *
- * Curated deliberately small (few, strong promises — DT-017 §contract-curation): a law that is
- * true of the implementation but absent here is NOT part of the module's promise; publishing it
- * later is a compatible extension. Consumers assume these via `item_mock.als` (unit roots);
- * integration roots discharge nothing here — for a STATIC reference module the laws are axioms,
- * not theorems, so the suite's obligation is joint SATISFIABILITY (witnesses), not proof.
+ * Since the DT-023 cut 7a log conversion the laws split by NATURE:
+ *  - CONTENT laws (supply ownership, UoM ownership, supplier-ref soundness) remain AXIOMS —
+ *    nothing deeper derives them; the implementation asserts them as facts, exactly as the
+ *    static form did (the degenerate-form heritage, now content-only).
+ *  - LIFECYCLE laws (Create-first, retirement-terminal) are THEOREMS of the guards + effects,
+ *    proven in the suite (check, UNSAT = holds) and assumable by consumers via the mock.
+ *  - The CHAINING law is the spine's, adopted as fact and re-published here so consumer unit
+ *    roots get the log shape from the mock.
  */
 
 open reference_data/item/item_types
+open meta/subject_log/subject_log[Item, ItemState] as ilog   // same params ⇒ the SAME spine instance as item_types
 
-// ── C1: supply ownership ─────────────────────────────────────────────────────────────────────────
-/** Every ItemSupply belongs to exactly one Item and inherits its tenant; an Item's default
-    supply, when it resolves, is one of that item's own supplies. Consumers may navigate
-    Item→supplies as a strict in-tenant tree and trust defaultSupply resolution. */
+// ── C1: supply ownership (versioned — DT-023 Q-C folding) ───────────────────────────────────────
+/** Every ItemSupply belongs to exactly one Item's history and inherits its tenant; a state's
+    default supply, when it resolves, is one of THAT STATE's own supplies. Consumers may
+    navigate a version's sSupplies as a strict in-tenant set and trust default resolution. */
 pred supplyOwnership {
-  all c: ItemSupply | one i: Item | c in i.supplies
-  all i: Item, c: i.supplies | c.tenantId = i.tenantId
-  all i: Item | let d = resolve[i.defaultSupply] | some d implies d in i.supplies
+  all c: ItemSupply | one i: Item | c in itemSuppliesOf[i]
+  all i: Item, c: itemSuppliesOf[i] | c.tenantId = i.tenantId
+  all s: ItemState | let d = resolve[s.sDefaultSupply] | some d implies d in s.sSupplies
+}
+/** itemSuppliesOf — every supply row appearing anywhere in `i`'s history (payloads + records). */
+fun itemSuppliesOf[i: Item]: set ItemSupply {
+  let os = { o: ItemOcc | o.subject = i } | os.post.sSupplies + (os & ItemWriteOcc).supplies
 }
 
 // ── C2: UoM schemes are owned (DT-009) ──────────────────────────────────────────────────────────
-// Scheme VALUE well-formedness (each = 1.0, no zero factors) is DEFINITIONAL and lives with the
-// vocabulary (uom.als `UomSchemeWF`) — consumers get it for free from the types cone; only the
-// RELATIONAL law is contractual here. (DT-017 finding: bundling the two would force an owning
-// Item into every scheme-consuming universe — fatal for the arity-4 collapse root. Consumers may
-// also assume contract laws À LA CARTE: open item_contracts + fact { <the preds relied on> }.)
-
-/** Every UomScheme belongs to exactly one Item (no orphan schemes). */
+/** Every UomScheme belongs to exactly one Item (no orphan schemes). Scheme VALUE
+    well-formedness is definitional and rides with the vocabulary (uom.als UomSchemeWF). */
 pred uomSchemesSound { all s: UomScheme | one i: Item | i.uom = s }
 
 // ── C3: supplier references are sound ───────────────────────────────────────────────────────────
 /** Tight by default (modeling-conventions §6): a supplier's vendor ref, when it resolves in
     scope, is a VENDOR BusinessRole; a resolved affiliate ref is a BusinessAffiliate; and when
     both resolve, the vendor role belongs to that affiliate. Dangling refs are allowed — the
-    'soft' (cross-Universe) case. */
+    'soft' (cross-Universe) case. (Dissolves into a BA version pin at cut 7b.) */
 pred supplierRefsSound {
   all s: ItemSupply | let v = resolve[s.supplier.vendorRef] |
     some v implies (v in BusinessRole and v.role = VENDOR)
@@ -48,6 +51,24 @@ pred supplierRefsSound {
     }
 }
 
+// ── C4: the lifecycle shape (DT-023 R1 — theorem of guards + effects) ──────────────────────────
+/** A committed first occurrence on an item is its Create (and Creates are only ever first);
+    retirement is TERMINAL — nothing commits after the item's state is Retired. With the
+    effects this yields the status shape: Live through Create/Update, Retired from Delete on. */
+pred itemLifecycleShape {
+  all o: ItemOcc | committed[o] implies {
+    ((no ilog/priorOn[o]) iff o in CreateItemOcc)
+    (some ilog/priorOn[o] implies ilog/priorOn[o].post.sStatus = RD_LIVE)
+  }
+}
+
+// ── C5: the log is chained (the spine's law, re-published for mock consumers) ──────────────────
+/** Every item occurrence — refusals included — reads the item's real current record. */
+pred itemLogChained { ilog/chained }
+
 // ── the promise ──────────────────────────────────────────────────────────────────────────────────
 /** guarantees — the module's full promise: the conjunction of the published laws. */
-pred guarantees { supplyOwnership and uomSchemesSound and supplierRefsSound }
+pred guarantees {
+  supplyOwnership and uomSchemesSound and supplierRefsSound
+  and itemLifecycleShape and itemLogChained
+}

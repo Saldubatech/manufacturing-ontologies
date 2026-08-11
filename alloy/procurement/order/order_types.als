@@ -48,7 +48,7 @@ open meta/subject_log/subject_log[OrderLine, OrderLineState] as llog  // the LIN
 open shared/values                                   // Quantity (+ keyed-map add/negate)
 open shared/note                                     // Note (sNotes/sInternalNotes — record-carried; pin `2 Note`)
 open operations/demand/demand_types                  // DemandItem + statuses + reads (TYPES only)
-open reference_data/item/item_types                  // Item + ItemDescriptorPin (§7 pin re-basing; previously transitive via demand_types)
+open reference_data/item/item_types                  // Item + ItemOcc pins + itemLiveAt (DT-023; previously transitive via demand_types)
 open reference_data/business_affiliate/business_affiliate_types      // SupplierReference [F8/O6]
 open reference_data/staff/staff_types                // StaffMember (sAssignee target — DT-022 TQ-7(b))
 
@@ -95,22 +95,15 @@ fact SupplierBindingExtensional {
     a.name != b.name or a.reference != b.reference or a.base != b.base or a.overrides != b.overrides
 }
 
-// ── the item descriptor PIN (MP ruling 2026-07-08; re-based to PIN — §7 canon, 2026-08-05) ──────
-/** The line captures a PIN of the item's descriptor at genesis and freezes it (MP ruling:
-    "lines do freeze the item descriptor, otherwise commitments to/from vendors are not
-    repeatable/auditable"). The §7 re-basing: PIN is the canonical freeze — its immutability is
-    INHERITED from the insert-only substrate, nothing re-legislated per carrier; the former
-    opaque COPY atom was the implementation-shaped stand-in. The handle (`ItemDescriptorPin`)
-    lives with its target in item_types. */
-fact ItemLinePinAgrees {
-  // Definitional capture (the refused-vs-unrepresentable distinction, R1-challenge precedent):
-  // the runtime SERVICE reads the descriptor of the item the line names — the caller never
-  // supplies the pin — so a MISMATCHED pin on an item line is UNREPRESENTABLE (a type-level
-  // fact, not a Reason; no register growth). A descriptor pin on a FREE-FORM line (no itemRef)
-  // stays representable — and guard-REFUSED (RNoDescriptor), preserving that refusal arm.
-  all o: AddLineOcc | (some o.itemData and some o.subject.itemRef) implies
-    o.itemData.pinOf.eId = o.subject.itemRef
-}
+// ── the item descriptor PIN — SUBSUMED BY THE IDENTITY PIN (DT-023 R3, cut 7a) ──────────────────
+// The line's identity `itemPin` IS the frozen descriptor pin (MP ruling 2026-07-08: "lines do
+// freeze the item descriptor, otherwise commitments to/from vendors are not
+// repeatable/auditable"): a VERSION reference into the item log, captured at genesis,
+// immutable BECAUSE it is identity — the former two-field apparatus (`itemRef` entity handle +
+// `sItemData` ItemDescriptorPin copy handle + the `ItemLinePinAgrees` agreement fact + the
+// `lineDescriptorFrozen` law + the `RNoDescriptor` capture guard) all DISSOLVE into the one
+// field. Pin-target agreement is now structural (one field cannot disagree with itself);
+// runtime coordinate: (entityId, rId).
 
 // ── the confirmation facet (F3) ─────────────────────────────────────────────────────────────────
 /** Disposition — the vendor's per-line answer; WAIVED = an acknowledgment recorded WITHOUT an
@@ -140,14 +133,16 @@ fact OrderRefs { all o: Order | no o.dataRefs }   // the supplier binding is REC
     received tracking (F7 flag 3). Changing a line's item = Remove + Add (O5). */
 sig OrderLine extends Scoped {
   orderRef: one  EntityId,   // → Order: the parent (lines never move — O5); entity-carried composition
-  itemRef:  lone EntityId    // → Item: WHAT is ordered; absent = free-form
+  itemPin:  lone ItemOcc     // → Item VERSION PIN (DT-023 R3; was itemRef + sItemData): WHAT is
+                             //   ordered AND the frozen descriptor version, in one; absent = free-form
 }
-fact OrderLineRefs { all l: OrderLine | l.dataRefs = l.orderRef + l.itemRef }   // kernel isolation covers them
+fact OrderLineRefs { all l: OrderLine | l.dataRefs = l.orderRef }   // kernel isolation covers it
+// Pin tenancy (DT-023): kernel isolation reaches only EntityId dataRefs — stated here instead.
+fact LineItemPinTenancy {
+  all l: OrderLine | some l.itemPin implies l.itemPin.subject.tenantId = l.tenantId
+}
 fact OrderLineRefIntegrity {
-  all l: OrderLine {
-    (let o = resolve[l.orderRef] | some o implies o in Order)
-    (let i = resolve[l.itemRef]  | some i implies i in Item)
-  }
+  all l: OrderLine | let o = resolve[l.orderRef] | some o implies o in Order
 }
 
 // ── the state records ───────────────────────────────────────────────────────────────────────────
@@ -186,13 +181,13 @@ sig OrderLineState extends Snapshot {
   sConfirmation: lone Confirmation,    // the vendor's answer (F3); none until acknowledged
   sReceived:     lone Quantity,        // STORED, incrementally maintained (F9); none = the keyed zero
   sLineStatus:   one  OrderLineStatus, // L_OPEN / L_CLOSED (closure by act — F7)
-  sDemand:       set  EntityId,        // → DemandItem: the serviced demand (O3: the HOLDER carries the refs)
-  sItemData:     lone ItemDescriptorPin // the PINNED item descriptor (present ⟺ the line orders an Item; captured at genesis — §7 canon 2026-08-05: the freeze law frames the HANDLE, the pinned view's immutability is inherited)
+  sDemand:       set  EntityId         // → DemandItem: the serviced demand (O3: the HOLDER carries the refs)
+  // (sItemData DISSOLVED at DT-023 cut 7a: the identity `itemPin` IS the frozen descriptor pin.)
 }
 fact OrderLineStateExtensional {
   all disj a, b: OrderLineState |
     a.sQuantity != b.sQuantity or a.sConfirmation != b.sConfirmation or a.sReceived != b.sReceived
-    or a.sLineStatus != b.sLineStatus or a.sDemand != b.sDemand or a.sItemData != b.sItemData
+    or a.sLineStatus != b.sLineStatus or a.sDemand != b.sDemand
 }
 // Record-carried refs are TYPED (soft — dangling allowed; tenancy is guard-side).
 fact OrderLineDemandRefIntegrity {
@@ -235,11 +230,11 @@ sig DeleteOrderOcc extends olog/SubjectOcc {} { bindings = subject }
 // ── the kinds — LINE subject ────────────────────────────────────────────────────────────────────
 /** AddLine — line genesis: from a DemandItem, from an Item, or free-form (F6). The on-the-fly
     card-less DemandItem for a naked-item line is the CALLER's demand-side Create — order-side
-    this is just genesis + attach. orderRef/itemRef ride the ENTITY; `itemData` is the PINNED
-    descriptor captured at genesis (present ⟺ the line orders an Item — the audit pin;
-    ItemLinePinAgrees ties it to the line's item definitionally). */
-sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId, itemData: lone ItemDescriptorPin }
-  { bindings = subject + qty + demand + itemData }
+    this is just genesis + attach. orderRef/itemPin ride the ENTITY — the pin IS the frozen
+    descriptor version (DT-023 cut 7a), captured current at genesis (LinePinCurrency) and
+    guarded live (RRetiredRef — line-add is a new-commitment point, D3). */
+sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId }
+  { bindings = subject + qty + demand }   // the descriptor pin rides the line IDENTITY (DT-023 cut 7a)
 /** UpdateLine — edit the requested quantity (SET; the item is immutable — O5). */
 sig UpdateLineOcc extends llog/SubjectOcc { qty: one Quantity } { bindings = subject + qty }
 /** LineDemandOcc — the abstract parent of the demand-addressing line kinds (`demand` declared
@@ -300,14 +295,12 @@ one sig ROrderStarted,      // create: this order already has committed history 
         RDemandIneligible,  // attach/submit C/OP gate: the demand item is dangling, not live,
                             //   not at the expected saga state (RELEASED for attach; IN_PROCESS at submit),
                             //   or not denominated in the line's item (C3b, MP 2026-07-10 — wrong
-                            //   item, or a free-form target line: no itemRef can never agree)
+                            //   item, or a free-form target line: no itemPin can never agree)
         RLinesOpen,         // close: a live line is still L_OPEN
-        RNoDemand,          // record-receipt: the line is free-form (no received tracking — F7)
-        RNoDescriptor       // add-line: the item descriptor PIN must be captured EXACTLY when
-                            //   the line orders an Item (MP 2026-07-08; §7 pin re-basing
-                            //   2026-08-05; covers both a missing pin and a pin on a
-                            //   free-form line)
+        RNoDemand           // record-receipt: the line is free-form (no received tracking — F7)
         extends Reason {}
+        // (RNoDescriptor RETIRED at DT-023 cut 7a: the descriptor pin is the line IDENTITY —
+        //  a missing or extra pin is no longer a caller error but a different line kind.)
 
 // ── the read API (per-role; L9) ─────────────────────────────────────────────────────────────────
 /** oPre / oPost / lPre / lPost — an occurrence's records, TYPED (the DT-017 Snapshot
@@ -356,7 +349,7 @@ fun retiredLinesOf[o: Order, t: Tick]: set OrderLine {
   { l: linesOf[o] | startedLineAt[l, t] and lineRemovedAt[l, t] }
 }
 /** freeForm — the line orders no Item: documentary only (F6/F7). */
-pred freeForm[l: OrderLine] { no l.itemRef }
+pred freeForm[l: OrderLine] { no l.itemPin }
 
 /** servicedAt — a line's serviced DemandItems, RESOLVED (soft refs may dangle out of scope). */
 fun servicedAt[l: OrderLine, t: Tick]: set DemandItem {

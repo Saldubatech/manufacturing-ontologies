@@ -26,14 +26,14 @@ run sys_modelLoads
   for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
 // Cross-domain: a card references an Item — and by kernel isolation they share a tenant.
-pred sys_cardReferencesItem { some c: KanbanCard, i: Item | resolve[c.itemRef] = i }
+pred sys_cardReferencesItem { some c: KanbanCard, i: Item | c.itemPin.subject = i }
 run sys_cardReferencesItem
   for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
 
 // Cross-domain composition: a card and an InventoryItem classified by the SAME Item coexist
 // (the KanbanCard ↔ InventoryItem seam meets at reference data).
 pred sys_cardAndHoldingShareItem {
-  some k: KanbanCard, ii: InventoryItem, i: Item | resolve[k.itemRef] = i and resolve[ii.itemRef] = i
+  some k: KanbanCard, ii: InventoryItem, i: Item | k.itemPin.subject = i and ii.itemPin.subject = i
 }
 run sys_cardAndHoldingShareItem
   for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1
@@ -52,7 +52,7 @@ run sys_crossTenantMaterial
 // (membership read via the log projection — the pool is log-carried since 2026-07-02).
 pred sys_poolHoldsClassifiedMember {
   some p: InventoryPool, t: Tick, i: Item |
-    some ii: heldAt[p, t] | resolve[ii.itemRef] = i and p.tenantId = i.tenantId
+    some ii: heldAt[p, t] | ii.itemPin.subject = i and p.tenantId = i.tenantId
 }
 run sys_poolHoldsClassifiedMember
   for 6 but 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard, 5 Int, 3 Scalar expect 1

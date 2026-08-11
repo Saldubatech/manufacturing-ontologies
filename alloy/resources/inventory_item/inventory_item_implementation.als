@@ -61,6 +61,14 @@ fun createViol[o: CreateOcc]: set Reason {
   + ((not gPositive[o.qty.byUnit]) => RNonPositive else none)
   + ((not unitsOk[o.qty.byUnit, o.target]) => RInvalidUnit else none)
 }
+// DT-023 cut 7a: a committed birth pins the item's CURRENT version at its tick (Q-A currency).
+// Deliberately NO RRetiredRef guard here — inventory birth is CAPTURE riding upstream-guarded
+// commitments (the D3 grandfather principle: a receiving line added pre-retirement still
+// births; at-rest stock of a retired item is legal). The new-commitment gates live in
+// demand/order/receiving/kanban. A birth after retirement simply pins the retired version.
+fact ItemPinCurrency {
+  all o: CreateOcc | committed[o] implies pinsCurrentItem[o.target.itemPin, o.tick]
+}
 fun deleteViol[o: DeleteOcc]: set Reason {
   ((not liveBefore[o, o.target]) => RNotLive else none)
   + ((liveBefore[o, o.target] and o.pre.sFill != EMPTY) => RNotApplicable else none)   // use WriteOff
@@ -144,12 +152,12 @@ fun splitViol[o: SplitOcc]: set Reason {
        => RIncomparable else none)
   + ((not (unitsOk[o.soGood.byUnit, o.target] and unitsOk[o.soDeg.byUnit, o.target]))
        => RInvalidUnit else none)
-  + ((o.nu.itemRef != o.target.itemRef or o.nu.tenantId != o.target.tenantId) => RIncompatible else none)
+  + ((o.nu.itemPin.subject != o.target.itemPin.subject or o.nu.tenantId != o.target.tenantId) => RIncompatible else none)
 }
 fun mergeViol[o: MergeOcc]: set Reason {
   ((not liveBefore[o, o.target] or not liveBefore[o, o.absorbed]) => RNotLive else none)
   + ((isSerialized[o.target] or isSerialized[o.absorbed]) => RSerialized else none)
-  + ((o.target.tenantId != o.absorbed.tenantId or o.target.itemRef != o.absorbed.itemRef
+  + ((o.target.tenantId != o.absorbed.tenantId or o.target.itemPin.subject != o.absorbed.itemPin.subject
       or (liveBefore[o, o.target] and liveBefore[o, o.absorbed]
             and o.pre.sLocator != o.absPre.sLocator)) => RIncompatible else none)
 }

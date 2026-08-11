@@ -154,11 +154,33 @@ fun addLineViol[o: AddReceivingLineOcc]: set Reason {
   + ((receiverStatusAt[parentReceiverOf[o.subject], o.tick] = RV_COMPLETE) => RFrozen else none)
   + ((some a: resolve[o.attribution] & OrderAttribution | a.tenantId != o.subject.tenantId)
      => RForeignRef else none)
+  + ((some o.item and o.item.subject.tenantId != o.subject.tenantId)
+     => RForeignRef else none)   // DT-023: the pin's tenancy (record-carried — guard-side)
+  + ((no o.attribution and some o.item and not itemLiveAt[o.item.subject, o.tick])
+     => RRetiredRef else none)   // D3 blind-receiving refinement: a BLIND line IS the
+                                 // acceptance decision — only currently defined items
+                                 // may be received without an order behind them
   + attachSumViol[o, o.attribution, o.expectedQty]   // the newborn's cap is the payload's
 }
 fun updateLineViol[o: UpdateReceivingLineOcc]: set Reason {
   ((no o.pre) => RLineClosed else none)
   + ((some o.pre and rlPre[o].sStatus != RL_RECEIVING) => RFrozen else none)
+  + ((some o.item and o.item.subject.tenantId != o.subject.tenantId)
+     => RForeignRef else none)   // DT-023: the pin's tenancy
+  + ((some o.pre and no rlPre[o].sAttributions
+      and some o.item and not itemLiveAt[o.item.subject, o.tick])
+     => RRetiredRef else none)   // D3 blind-receiving refinement: re-pin on a line with
+                                 // no attributions is a blind acceptance — gated
+}
+// DT-023 cut 7a: capture-window writes RE-PIN the item's CURRENT version (the Q-A floating
+// semantics — sExpectedItem floats until the Receive freeze). The RRetiredRef gate follows
+// the COMMITMENT DECISION (D3 blind-receiving refinement, MP 2026-08-10): ORDER-CONNECTED
+// add/re-pin stays UNGATED — capture riding the order's already-gated commitment (the D3
+// grandfather rows: ordered goods arrive regardless); BLIND add/re-pin refuses a retired
+// item with RRetiredRef (there is no upstream gate — the blind write is the commitment).
+fact LineExpectedItemPinCurrency {
+  all o: AddReceivingLineOcc    | (committed[o] and some o.item) implies pinsCurrentItem[o.item, o.tick]
+  all o: UpdateReceivingLineOcc | (committed[o] and some o.item) implies pinsCurrentItem[o.item, o.tick]
 }
 fun appendAttributionViol[o: AppendAttributionOcc]: set Reason {
   ((no o.pre) => RLineClosed else none)
@@ -176,11 +198,11 @@ fun removeAttributionViol[o: RemoveAttributionOcc]: set Reason {
 fun receiveViol[o: ReceiveLineOcc]: set Reason {
   ((no o.pre) => RLineClosed else none)
   + ((some o.pre and rlPre[o].sStatus != RL_RECEIVING) => RBadState else none)
-  + ((some o.birthPins and no resolve[rlPre[o].sExpectedItem] & Item) => RNoItem else none)
+  + ((some o.birthPins and no rlPre[o].sExpectedItem) => RNoItem else none)
   + ((some p: resolve[o.pool] & InventoryPool | p.tenantId != o.subject.tenantId)
      => RForeignPool else none)
   + ((some o.pool and some rlPre[o].sExpectedItem
-      and (resolve[o.pool] & InventoryPool).itemRef != rlPre[o].sExpectedItem)
+      and (resolve[o.pool] & InventoryPool).itemPin.subject != rlPre[o].sExpectedItem.subject)
      => RWrongItem else none)   // a DANGLING pool refuses conservatively through this same
                                 //   clause (an empty resolution can never agree — the
                                 //   attachCycleViol dangling-ref precedent)

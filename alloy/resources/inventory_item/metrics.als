@@ -104,7 +104,7 @@ fact CellWellFormed { all c: CountCell | some c.cLevel iff some c.cNode }
     nothing), and under the locator node when the cell is classified. */
 fun membersOf[c: CountCell]: set InventoryItem {
   { ii: InventoryItem | liveAsOf[ii, c.cAsOf] and ii.tenantId = c.cTenant
-      and resolve[ii.itemRef] = c.cItem
+      and ii.itemPin.subject = c.cItem
       and (some c.cLevel implies
              (some stateAsOf[ii, c.cAsOf].sLocator
               and samePrefix[stateAsOf[ii, c.cAsOf].sLocator, c.cNode, c.cLevel])) }
