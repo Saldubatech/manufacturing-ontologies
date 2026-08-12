@@ -172,12 +172,15 @@ fact ReceiverStateExtensional {
     or a.sOperator != b.sOperator
     or a.sInternalNotes != b.sInternalNotes
 }
-// Pin-target agreement is DEFINITIONAL (the SupplierBindingPinAgrees precedent): a present
-// selector requires its pin and is a CARRIER role of the PINNED version. Tenancy stays
-// guard-side (carrierTenancyViol).
+// Pin-target agreement is DEFINITIONAL (the SupplierBindingPinAgrees precedent): pin and
+// selector come TOGETHER (DT-023 cut 8 — a carrier link always names its CARRIER role),
+// and the selector is a CARRIER role of the PINNED version. Tenancy stays guard-side
+// (carrierTenancyViol).
 fact ReceiverCarrierPinAgrees {
-  all s: ReceiverState | some s.sCarrierRole implies
-    (some s.sCarrierPin and roleSelectorAgrees[s.sCarrierPin, s.sCarrierRole, CARRIER])
+  all s: ReceiverState {
+    some s.sCarrierPin iff some s.sCarrierRole
+    some s.sCarrierRole implies roleSelectorAgrees[s.sCarrierPin, s.sCarrierRole, CARRIER]
+  }
 }
 
 /** ReceivingLineState — one moment's payload of a ReceivingLine (a value; extensional). The

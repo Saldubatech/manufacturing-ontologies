@@ -51,7 +51,9 @@ run int_ord_submitArc {
   }
 } for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      12 Tick, 12 EntityId, 12 Snapshot, 2 Note expect 1
+      12 Tick, 14 EntityId, 14 Snapshot, 9 Occurrence, 2 Note expect 1
+      // census +2 EntityId / +2 Occurrence at DT-023 cut 8 (mirrors unit_ord_buildAndSubmit):
+      // Submit requires a LINKED vendor, so the arc carries the BA Create fixture (PDEV-241 re-base)
 
 // ── the cancel arc on the real stack: the hold dies with the order; the item is STILL RELEASED
 // on its own (sovereign) log and back in the queue. ─────────────────────────────────────────────

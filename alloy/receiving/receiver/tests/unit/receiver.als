@@ -95,11 +95,32 @@ check unit_rcv_contract_receiverTerminalComplete for 5 but 5 Int, 3 Scalar, 5 St
       0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 6 Occurrence, 8 EntityId, 6 Tick, 8 Snapshot, 2 Note expect 0
 
-// The LATTICE ROW (§8.5.3): `unit_rcv_contract_linePoolExclusive` was RELOCATED to the
-// soak tier at DT-023 cut 7a — `alloy/soak/tests/receiver_pool_exclusive.als`. The item-log
-// census (ItemOcc/ItemState in this cone since the pin re-point) pushed the UNSAT proof past
-// the unit-tier budget (>9h CPU; it was minutes at cut 5/6). Same assert, same scopes — only
-// the tier changed; the SAT companion below stays here (anti-vacuity is cheap).
+// The LATTICE ROW (§8.5.3): the COMBINED check was RELOCATED to the soak tier at DT-023
+// cut 7a (`soak_rcv_linePoolExclusiveUnitScope` — the item-log census pushed its UNSAT
+// proof past 9h). Per the D-1b sliced-gate-coverage rule (soak-verification-specification,
+// applied retroactively at cut 8), the row's THREE FACETS are checked here in universes
+// that each exclude the other holder kinds — an EXACT decomposition (the row is their
+// conjunction), so the gate keeps full facet-level assurance while the conjunction soaks.
+assert unit_rcv_contract_linesPoolLoneHolder { linesPoolLoneHolder }
+check unit_rcv_contract_linesPoolLoneHolder for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 2 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 1 InventoryItem, 2 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
+      8 Occurrence, 10 EntityId, 7 Tick, 9 Snapshot, 2 Note expect 0
+
+assert unit_rcv_contract_lineCyclePoolDisjoint { lineCyclePoolDisjoint }
+check unit_rcv_contract_lineCyclePoolDisjoint for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      1 CardCycle, 1 KanbanCard, 1 InventoryItem, 2 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
+      8 Occurrence, 10 EntityId, 7 Tick, 9 Snapshot, 2 Note expect 0
+
+assert unit_rcv_contract_lineDemandPoolDisjoint { lineDemandPoolDisjoint }
+check unit_rcv_contract_lineDemandPoolDisjoint for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Receiver, 1 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 1 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 1 InventoryItem, 2 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
+      8 Occurrence, 10 EntityId, 7 Tick, 9 Snapshot, 2 Note expect 0
 
 // The lattice SAT companion (anti-vacuity, mock peers): the premise + one holder of each
 // kind on three distinct pools — the cycle/demand bindings ride their committed attach

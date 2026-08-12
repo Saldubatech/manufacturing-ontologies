@@ -96,9 +96,10 @@ fun attachDemandViol[o: llog/SubjectOcc, m: EntityId]: set Reason {
        => RDemandIneligible else none)
     + ((some d and d.itemPin.subject != o.subject.itemPin.subject)
        => RDemandIneligible else none)   // C3b item-agreement (MP 2026-07-10): wrong item OR free-form target
-    + ((some d and not itemLiveAt[d.itemPin.subject, o.tick])
-       => RRetiredRef else none)   // DT-023 D3 (the demand row): order-ATTACH is the new-commitment
-                                   //   point for an OPEN demand — a retired item's demand attaches nowhere
+    // (The former attach RRetiredRef clause was REMOVED at DT-023 cut 8 — MP ruling
+    //  2026-08-11: servicing an EXISTING demand is reference PROPAGATION, not inception;
+    //  an order line MAY be created for a demand whose item has retired — otherwise the
+    //  workflow strands the demand. The vendor commitment re-check stays at Submit.)
     + ((some d and some (holdingLineOf[d, o.tick] - o.subject))
        => RDemandHeld else none)   // the hold reading — parent-live lines only (a canceled order's holds are gone)
     + ((m in lPre[o].sDemand) => RDemandHeld else none))
@@ -124,6 +125,10 @@ fun submitViol[o: SubmitOcc]: set Reason {
   + ((liveAtOccO[o] and oPre[o].sStatus != OS_DRAFT) => RBadState else none)
   + ((liveAtOccO[o] and no liveLinesOf[o.subject, o.tick]) => RNoLines else none)
   + ((liveAtOccO[o] and no oPre[o].sSupplier.name) => RNoSupplier else none)
+  + ((liveAtOccO[o] and no oPre[o].sSupplier.vendorPin) => RNoSupplier else none)
+                                 // DT-023 cut 8 (the PDEV-241 re-base): Submit requires a
+                                 //   LINKED vendor — a draft may compose unlinked, but it
+                                 //   cannot go out without a real BusinessAffiliate(VENDOR)
   + ((liveAtOccO[o] and some oPre[o].sSupplier.vendorPin
       and not baLiveAt[oPre[o].sSupplier.vendorPin.subject, o.tick])
      => RRetiredRef else none)   // DT-023 D3: Submit is the VENDOR commitment point — a draft
@@ -158,10 +163,12 @@ fun addLineViol[o: AddLineOcc]: set Reason {
   (startedBeforeL[o] => RLineStarted else none)
   + parentGateViol[o]
   + (some o.demand => attachDemandViol[o, o.demand] else none)
-  // DT-023 D2/D3: LINE-ADD is a new-commitment point — an item line on a retired item
-  // refuses (free-form lines skip; the descriptor-pin capture is now IDENTITY, so the
-  // former RNoDescriptor arm is structural).
-  + ((some o.subject.itemPin and not itemLiveAt[o.subject.itemPin.subject, o.tick])
+  // DT-023 cut 8 (inception vs propagation): the retirement gate binds only on the
+  // FROM-SCRATCH arm (`no o.demand` — the buyer directly chooses the item); the QUEUE
+  // arm (`some o.demand` — servicing an existing demand) inherits the pin — propagation,
+  // ungated. Free-form lines skip either way.
+  + ((no o.demand and some o.subject.itemPin
+      and not itemLiveAt[o.subject.itemPin.subject, o.tick])
      => RRetiredRef else none)
   // (No item tenancy clause: the itemPin rides LineItemPinTenancy — unrepresentable, the
   //  kernel posture. RForeignRef here covers the RECORD-carried demand ref via

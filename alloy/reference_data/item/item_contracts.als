@@ -43,7 +43,9 @@ pred uomSchemesSound { all s: UomScheme | one i: Item | i.uom = s }
     the former soft-ref soundness clauses are unrepresentable. */
 pred supplierPinsSound {
   all s: ItemSupply {
-    some s.supplierRole implies some s.supplierPin
+    some s.supplierPin iff some s.supplierRole   // together or not at all (DT-023 cut 8,
+                                                 //   the PDEV-241 re-base: a vendor link
+                                                 //   always names its VENDOR role)
     some s.supplierPin implies s.supplierPin.subject.tenantId = s.tenantId
     some s.supplierRole implies roleSelectorAgrees[s.supplierPin, s.supplierRole, VENDOR]
   }

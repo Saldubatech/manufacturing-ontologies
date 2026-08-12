@@ -173,15 +173,36 @@ pred receivingPoolGenesis {
     laws (`poolProvenance`/`holdingProvenance`), tying mock record bindings to attach
     payloads. Joined `guarantees` in the same change set as its first discharge (the
     §8.5.3 mock rule). */
-pred linePoolExclusiveWhileLive {
+// DT-023 cut 8, the D-1b decomposition (soak-verification-specification): the row is
+// EXACTLY the conjunction of three facets, each gate-checkable in a universe that
+// excludes the other holder kinds — gate-tier assurance while the full conjunction's
+// UNSAT proof runs at the soak tier (soak_rcv_linePoolExclusiveUnitScope). The
+// decomposition is exact (conjunction ≡ the row), so no assume-guarantee argument is
+// needed beyond the facets themselves.
+/** linesPoolLoneHolder — facet (i), OWN-KIND, unconditional: at any tick a pool is held
+    by at most one line. */
+pred linesPoolLoneHolder {
   all t: Tick, p: InventoryPool |
     lone { l: ReceivingLine | resolve[rlStateAt[l, t].sPool] = p }
+}
+/** lineCyclePoolDisjoint — facet (ii)/cycles, under the genesis premise: a line-held pool
+    is never simultaneously a live cycle's pool. */
+pred lineCyclePoolDisjoint {
   receivingPoolGenesis implies
     all t: Tick, p: InventoryPool |
-      (some l: ReceivingLine | resolve[rlStateAt[l, t].sPool] = p) implies {
-        no c: CardCycle | liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p
-        no d: DemandItem | liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p
-      }
+      (some l: ReceivingLine | resolve[rlStateAt[l, t].sPool] = p) implies
+        (no c: CardCycle | liveCycleAt[c, t] and resolve[stateOfCycleAt[c, t].sPool] = p)
+}
+/** lineDemandPoolDisjoint — facet (ii)/demands, under the genesis premise: a line-held
+    pool is never simultaneously a live demand's holding. */
+pred lineDemandPoolDisjoint {
+  receivingPoolGenesis implies
+    all t: Tick, p: InventoryPool |
+      (some l: ReceivingLine | resolve[rlStateAt[l, t].sPool] = p) implies
+        (no d: DemandItem | liveDemandAt[d, t] and resolve[demandStateAt[d, t].sHolding] = p)
+}
+pred linePoolExclusiveWhileLive {
+  linesPoolLoneHolder and lineCyclePoolDisjoint and lineDemandPoolDisjoint
 }
 
 // ── the promise ─────────────────────────────────────────────────────────────────────────────────

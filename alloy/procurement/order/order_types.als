@@ -97,11 +97,16 @@ fact SupplierBindingExtensional {
     a.name != b.name or a.vendorPin != b.vendorPin or a.vendorRole != b.vendorRole
     or a.base != b.base or a.overrides != b.overrides
 }
-// Pin-target agreement is DEFINITIONAL (the ItemLinePinAgrees precedent): a present selector
-// requires its pin and is a VENDOR role of the PINNED version. Tenancy stays guard-side.
+// Pin-target agreement is DEFINITIONAL (the ItemLinePinAgrees precedent): pin and selector
+// come TOGETHER (DT-023 cut 8, the PDEV-241 re-base: every present vendor reference points
+// to a real BusinessAffiliate BEARING a VENDOR role — "name-only" means a minimal
+// BusinessAffiliate, never a role-less link), and the selector is a VENDOR role of the
+// PINNED version. Tenancy stays guard-side.
 fact SupplierBindingPinAgrees {
-  all b: SupplierBinding | some b.vendorRole implies
-    (some b.vendorPin and roleSelectorAgrees[b.vendorPin, b.vendorRole, VENDOR])
+  all b: SupplierBinding {
+    some b.vendorPin iff some b.vendorRole
+    some b.vendorRole implies roleSelectorAgrees[b.vendorPin, b.vendorRole, VENDOR]
+  }
 }
 
 // ── the item descriptor PIN — SUBSUMED BY THE IDENTITY PIN (DT-023 R3, cut 7a) ──────────────────

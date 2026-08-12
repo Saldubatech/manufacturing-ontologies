@@ -89,7 +89,9 @@ run unit_ord_buildAndSubmit {
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      9 Tick, 10 EntityId, 10 Snapshot, 2 Note expect 1
+      9 Tick, 12 EntityId, 10 Snapshot, 8 Occurrence, 2 Note expect 1
+      // census +2 EntityId / +2 Occurrence at DT-023 cut 8: Submit now requires a LINKED
+      // vendor, so the trace carries the BA Create fixture (the PDEV-241 re-base)
 
 // Scenario 3 (acknowledgment, WAIVED flavor): the auto-confirm fires after Submit; the CONFIRMED
 // derived reading holds (transient — a reading, not a transition).
@@ -356,16 +358,45 @@ run unit_ord_notTerminalRefused {
       1 Order, 0 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       7 EntityId, 2 Note expect 1
 
-// DT-023 D2/D3: LINE-ADD on a retired item refuses with exactly RRetiredRef (the
-// new-commitment gate; replaces the retired RNoDescriptor arm — the pin capture is identity).
+// DT-023 D2/D3 (cut-8 form): LINE-ADD on a retired item refuses with exactly RRetiredRef
+// on the FROM-SCRATCH arm only (`no o.demand` — the buyer's direct item choice; the queue
+// arm is propagation, ungated — see the cut-8 witnesses below).
 run unit_ord_lineRetiredItemRefused {
   some o: AddLineOcc | {
+    no o.demand
     refusedAtAdmission[o] and o.admission.because = RRetiredRef
     some o.subject.itemPin
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       9 EntityId, 8 Snapshot, 8 Tick, 6 Occurrence, 2 Note expect 1
+
+// ── DT-023 cut 8: propagation ungated + the PDEV-241 re-base (MP rulings, 2026-08-11) ──────────
+
+// PROPAGATION is ungated: attaching an EXISTING demand whose item has since RETIRED
+// COMMITS — servicing a demand passes its reference along; refusing would strand the
+// demand (the anti-deadlock half; the vendor commitment re-check stays at Submit).
+run unit_ord_attachRetiredDemandAllowed {
+  some o: AttachDemandOcc, x: DeleteItemOcc | {
+    committed[o] and committed[x]
+    x.subject = o.subject.itemPin.subject and precedes[x.tick, o.tick]
+    not itemLiveAt[o.subject.itemPin.subject, o.tick]
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      11 EntityId, 9 Snapshot, 9 Tick, 8 Occurrence, 2 Note expect 1
+
+// The PDEV-241 re-base: Submit requires a LINKED vendor — a named-but-unpinned binding
+// refuses with exactly RNoSupplier (the draft may compose unlinked; it cannot go out).
+run unit_ord_submitUnlinkedSupplierRefused {
+  some sub: SubmitOcc | {
+    some oPre[sub].sSupplier.name
+    no oPre[sub].sSupplier.vendorPin
+    refusedAtAdmission[sub] and sub.admission.because = RNoSupplier
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      1 SupplierName, 10 EntityId, 8 Snapshot, 8 Tick, 6 Occurrence, 2 Note expect 1
 
 // ── boundary witnesses (must be LEGAL — never UNSAT) ────────────────────────────────────────────
 // A free-form line: documentary only — no item, no demand, no received tracking.
@@ -405,7 +436,7 @@ run unit_ord_submitRetiredVendorRefused {
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      1 BusinessAffiliate, 0 BusinessRole, 12 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence, 2 Note expect 1
+      1 BusinessAffiliate, 1 BusinessRole, 13 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence, 2 Note expect 1
 
 // Grandfather (the D3 SUBMITTED+ row): an order SUBMITTED against a live vendor stays legally
 // SUBMITTED after the vendor retires — the frozen binding's PIN keeps serving the agreed
@@ -420,7 +451,7 @@ run unit_ord_submittedSurvivesVendorRetirement {
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      1 BusinessAffiliate, 0 BusinessRole, 12 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence, 2 Note expect 1
+      1 BusinessAffiliate, 1 BusinessRole, 13 EntityId, 8 Tick, 8 Snapshot, 8 Occurrence, 2 Note expect 1
 
 // Over-receipt is admissible (the advisory stance): two postings commit; the line stays open.
 run unit_ord_overReceiptLegal {

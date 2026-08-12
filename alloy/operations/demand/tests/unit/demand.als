@@ -391,3 +391,32 @@ run unit_dem_revokeRevokedRefused {
       // census +1 across the board at DT-023 cut 7a: the trace's item-log fixture (the
       // committed CreateItemOcc behind the demand genesis guard) pushed the occurrence
       // count past the old for-8 default this deep witness sat exactly at
+
+// ── DT-023 cut 8: gate at INCEPTION, never at PROPAGATION ──────────────────────────────────────
+
+// PROPAGATION is ungated: a scan-derived demand (CreateWithCycle — the pin inherited from
+// the triggering cycle, whose REQUEST was the gated inception) COMMITS even though its item
+// has since RETIRED. This is the anti-deadlock half of the cut-8 ruling: the scan workflow
+// must not strand on a mid-flight retirement.
+run unit_dem_scanDerivedRetiredAllowed {
+  some o: CreateWithCycleOcc, k: AcceptOcc, d: DeleteItemOcc | {
+    committed[o] and committed[k] and committed[d]
+    k.cycle = resolve[o.member] and precedes[k.tick, o.tick]
+    d.subject = o.subject.itemPin.subject and precedes[d.tick, o.tick]
+    not itemLiveAt[o.subject.itemPin.subject, o.tick]
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 2 CardCycle, 1 KanbanCard, 0 InventoryItem,
+      12 EntityId, 9 Tick, 9 Snapshot, 9 Occurrence expect 1
+
+// INCEPTION stays gated: a DIRECT create (the caller chooses the item — F6/queue-add) of a
+// demand for a retired item refuses with exactly RRetiredRef.
+run unit_dem_directCreateRetiredRefused {
+  some o: CreateDemandOcc, d: DeleteItemOcc | {
+    committed[d]
+    d.subject = o.subject.itemPin.subject and precedes[d.tick, o.tick]
+    refusedAtAdmission[o] and o.admission.because = RRetiredRef
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem,
+      10 EntityId, 7 Tick, 7 Snapshot, 7 Occurrence expect 1

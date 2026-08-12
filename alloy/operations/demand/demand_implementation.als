@@ -56,9 +56,7 @@ fun createGenesisViol[o: dlog/SubjectOcc]: set Reason {
   //  cross-tenant resolution UNREPRESENTABLE; the itemPin's tenancy is the DemandItemPinTenancy
   //  fact (DT-023 — same unrepresentable posture). RForeignRef remains for the RECORD-carried
   //  refs: holding, delivery.)
-  // DT-023 D2 (the demand row): demand GENESIS is a new-commitment point — creating an intent
-  // to produce a retired item refuses; live demands complete (grandfathered downstream).
-  + ((not itemLiveAt[o.subject.itemPin.subject, o.tick]) => RRetiredRef else none)
+  // (The retirement clause moved to createViol at DT-023 cut 8 — see there.)
 }
 // DT-023 cut 7a: a committed genesis pins the item's CURRENT version at its tick (Q-A currency).
 fact DemandItemPinCurrency {
@@ -80,7 +78,15 @@ fun attachCycleViol[o: dlog/SubjectOcc, m: EntityId]: set Reason {
        => RCycleHeld else none)
     + ((m in dPre[o].sMembership) => RCycleHeld else none))
 }
-fun createViol[o: CreateDemandOcc]: set Reason { createGenesisViol[o] }
+// DT-023 cut 8 (gate at INCEPTION, never at PROPAGATION — MP ruling 2026-08-11): the
+// retirement gate binds ONLY on the DIRECT create (the caller chooses the item — F6
+// card-less demand, queue-add of a new item). The WITH-CYCLE create is PROPAGATION —
+// its pin is inherited from the triggering cycle, whose REQUEST was the gated
+// inception — and refusing it would strand the scan workflow.
+fun createViol[o: CreateDemandOcc]: set Reason {
+  createGenesisViol[o]
+  + ((not itemLiveAt[o.subject.itemPin.subject, o.tick]) => RRetiredRef else none)
+}
 fun createWithViol[o: CreateWithCycleOcc]: set Reason {
   createGenesisViol[o] + attachCycleViol[o, o.member]
 }
