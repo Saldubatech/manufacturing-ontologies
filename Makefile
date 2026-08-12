@@ -15,7 +15,7 @@ ALLOY_FLAGS ?= -s glucose
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
 
-.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak report report-examples check clean
+.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak soak-plan soak-chunk soak-status report report-examples check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -197,6 +197,33 @@ soak: $(ALLOY)
 	done; \
 	if [ $$fail -ne 0 ]; then echo "SOAK FAIL: a command did not match its expect (a law may have a counterexample past the gate scopes)"; exit 1; fi; \
 	echo "OK: soak tier matched every expect"
+
+## soak-plan / soak-chunk / soak-status: the CHUNKED soak runner (DT-024 §6) — night-window
+## execution at command granularity. soak-chunk mints a batch dir soak/<YYYYMMDD-HHMM>/ (REJECTED
+## on name conflict — never overwrite a batch ledger), plans, then dispatches heaviest-first while
+## the window affords each command (2x margin; unknown estimate needs >4h remaining). LENIENT=1
+## (the default) never interrupts an over-runner — window end SURFACES them for the human
+## kill/extend decision. RESUME=soak/<tag> continues a prior batch instead of minting one.
+## Wrapped in caffeinate when available (independent power assertion; coexists with Amphetamine).
+## WINDOW accepts 16h / 45m / plain seconds. Estimates: alloy/soak/estimates.tsv, keyed by
+## scope-hash — a model change under a command invalidates its measurement (row goes unknown).
+soak-chunk: $(ALLOY)
+	@w='$(WINDOW)'; [ -n "$$w" ] || { echo "usage: make soak-chunk WINDOW=16h [PAR=2] [LENIENT=1] [RESUME=soak/<tag>]"; exit 2; }; \
+	case "$$w" in *h) s=$$(( $${w%h} * 3600 ));; *m) s=$$(( $${w%m} * 60 ));; *) s=$$w;; esac; \
+	if [ -n "$(RESUME)" ]; then batch='$(RESUME)'; [ -f "$$batch/plan.tsv" ] || { echo "RESUME: no plan.tsv in $$batch"; exit 2; }; \
+	else batch=soak/$$(date +%Y%m%d-%H%M); [ ! -e "$$batch" ] || { echo "REJECT: $$batch already exists (never overwrite a batch ledger)"; exit 2; }; \
+	  tools/soak-chunk.sh plan "$$batch" || exit 2; fi; \
+	caf=""; command -v caffeinate >/dev/null && caf="caffeinate -i"; \
+	echo "batch=$$batch window=$${s}s par=$(or $(PAR),1) lenient=$(or $(LENIENT),1)"; \
+	$$caf tools/soak-chunk.sh chunk "$$batch" "$$s" "$(or $(PAR),1)" "$(or $(LENIENT),1)"
+
+soak-plan:
+	@batch=soak/$$(date +%Y%m%d-%H%M)-plan; tools/soak-chunk.sh plan "$$batch"; cat "$$batch/plan.tsv"
+
+soak-status:
+	@b='$(BATCH)'; [ -n "$$b" ] || b=$$(ls -d soak/2* 2>/dev/null | sort | tail -1); \
+	[ -n "$$b" ] || { echo "no batch under soak/"; exit 2; }; \
+	tools/soak-chunk.sh status "$$b"
 
 ## profiles: per gate root, print the adopted modeling profiles (transitive open walk — DT-012)
 profiles:

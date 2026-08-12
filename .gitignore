@@ -148,3 +148,5 @@ vite.config.ts.timestamp-*
 # Alloy Analyzer exec output (receipts + solution dumps); the Makefile writes here via -o.
 # `make clean` wipes it. (`out` is also matched by the Next.js block above — kept explicit here.)
 /out/
+# soak batch dirs (the DT-024 chunked-runner ledgers) — repo-root only, alloy/soak stays tracked
+/soak/
