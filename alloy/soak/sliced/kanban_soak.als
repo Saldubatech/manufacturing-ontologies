@@ -1,4 +1,4 @@
-module soak/tests/kanban_soak
+module soak/sliced/kanban_soak
 
 /*
  * SOAK tier (DT-022 TQ-5 ruling; scaling-outlook to-do #5 — built 2026-08-08): the kanban

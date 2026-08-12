@@ -1,4 +1,4 @@
-module soak/tests/zlattice_soak
+module soak/sliced/zlattice_soak
 
 /*
  * SOAK tier (DT-022 TQ-5): the GLOBAL exclusivity-lattice row at WIDENED scopes — the

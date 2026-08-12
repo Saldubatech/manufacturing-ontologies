@@ -1,4 +1,4 @@
-module soak/tests/order_soak
+module soak/sliced/order_soak
 
 /*
  * SOAK tier (DT-022 TQ-5): the order freeze family at GENEROUS scopes — see

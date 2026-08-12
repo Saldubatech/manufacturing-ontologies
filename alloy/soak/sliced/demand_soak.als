@@ -1,4 +1,4 @@
-module soak/tests/demand_soak
+module soak/sliced/demand_soak
 
 /*
  * SOAK tier (DT-022 TQ-5): the demand lattice/provenance laws at GENEROUS scopes — see

@@ -1,4 +1,4 @@
-module soak/tests/reference_data_dynamics
+module soak/lemmas/reference_data_dynamics
 
 /*
  * SOAK tier — the VERSION-DYNAMICS LEMMA root (DT-023 Q-D / DT-024, closing pass 7c):

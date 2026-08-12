@@ -190,7 +190,7 @@ test-sys: $(ALLOY)
 ## Sequential by design: one JVM at a time gets the machine's full memory.
 soak: $(ALLOY)
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy/soak -path '*/tests/*.als' | sort); do \
+	for f in $$(find alloy/soak \( -path '*/lemmas/*' -o -path '*/sliced/*' -o -path '*/tests/*' \) -name '*.als' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.soak.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.soak.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \

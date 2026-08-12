@@ -1,4 +1,4 @@
-module soak/tests/receiving_soak
+module soak/sliced/receiving_soak
 
 /*
  * SOAK tier (DT-022 TQ-5): the receiving freeze + lattice laws at GENEROUS scopes — see

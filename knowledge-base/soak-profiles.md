@@ -42,7 +42,7 @@ implementation roots at comparable entity census (translation dominates: >1h CNF
 translation observed on the implementation cones).
 
 **REALIZED at DT-023 cut 7c (2026-08-11):** the lemma-then-slice shape is now BUILT for
-reference data — `soak/tests/reference_data_dynamics.als` is the version-dynamics LEMMA
+reference data — `soak/lemmas/reference_data_dynamics.als` is the version-dynamics LEMMA
 root (lifecycle shapes wide, current-uniqueness, pinned-vs-floating divergence), and all
 six operational soak roots carry the CREATED-ONLY slice fact (each reference-data subject
 = exactly its Create) with the lemma as justification.
@@ -51,19 +51,25 @@ six operational soak roots carry the CREATED-ONLY slice fact (each reference-dat
 `unit_rcv_contract_linePoolExclusive` (the §8.5.3 lattice row at UNIT scopes) solved in
 minutes at cuts 5/6 but blew past 9h CPU once the item log (`ItemOcc`/`ItemState`) rode
 the receiver cone via the pin re-point. Relocated verbatim to
-`soak/tests/receiver_pool_exclusive.als` (`soak_rcv_linePoolExclusiveUnitScope`) — tier
+`soak/sliced/receiver_pool_exclusive.als` (`soak_rcv_linePoolExclusiveUnitScope`) — tier
 change only. Watch the other multi-holder exclusivity checks for the same cliff as 7b/7c
 widen the reference-data cones.
 
-## Operational shape (target)
+## Operational shape (BUILT 2026-08-11 — the DT-024 §6 chunked runner)
 
-- `alloy/soak/tests/` splits into LEMMA roots (isolation, item agreement, binding
-  soundness, Σ) and SLICED per-family roots; each sliced root's header carries its
-  slice facts + justifications.
+- The tree split is REALIZED: `alloy/soak/lemmas/` (one root per catalog axis with a
+  lemma — reference_data_dynamics today; isolation/item-agreement/binding-soundness/Σ
+  to come) and `alloy/soak/sliced/` (per-family roots incl. the demoted checks); each
+  sliced root's header carries its slice facts + justifications (A-XX obligation).
+- `make soak-chunk WINDOW=16h [PAR=n] [LENIENT=1] [RESUME=soak/<tag>]` — the
+  night-window runner (`tools/soak-chunk.sh`): batch dir `soak/<YYYYMMDD-HHMM>/`
+  (rejected on conflict), heaviest-first dispatch under a 2x margin (unknown estimate
+  needs >4h remaining), per-command atomic completion, lenient over-runs surfaced at
+  window end for the human kill/extend call. `make soak-status` folds the batch into
+  `ledger.tsv`. Estimates: `alloy/soak/estimates.tsv`, keyed by scope-hash — the pre-cut-8
+  measurements above are all INVALID (cones changed); the first batches remeasure.
 - Profiles: FULL (this catalog at generous axis scopes — design gates / monthly);
-  OVERNIGHT (+1-notch sliced census — the schedulable default). `make soak` should gain
-  a PAR fan-out like the gate (the v1 sequential form wasted the idle machine — fixed
-  by hand mid-run, 2026-08-08).
+  OVERNIGHT (+1-notch sliced census — the schedulable default via soak-chunk).
 
 **A KILLED gate has performed NO verification (2026-08-11 lesson):** `check-alloy-par`'s
 per-root "== X done" lines prove nothing — `run-root.sh` logs "done" on PARSE FAILURES

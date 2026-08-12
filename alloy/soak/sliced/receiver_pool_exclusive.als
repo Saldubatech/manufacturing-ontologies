@@ -1,4 +1,4 @@
-module soak/tests/receiver_pool_exclusive
+module soak/sliced/receiver_pool_exclusive
 
 /*
  * SOAK tier — the §8.5.3 lattice row at its former UNIT scopes, RELOCATED here at DT-023
