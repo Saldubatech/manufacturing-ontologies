@@ -57,10 +57,13 @@ check-layering:
 	done; \
 	[ $$fail -eq 0 ] && echo "OK: layering respected (meta -/-> shared -/-> domains; DT-017 mock discipline)" || exit 1
 
-## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch
+## check-alloy: run every command in every test root (any alloy/**/tests/*.als); fail on expect mismatch.
+## CHECK_SCOPE=alloy/<family> restricts the walk to one subtree — used by the full-gate CI workflow
+## to shard the gate across matrix jobs; the default (whole tree) is the push gate, unchanged.
+CHECK_SCOPE ?= alloy
 check-alloy: $(ALLOY) check-layering
 	@mkdir -p $(OUT); fail=0; \
-	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
+	for f in $$(find $(CHECK_SCOPE) -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*' | sort); do \
 	  echo "== $$f =="; \
 	  java -jar $(ALLOY) -D info exec $(ALLOY_FLAGS) -c "*" -o $(OUT) -f "$$f" > out/.run.log 2>&1 || fail=1; \
 	  grep -iE 'SAT|UNSAT|error|against expectation' out/.run.log | grep -ivE 'symmetr|kodkod|cnf|translat|solving' || true; \
