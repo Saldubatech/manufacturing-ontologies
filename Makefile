@@ -47,8 +47,8 @@ check-layering:
 	  echo "FAIL: only conventions/ files may open conventions/ (exemplars are not libraries — MP 2026-07-08)"; fail=1; fi; \
 	if grep -rn '^open resources/inventory_item/legacy' alloy --include='*.als'; then \
 	  echo "FAIL: nothing may open the archived legacy carrier (DT-011 — moved to alloy-sample/inventory_item_legacy)"; fail=1; fi; \
-	if grep -rn '^open .*_mock' alloy --include='*.als' | grep -v '/tests/'; then \
-	  echo "FAIL: only test ROOTS may open a module mock (DT-017 — library files open peers' _types only)"; fail=1; fi; \
+	if grep -rn '^open .*_mock' alloy --include='*.als' | grep -vE '/tests/|^alloy/soak/'; then \
+	  echo "FAIL: only test/soak ROOTS may open a module mock (DT-017 — library files open peers' _types only; soak slices are command-carrying roots, DT-024)"; fail=1; fi; \
 	for f in $$(find alloy -path '*/tests/*.als' ! -path '*/legacy/*' ! -path 'alloy/soak/*'); do \
 	  for m in $$(grep -E '^open [a-z0-9_/]*_mock' "$$f" | awk '{print $$2}' | sed 's|_mock$$||'); do \
 	    if grep -qE "^open $$m"_implementation "$$f"; then \
