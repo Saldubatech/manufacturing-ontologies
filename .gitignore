@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 /out/
 # soak batch dirs (the DT-024 chunked-runner ledgers) — repo-root only, alloy/soak stays tracked
 /soak/
+# bulk instance corpus (DT-025 R3): manifest + registered SAT dumps are regenerable
+# machine products, keyed by model SHA. The CURATED seed corpus is committed elsewhere.
+/corpus/

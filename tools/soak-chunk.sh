@@ -4,15 +4,19 @@
 # and the scheduler's job is to never dispatch one it cannot afford to finish.
 #
 # Subcommands (driven by the Makefile targets soak-plan / soak-chunk / soak-status):
-#   plan   <batch-dir>                       enumerate (root, command) pairs into plan.tsv
-#   chunk  <batch-dir> <window-s> <par> <lenient>   dispatch loop (the night window)
-#   status <batch-dir>                       fold artifacts into ledger.tsv + a summary
+#   plan    <batch-dir>                      enumerate (root, command) pairs into plan.tsv
+#   chunk   <batch-dir> <window-s> <par> <lenient>   dispatch loop (the night window)
+#   status  <batch-dir>                      fold artifacts into ledger.tsv + a summary
+#   harvest <batch-dir>                      register the batch's SAT dumps into corpus/
+#   harvest-one <batch-dir> <command>        one command's dumps (the completion hook)
 #
 # Batch dir layout (soak/<YYYYMMDD-HHMM>/ at the repo root, gitignored):
 #   plan.tsv            tier  root  command  scope_hash  estimate_s   (dispatch order)
+#   batch.meta          created epoch, model_sha (+dirty flag) — the corpus provenance key
 #   dispatch.log        the dispatcher's decisions (dispatched / deferred / window end)
 #   cmd/<name>.log      solver output          cmd/<name>.rc    exit code
 #   cmd/<name>.meta     start/end epochs       cmd/<name>.d/    harvested instances (-o)
+#   cmd/<name>.overbudget   cap + elapsed when the watchdog killed the command
 #   ledger.tsv          materialized by `status` from plan + artifacts
 #
 # Estimates: alloy/soak/estimates.tsv (committed) — command<TAB>scope_hash<TAB>seconds.
@@ -21,9 +25,19 @@
 # only while remaining window > UNKNOWN_FLOOR. Harvest new measurements from ledger.tsv.
 #
 # Lenient mode (MP, 2026-08-11): runs are never interrupted on going over estimate or
-# window — over-runners are SURFACED at window end for a human kill/extend decision.
-# (Non-lenient differs only in exit code today: it exits 1 if runs outlive the window,
-# so a wrapping scheduler can react. This runner never kills a solver either way.)
+# WINDOW — over-runners are SURFACED at window end for a human kill/extend decision.
+# ORTHOGONAL to that, the budget-cap watchdog (PDEV-1610 / DT-025 R2): a command past
+# CAP_NUM x its estimate (UNKNOWN_CAP when unmeasured) is killed and recorded
+# OVER-BUDGET — a deliberate "too hard at this scope" bracket data point for the
+# frontier search, not a lost run. CAP_NUM=0 (or UNKNOWN_CAP=0) disables the watchdog.
+#
+# Quiet window (PDEV-1610): chunk REFUSES to start while a foreign Alloy solver runs on
+# this host (co-running poisons both runs' wall-clocks). FORCE=1 overrides.
+#
+# Corpus (DT-025 R3, bulk tier): every done-SAT command's -o dumps are registered into
+# corpus/manifest.tsv at completion (dumps stay in place in the batch dir; the manifest
+# is the index, keyed by model_sha + scope_hash). corpus/ is gitignored — the curated
+# seed corpus is a separate, committed artifact (PDEV-1613).
 set -u
 
 ALLOY_JAR=${ALLOY_JAR:-tools/alloy.jar}
@@ -31,6 +45,10 @@ ALLOY_FLAGS=${ALLOY_FLAGS:--s glucose}
 MARGIN_NUM=${MARGIN_NUM:-2}          # dispatch iff estimate * MARGIN <= remaining
 UNKNOWN_FLOOR=${UNKNOWN_FLOOR:-14400} # unknown estimate: dispatch only if remaining > 4h
 POLL=${POLL:-60}                      # dispatcher poll interval, seconds
+CAP_NUM=${CAP_NUM:-3}                 # watchdog: kill at estimate * CAP_NUM (0 disables)
+UNKNOWN_CAP=${UNKNOWN_CAP:-21600}     # watchdog cap for unknown-estimate commands: 6h (0 disables)
+CORPUS=${CORPUS:-corpus}              # bulk-corpus root (gitignored)
+FORCE=${FORCE:-0}                     # 1 = override the quiet-window refusal
 
 die() { echo "soak-chunk: $*" >&2; exit 2; }
 
@@ -57,10 +75,19 @@ soak_roots() { # tier order: lemmas, sliced, then the transitional tests/
 
 tier_of() { case "$1" in */lemmas/*) echo 0;; */sliced/*) echo 1;; *) echo 2;; esac; }
 
+# ── foreign solvers (quiet window): Alloy JVMs on this host NOT belonging to $1 ──────
+foreign_solvers() { # $1 = batch dir (our own jobs carry "-o <batch>/" in their args)
+  ps -axo pid,command | grep -F 'alloy.jar' | grep -v grep | grep -vF "$1/" || true
+}
+
 # ── plan ─────────────────────────────────────────────────────────────────────────────
 cmd_plan() {
   local batch="$1" est=alloy/soak/estimates.tsv root h tier c e
   mkdir -p "$batch/cmd"
+  { printf 'created\t%s\n' "$(date +%s)"
+    printf 'model_sha\t%s\n' "$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    printf 'dirty\t%s\n' "$([ -n "$(git status --porcelain 2>/dev/null)" ] && echo 1 || echo 0)"
+  } > "$batch/batch.meta"
   : > "$batch/plan.unsorted"
   for root in $(soak_roots); do
     h=$(cone_hash "$root"); tier=$(tier_of "$root")
@@ -85,7 +112,8 @@ launch_one() { # $1 batch  $2 root  $3 command  $4 scope_hash
   nohup sh -c "java -jar '$ALLOY_JAR' -D info exec $ALLOY_FLAGS -c '$c' -o '$batch/cmd/$c.d' -f '$root' \
                  > '$batch/cmd/$c.log' 2>&1; \
                echo \$? > '$batch/cmd/$c.rc'; \
-               printf 'end\t%s\n' \"\$(date +%s)\" >> '$batch/cmd/$c.meta'" \
+               printf 'end\t%s\n' \"\$(date +%s)\" >> '$batch/cmd/$c.meta'; \
+               tools/soak-chunk.sh harvest-one '$batch' '$c' >> '$batch/dispatch.log' 2>&1 || true" \
        >/dev/null 2>&1 &
   echo "$!" > "$batch/cmd/$c.pid"
   echo "$(date '+%H:%M:%S') DISPATCH $c (root $root, pid $(cat "$batch/cmd/$c.pid"))" | tee -a "$batch/dispatch.log"
@@ -105,11 +133,37 @@ running_count() { # jobs with a pid file, no rc yet, process alive
 cmd_chunk() {
   local batch="$1" window="$2" par="$3" lenient="$4"
   [ -f "$batch/plan.tsv" ] || die "no plan.tsv in $batch (run plan first)"
+  local foreign; foreign=$(foreign_solvers "$batch")
+  if [ -n "$foreign" ] && [ "$FORCE" != "1" ]; then
+    echo "QUIET-WINDOW REFUSAL: another Alloy solver is running on this host — co-running poisons both wall-clocks (and the estimates harvested from them). FORCE=1 overrides." >&2
+    echo "$foreign" >&2
+    exit 2
+  fi
   local start end now remaining
   start=$(date +%s); end=$((start + window))
-  echo "$(date '+%H:%M:%S') CHUNK start window=${window}s par=$par lenient=$lenient" | tee -a "$batch/dispatch.log"
+  echo "$(date '+%H:%M:%S') CHUNK start window=${window}s par=$par lenient=$lenient cap=${CAP_NUM}x/unknown=${UNKNOWN_CAP}s" | tee -a "$batch/dispatch.log"
   while :; do
     now=$(date +%s); remaining=$((end - now))
+    # ── budget-cap watchdog (PDEV-1610 / DT-025 R2): a kill here is a bracket data ──
+    # point ("too hard at this scope"), never a lost run — the ledger keeps it.
+    local wp wc wpid ws0 wel we wcap
+    for wp in "$batch"/cmd/*.pid; do
+      [ -f "$wp" ] || continue
+      wc=$(basename "$wp" .pid)
+      [ -f "$batch/cmd/$wc.rc" ] && continue
+      [ -f "$batch/cmd/$wc.overbudget" ] && continue
+      wpid=$(cat "$wp"); kill -0 "$wpid" 2>/dev/null || continue
+      ws0=$(awk -F'\t' '$1=="start"{print $2}' "$batch/cmd/$wc.meta" 2>/dev/null); [ -n "$ws0" ] || continue
+      wel=$((now - ws0))
+      we=$(awk -F'\t' -v c="$wc" '$3==c{print $5; exit}' "$batch/plan.tsv"); we=${we:--1}
+      if [ "$we" -ge 0 ]; then wcap=$((we * CAP_NUM)); else wcap=$UNKNOWN_CAP; fi
+      [ "$wcap" -gt 0 ] || continue
+      if [ "$wel" -gt "$wcap" ]; then
+        printf 'cap_s\t%s\nelapsed_s\t%s\n' "$wcap" "$wel" > "$batch/cmd/$wc.overbudget"
+        echo "$(date '+%H:%M:%S') OVER-BUDGET kill $wc elapsed=${wel}s cap=${wcap}s — recorded as a too-hard-at-this-scope bracket point" | tee -a "$batch/dispatch.log"
+        pkill -TERM -P "$wpid" 2>/dev/null; sleep 5; pkill -KILL -P "$wpid" 2>/dev/null || true
+      fi
+    done
     # fold: revert dead 'running' rows (killed mid-solve) to pending is implicit — a pid
     # with no rc and no live process simply becomes dispatchable again on RESUME, and its
     # second death is visible in dispatch.log for the over-window judgment.
@@ -124,6 +178,7 @@ cmd_chunk() {
         else
           [ "$remaining" -gt "$UNKNOWN_FLOOR" ] || { echo "$(date '+%H:%M:%S') DEFER $c est=unknown remaining=${remaining}s" >> "$batch/dispatch.log"; continue; }
         fi
+        [ -n "$(foreign_solvers "$batch")" ] && echo "$(date '+%H:%M:%S') QUIET-WARN dispatching $c while a foreign Alloy solver runs — wall-clocks (and harvested estimates) are polluted" | tee -a "$batch/dispatch.log"
         launch_one "$batch" "$root" "$c" "$h"; dispatched=1; break
       done < "$batch/plan.tsv"
       # nothing dispatchable and nothing running and window still open -> all done or all deferred
@@ -150,12 +205,51 @@ cmd_chunk() {
   cmd_status "$batch"
 }
 
+# ── harvest (corpus registration — DT-025 R3 bulk tier) ─────────────────────────────
+harvest_one() { # $1 batch  $2 command — idempotent (dedupes on solution path)
+  local batch="$1" c="$2" sols s sha root h n=0
+  sols=$(find "$batch/cmd/$c.d" -name '*solution*' -type f 2>/dev/null | sort)
+  [ -n "$sols" ] || return 0
+  mkdir -p "$CORPUS"
+  [ -f "$CORPUS/manifest.tsv" ] || printf 'registered\tmodel_sha\troot\tcommand\tscope_hash\tbatch\tsolution\n' > "$CORPUS/manifest.tsv"
+  sha=$(awk -F'\t' '$1=="model_sha"{print $2}' "$batch/batch.meta" 2>/dev/null)
+  if [ -z "$sha" ]; then
+    # retro batch (predates batch.meta): resolve the tip AS OF the batch's start time,
+    # which the batch dir name encodes (soak/YYYYMMDD-HHMM). scope_hash stays the exact key.
+    local ts; ts=$(basename "$batch" | sed -nE 's/^([0-9]{4})([0-9]{2})([0-9]{2})-([0-9]{2})([0-9]{2}).*/\1-\2-\3 \4:\5/p')
+    sha=$( [ -n "$ts" ] && git rev-list -1 --before="$ts" HEAD 2>/dev/null || true )
+    sha="${sha:-unknown}+retro"
+  fi
+  root=$(awk -F'\t' '$1=="root"{print $2}' "$batch/cmd/$c.meta" 2>/dev/null)
+  h=$(awk -F'\t' '$1=="scope_hash"{print $2}' "$batch/cmd/$c.meta" 2>/dev/null)
+  for s in $sols; do
+    grep -qF "	$s" "$CORPUS/manifest.tsv" 2>/dev/null && continue
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$sha" "${root:-?}" "$c" "${h:-?}" "$batch" "$s" >> "$CORPUS/manifest.tsv"
+    n=$((n+1))
+  done
+  [ "$n" -gt 0 ] && echo "HARVEST $c: $n instance(s) -> $CORPUS/manifest.tsv"
+  return 0
+}
+
+cmd_harvest() { # retroactive whole-batch registration (old batches predate the hook)
+  local batch="$1" d c before after
+  [ -d "$batch/cmd" ] || die "no cmd/ in $batch"
+  before=$( [ -f "$CORPUS/manifest.tsv" ] && awk 'NR>1{n++} END{print n+0}' "$CORPUS/manifest.tsv" || echo 0 )
+  for d in "$batch"/cmd/*.d; do
+    [ -d "$d" ] || continue
+    c=$(basename "$d" .d)
+    harvest_one "$batch" "$c"
+  done
+  after=$( [ -f "$CORPUS/manifest.tsv" ] && awk 'NR>1{n++} END{print n+0}' "$CORPUS/manifest.tsv" || echo 0 )
+  echo "harvest: $((after - before)) new instance(s) registered from $batch ($CORPUS/manifest.tsv now $after rows)"
+}
+
 # ── status (materialize the ledger) ──────────────────────────────────────────────────
 cmd_status() {
   local batch="$1"
   [ -f "$batch/plan.tsv" ] || die "no plan.tsv in $batch"
   printf 'tier\troot\tcommand\tscope_hash\testimate_s\tstatus\telapsed_s\n' > "$batch/ledger.tsv"
-  local nd=0 nm=0 ne=0 nr=0 np=0
+  local nd=0 nm=0 ne=0 nr=0 np=0 nb=0
   while IFS=$(printf '\t') read -r tier root c h e; do
     local st="pending" el=""
     if [ -f "$batch/cmd/$c.rc" ]; then
@@ -163,7 +257,8 @@ cmd_status() {
       local s0 s1; s0=$(awk -F'\t' '$1=="start"{print $2}' "$batch/cmd/$c.meta" 2>/dev/null)
       s1=$(awk -F'\t' '$1=="end"{print $2}' "$batch/cmd/$c.meta" 2>/dev/null)
       [ -n "$s0" ] && [ -n "$s1" ] && el=$((s1 - s0))
-      if grep -q "against expectation" "$batch/cmd/$c.log" 2>/dev/null; then st="MISMATCH"; nm=$((nm+1))
+      if [ -f "$batch/cmd/$c.overbudget" ]; then st="OVER-BUDGET"; nb=$((nb+1))
+      elif grep -q "against expectation" "$batch/cmd/$c.log" 2>/dev/null; then st="MISMATCH"; nm=$((nm+1))
       elif [ "$rc" != "0" ] || grep -qE "Syntax error|\[main\] ERROR" "$batch/cmd/$c.log" 2>/dev/null; then st="ERROR"; ne=$((ne+1))
       else st="done"; nd=$((nd+1)); fi
     elif [ -f "$batch/cmd/$c.pid" ] && kill -0 "$(cat "$batch/cmd/$c.pid")" 2>/dev/null; then
@@ -172,14 +267,21 @@ cmd_status() {
     else np=$((np+1)); fi
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$tier" "$root" "$c" "$h" "$e" "$st" "$el" >> "$batch/ledger.tsv"
   done < "$batch/plan.tsv"
-  echo "== $batch: done=$nd mismatch=$nm error=$ne running=$nr pending=$np"
+  echo "== $batch: done=$nd mismatch=$nm error=$ne over-budget=$nb running=$nr pending=$np"
   [ "$nm" -gt 0 ] && { echo "MISMATCHES (a law may have a counterexample past the gate scopes):"; awk -F'\t' '$6=="MISMATCH"{print "  "$3"  ("$2")"}' "$batch/ledger.tsv"; }
+  [ "$nb" -gt 0 ] && { echo "OVER-BUDGET (too hard at this scope — frontier bracket points, candidates for the FULL profile):"; awk -F'\t' '$6=="OVER-BUDGET"{print "  "$3"  ("$2")"}' "$batch/ledger.tsv"; }
+  if [ -f "$CORPUS/manifest.tsv" ]; then
+    local reg; reg=$(awk -F'\t' -v b="$batch" 'NR>1 && $6==b' "$CORPUS/manifest.tsv" | wc -l | tr -d ' ')
+    echo "corpus: $reg instance(s) registered from this batch"
+  fi
   column -t -s "$(printf '\t')" "$batch/ledger.tsv" | sed 's/^/  /'
 }
 
 case "${1:-}" in
-  plan)   shift; cmd_plan "$@";;
-  chunk)  shift; cmd_chunk "$@";;
-  status) shift; cmd_status "$@";;
-  *) die "usage: soak-chunk.sh plan|chunk|status <batch-dir> [args]";;
+  plan)        shift; cmd_plan "$@";;
+  chunk)       shift; cmd_chunk "$@";;
+  status)      shift; cmd_status "$@";;
+  harvest)     shift; cmd_harvest "$@";;
+  harvest-one) shift; harvest_one "$@";;
+  *) die "usage: soak-chunk.sh plan|chunk|status|harvest|harvest-one <batch-dir> [args]";;
 esac

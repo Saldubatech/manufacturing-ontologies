@@ -15,7 +15,7 @@ ALLOY_FLAGS ?= -s glucose
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
 
-.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak soak-plan soak-chunk soak-status report report-examples check clean
+.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak soak-plan soak-chunk soak-status soak-harvest report report-examples check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -198,12 +198,17 @@ soak: $(ALLOY)
 	if [ $$fail -ne 0 ]; then echo "SOAK FAIL: a command did not match its expect (a law may have a counterexample past the gate scopes)"; exit 1; fi; \
 	echo "OK: soak tier matched every expect"
 
-## soak-plan / soak-chunk / soak-status: the CHUNKED soak runner (DT-024 §6) — night-window
-## execution at command granularity. soak-chunk mints a batch dir soak/<YYYYMMDD-HHMM>/ (REJECTED
-## on name conflict — never overwrite a batch ledger), plans, then dispatches heaviest-first while
+## soak-plan / soak-chunk / soak-status / soak-harvest: the CHUNKED soak runner (DT-024 §6,
+## hardened per PDEV-1610/DT-025) — night-window execution at command granularity. soak-chunk
+## mints a batch dir soak/<YYYYMMDD-HHMM>/ (REJECTED on name conflict — never overwrite a batch
+## ledger), stamps the model SHA into batch.meta, plans, then dispatches heaviest-first while
 ## the window affords each command (2x margin; unknown estimate needs >4h remaining). LENIENT=1
-## (the default) never interrupts an over-runner — window end SURFACES them for the human
-## kill/extend decision. RESUME=soak/<tag> continues a prior batch instead of minting one.
+## (the default) never interrupts an over-runner at WINDOW end — those are SURFACED for the
+## human kill/extend decision. ORTHOGONALLY, the budget-cap watchdog kills any command past
+## CAP_NUM x estimate (UNKNOWN_CAP when unmeasured; 6h default) and records it OVER-BUDGET —
+## a frontier bracket point, not a loss. Chunk REFUSES to start beside a foreign Alloy solver
+## (FORCE=1 overrides). Done-SAT -o dumps auto-register into corpus/manifest.tsv at completion;
+## soak-harvest [BATCH=…] back-fills a pre-hook batch. RESUME=soak/<tag> continues a prior batch.
 ## Wrapped in caffeinate when available (independent power assertion; coexists with Amphetamine).
 ## WINDOW accepts 16h / 45m / plain seconds. Estimates: alloy/soak/estimates.tsv, keyed by
 ## scope-hash — a model change under a command invalidates its measurement (row goes unknown).
@@ -224,6 +229,11 @@ soak-status:
 	@b='$(BATCH)'; [ -n "$$b" ] || b=$$(ls -d soak/2* 2>/dev/null | sort | tail -1); \
 	[ -n "$$b" ] || { echo "no batch under soak/"; exit 2; }; \
 	tools/soak-chunk.sh status "$$b"
+
+soak-harvest:
+	@b='$(BATCH)'; [ -n "$$b" ] || b=$$(ls -d soak/2* 2>/dev/null | sort | tail -1); \
+	[ -n "$$b" ] || { echo "no batch under soak/"; exit 2; }; \
+	tools/soak-chunk.sh harvest "$$b"
 
 ## profiles: per gate root, print the adopted modeling profiles (transitive open walk — DT-012)
 profiles:
