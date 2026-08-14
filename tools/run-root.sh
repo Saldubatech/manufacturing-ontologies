@@ -6,6 +6,7 @@ set -u
 root="$1"
 b=$(printf '%s' "$root" | tr '/' '_')
 mkdir -p "out/par/$b.d"
-# shellcheck disable=SC2086 — ALLOY_FLAGS is deliberately word-split (e.g. "-s glucose")
+# ALLOY_FLAGS is deliberately word-split (e.g. "-s glucose")
+# shellcheck disable=SC2086
 java -jar "${ALLOY_JAR:-tools/alloy.jar}" -D info exec ${ALLOY_FLAGS:-} -c "*" -o "out/par/$b.d" -f "$root" > "out/par/$b.log" 2>&1
 echo "== $root done"

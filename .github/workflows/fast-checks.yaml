@@ -1,0 +1,41 @@
+# Tier 1 — fast PR checks (seconds to minutes): the layering lint, shell hygiene,
+# and the pinned-tools checksum. No solver work here; that is affected-cones.yaml.
+name: fast-checks
+
+on:
+  pull_request:
+
+concurrency:
+  group: fast-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layering-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: DT-001.12 layer law + DT-017 mock discipline
+        run: make check-layering
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck tools/*.sh (error severity)
+        run: shellcheck -S error tools/*.sh
+
+  tools-checksum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/alloy.jar
+            tools/robot.jar
+          key: tools-${{ hashFiles('tools/get-tools.sh') }}
+      - name: fetch + SHA-256 verify the pinned jars
+        run: make tools

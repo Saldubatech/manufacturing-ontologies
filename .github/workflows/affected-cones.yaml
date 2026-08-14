@@ -1,0 +1,49 @@
+# Tier 2 — cone-aware PR gate: run every test root whose open-cone touches an alloy
+# file the PR changed (make check-affected). Bounded by the job timeout — an over-cap
+# failure means "this PR's cones are too heavy for CI; run the full gate locally"
+# (the same budget-cap philosophy as the soak watchdog, PDEV-1610). NOT the full gate:
+# `make check-alloy` remains the local push discipline, and full-gate.yaml the CI form.
+name: affected-cones
+
+on:
+  pull_request:
+
+concurrency:
+  group: affected-cones-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-affected:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/alloy.jar
+            tools/robot.jar
+          key: tools-${{ hashFiles('tools/get-tools.sh') }}
+      - run: make tools
+      - name: pick solver (glucose native, else pure-Java SAT4J — both sound/complete)
+        run: |
+          printf 'sig A {}\nrun probe { some A } for 2 expect 1\n' > /tmp/probe.als
+          mkdir -p /tmp/probe-out
+          if java -jar tools/alloy.jar exec -s glucose -c probe -o /tmp/probe-out -f /tmp/probe.als >/dev/null 2>&1; then
+            echo "ALLOY_FLAGS=-s glucose" >> "$GITHUB_ENV"
+            echo "solver: glucose (native loaded)"
+          else
+            echo "ALLOY_FLAGS=" >> "$GITHUB_ENV"
+            echo "solver: SAT4J (glucose native failed to load on this runner)"
+          fi
+      - name: run the roots whose cones this PR touched
+        run: |
+          files="$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" -- alloy | tr '\n' ' ')"
+          echo "changed alloy files: ${files:-none}"
+          make check-affected FILES="$files"
