@@ -224,6 +224,17 @@ fun recordReceiptViol[o: RecordReceiptOcc]: set Reason {
   + ((not usableLineAtOcc[o]) => RLineClosed else none)
   + (freeForm[o.subject] => RNoDemand else none)   // F7: no received tracking on a free-form line
 }
+/** reverseReceiptViol — the accrual gate MIRRORED (F9b, cut 9). The RLineClosed/ROrderClosed
+    refusals are LOAD-BEARING financially: after close the received quantity has priced the
+    order, so a late revocation must NOT silently decrement — it refuses, and the runtime
+    listener ALARMS on that refusal (MP 2026-08-14; post-close correction is credit-note
+    territory, out of a listener's authority). */
+fun reverseReceiptViol[o: ReverseReceiptOcc]: set Reason {
+  (let ord = parentOf[o.subject] |
+    ((no ord or not liveOrderAt[ord, o.tick]) => ROrderClosed else none))
+  + ((not usableLineAtOcc[o]) => RLineClosed else none)
+  + (freeForm[o.subject] => RNoDemand else none)   // F7: a free-form line never accrued
+}
 fun closeLineViol[o: CloseLineOcc]: set Reason {
   (let ord = parentOf[o.subject] |
     ((no ord or not liveOrderAt[ord, o.tick]) => ROrderClosed else none))
@@ -250,6 +261,7 @@ fact OrderAdmissionWitness {
   all o: RemoveLineOcc         | (o.admission = Accepted iff no removeLineViol[o])      and (o.admission in Rejected implies o.admission.because = removeLineViol[o])
   all o: RecordAcknowledgmentOcc | (o.admission = Accepted iff no recordAckViol[o])     and (o.admission in Rejected implies o.admission.because = recordAckViol[o])
   all o: RecordReceiptOcc      | (o.admission = Accepted iff no recordReceiptViol[o])   and (o.admission in Rejected implies o.admission.because = recordReceiptViol[o])
+  all o: ReverseReceiptOcc     | (o.admission = Accepted iff no reverseReceiptViol[o])  and (o.admission in Rejected implies o.admission.because = reverseReceiptViol[o])
   all o: CloseLineOcc          | (o.admission = Accepted iff no closeLineViol[o])       and (o.admission in Rejected implies o.admission.because = closeLineViol[o])
   all o: AnnotateLineOcc       | (o.admission = Accepted iff no annotateLineViol[o])    and (o.admission in Rejected implies o.admission.because = annotateLineViol[o])
 }
@@ -364,6 +376,10 @@ fact OrderEffectWitness {
   }
   all o: RecordReceiptOcc | committed[o] implies {
     qtyMap[lPost[o].sReceived] = add[qtyMap[lPre[o].sReceived], qtyMap[o.qty]]   // += (pairwise — F9)
+    sameLineButReceived[lPre[o], lPost[o]]
+  }
+  all o: ReverseReceiptOcc | committed[o] implies {
+    qtyMap[lPost[o].sReceived] = add[qtyMap[lPre[o].sReceived], negate[qtyMap[o.qty]]]   // −= (pairwise — F9b, cut 9)
     sameLineButReceived[lPre[o], lPost[o]]
   }
   all o: CloseLineOcc | committed[o] implies {

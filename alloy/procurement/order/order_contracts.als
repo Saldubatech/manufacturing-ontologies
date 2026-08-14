@@ -16,9 +16,12 @@ module procurement/order/order_contracts
  *    ignorant; the gate is order-side only).
  *  - The receipt accrual is CONVERGENT/NOTIFICATION (F7: received-ness rides the DEMAND edge —
  *    demand RecordProduction notifications drive order RecordReceipt postings; the listener
- *    converges, the runtime law probe's SELF-HEAL is mandatory). Its quiescence law
- *    (`receiptsSettledAt`) is t-parameterized — witnessed on settled traces, NEVER a global
- *    fact (that would outlaw the legal missed-notification window).
+ *    converges, the runtime law probe's SELF-HEAL is mandatory). Since cut 9 (MP ruling
+ *    2026-08-14) the edge is BIDIRECTIONAL in effect: a demand-side Revoke/ExtractProduction
+ *    drives the COMPENSATING order ReverseReceipt posting (F9b — the received quantity is
+ *    financially binding, so a revoked delivery decrements it). Both directions share the one
+ *    quiescence law (`receiptsSettledAt`), t-parameterized — witnessed on settled traces, NEVER
+ *    a global fact (that would outlaw the legal missed-notification window).
  *
  * There is NO amendment protocol (F4), NO ScheduleLine (F2), NO order-value sum anywhere in
  * the model (F9/F10 — the denormalized-observables convention: `sReceived` is stored and
@@ -89,17 +92,37 @@ pred receiptAccrues {
     qtyMap[lPost[o].sReceived] = add[qtyMap[lPre[o].sReceived], qtyMap[o.qty]]
 }
 
+// ── C5b · the receipt reversal (F9b, cut 9) — incremental-effect theorem ────────────────────────
+/** A committed ReverseReceipt's effect is EXACTLY sReceived −= qty (pairwise — the accrual's
+    compensating mirror; MP 2026-08-14: the received quantity prices the order at close, so a
+    revoked delivery must come OFF it). A reversal may precede its own accrual in the missed-
+    notification window (sReceived transiently negative) — the over-receipt admissibility
+    stance; quiescence balances it. */
+pred receiptReverses {
+  all o: ReverseReceiptOcc | committed[o] implies
+    qtyMap[lPost[o].sReceived] = add[qtyMap[lPre[o].sReceived], negate[qtyMap[o.qty]]]
+}
+
 // ── C6 · the receipt quiescence (F7) — CONVERGENT/NOTIFICATION, t-parameterized ─────────────────
-/** receiptsSettledAt — the demand ↔ order logs are settled at `t`: every committed demand-side
-    accrual (RecordProduction) on an item serviced by a live line has been posted to that line
-    (a later committed RecordReceipt). Holds at notification quiescence; legally FALSE in the
+/** receiptsSettledAt — the demand ↔ order logs are settled at `t`, BOTH directions (cut 9):
+    every committed demand-side accrual (RecordProduction) on an item serviced by a live line has
+    been posted to that line (a later committed RecordReceipt), and every committed demand-side
+    reversal (ExtractProduction — the Revoke pairing) likewise has its compensating posting (a
+    later committed ReverseReceipt). Holds at notification quiescence; legally FALSE in the
     missed/in-flight window — the runtime law probe watches it, and its MANDATORY self-heal
-    (the drill-down recompute) restores it. NEVER a global fact; NOT in `guarantees`. */
+    (the drill-down recompute) restores it. NEVER a global fact; NOT in `guarantees`.
+    NB the reversal clause quantifies over holdingLineOf AT `t` like the accrual clause: a
+    revocation whose line has closed (or whose order has terminated) by `t` is OUT of the
+    settled obligation — the refusal-and-ALARM posture (MP 2026-08-14), not silent convergence. */
 pred receiptsSettledAt[t: Tick] {
   all rp: RecordProductionOcc |
     (committed[rp] and notAfter[rp.tick, t] and some holdingLineOf[rp.subject, t]) implies
       (some rr: RecordReceiptOcc | committed[rr] and rr.subject in holdingLineOf[rp.subject, t]
          and precedes[rp.tick, rr.tick] and notAfter[rr.tick, t])
+  all xp: ExtractProductionOcc |
+    (committed[xp] and notAfter[xp.tick, t] and some holdingLineOf[xp.subject, t]) implies
+      (some rv: ReverseReceiptOcc | committed[rv] and rv.subject in holdingLineOf[xp.subject, t]
+         and precedes[xp.tick, rv.tick] and notAfter[rv.tick, t])
 }
 
 // ── C7 · closure by act (F7) — ATOMIC ───────────────────────────────────────────────────────────
@@ -171,6 +194,7 @@ pred guarantees {
   and attachItemAgrees
   and submitRequiresStarted
   and receiptAccrues
+  and receiptReverses
   and lineClosureByAct
   and closeRequiresSettled
   and supplierBindingFrozen

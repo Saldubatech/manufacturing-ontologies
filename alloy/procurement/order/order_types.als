@@ -264,6 +264,14 @@ sig RecordAcknowledgmentOcc extends llog/SubjectOcc { confirmation: one Confirma
     RecordProduction notifications; the SAME kind is the manual repair / probe re-drive).
     Incremental: sReceived += qty — pairwise, no fold anywhere. */
 sig RecordReceiptOcc extends llog/SubjectOcc { qty: one Quantity } { bindings = subject + qty }
+/** ReverseReceipt — the accrual's COMPENSATING posting (F9b, MP ruling 2026-08-14: the received
+    quantity is FINANCIALLY BINDING — it is what incurs cost when the order closes — so a revoked
+    delivery must decrement it, unlike purely operational effects; the C/NOTIF reaction to demand
+    Revoke/ExtractProduction notifications; the SAME kind is the manual repair / probe re-drive).
+    Incremental: sReceived −= qty — pairwise, the ledger's reversing entry (corrections are never
+    edits). Dedup (one reversal per revoked delivery) is runtime idempotency machinery — the
+    accrual precedent: no law reads a delivery identity here. */
+sig ReverseReceiptOcc extends llog/SubjectOcc { qty: one Quantity } { bindings = subject + qty }
 /** CloseLine — line done, BY DECREE (F7: full receipt makes closure available, never actual;
     "short" = the derived reading open ≠ 0 at the close tick). */
 sig CloseLineOcc extends llog/SubjectOcc {} { bindings = subject }

@@ -45,6 +45,10 @@ assert unit_ord_contract_receiptAccrues { receiptAccrues }
 check unit_ord_contract_receiptAccrues for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 8 Quantity, 2 Note expect 0
 
+assert unit_ord_contract_receiptReverses { receiptReverses }
+check unit_ord_contract_receiptReverses for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 8 Quantity, 2 Note expect 0
+
 assert unit_ord_contract_lineClosureByAct { lineClosureByAct }
 check unit_ord_contract_lineClosureByAct for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 2 Note expect 0
@@ -121,6 +125,35 @@ run unit_ord_receiptSettles {
       10 Tick, 11 EntityId, 11 Snapshot, 4 Quantity, 2 Note, 8 Occurrence expect 1
       // census +1 at DT-023 cut 7a: the item-log fixture behind the attach agreement pushed
       // this deep witness past the old default-6 occurrence ceiling
+
+// Cut 9 (F9b — MP 2026-08-14): a reversal COMPENSATES its accrual — record then reverse the
+// same quantity and the stored sReceived reads the keyed zero again (the financially binding
+// counter returns to its pre-record value; the keyed monoid zero-nets collapse).
+run unit_ord_reverseCompensatesReceipt {
+  some rr: RecordReceiptOcc, rv: ReverseReceiptOcc, t: Tick | {
+    committed[rr] and committed[rv]
+    rv.subject = rr.subject
+    rv.qty = rr.qty
+    precedes[rr.tick, rv.tick] and notAfter[rv.tick, t]
+    some qtyMap[rr.qty]
+    no qtyMap[lineStateAt[rr.subject, t].sReceived]
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      9 Tick, 9 EntityId, 10 Snapshot, 5 Quantity, 2 Note expect 1
+
+// Cut 9 (the refusal-and-ALARM posture): a reversal against a CLOSED line refuses with exactly
+// RLineClosed — the received quantity has priced the order, a late revocation must not silently
+// decrement (the runtime listener alarms on this refusal).
+run unit_ord_reverseOnClosedLineRefused {
+  some o: ReverseReceiptOcc | {
+    o.admission in Rejected
+    o.admission.because = RLineClosed
+    lPre[o].sLineStatus = L_CLOSED
+  }
+} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      9 Tick, 9 EntityId, 10 Snapshot, 4 Quantity, 2 Note expect 1
 
 // Scenario 4b (the C/NOTIF MISSED-NOTIFICATION WINDOW — must be LEGAL): an accrual committed,
 // no posting yet, the quiescence law FALSE. The emitter cannot fix it; the listener/probe will.

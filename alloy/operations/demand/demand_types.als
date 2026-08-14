@@ -158,7 +158,9 @@ sig RecordProductionOcc extends dlog/SubjectOcc { delivery: lone EntityId } { bi
 /** ExtractProduction — the demand-side extraction pairing Revoke (⟲, §8.1.2): reverses the
     recorded contribution on the target's log (the fulfillment fold ignores REVOKED deliveries;
     the holding pool's content movement is runtime, watched by the I3-family probe). Committed
-    ONLY as the demand-side half of the ATOMIC Revoke composition. */
+    ONLY as the demand-side half of the ATOMIC Revoke composition. The listener chain
+    (ProductionRevoked → the order's receiptReverses COMPENSATING posting) rides THIS kind
+    (cut 9, MP 2026-08-14 — the received quantity is financially binding). */
 sig ExtractProductionOcc extends dlog/SubjectOcc { delivery: lone EntityId } { bindings = subject + delivery }
 /** Distribute — allocate accumulated production (⟲, R8): a DATA-DRIVEN distribution matrix
     (per-member quantities) + the caller's fullness assertion `fills` (intent-capturing — the
