@@ -1,0 +1,68 @@
+module reference_data/item/item_implementation
+
+/*
+ * ITEM — IMPLEMENTATION (DT-017). Integration roots open this file to get the REAL module.
+ *
+ * Since the DT-023 cut 7a log conversion the module is NO LONGER static-degenerate: the
+ * lifecycle machinery (chaining, reason-precise admission, effects) lives here, and the
+ * contract's lifecycle laws are THEOREMS of it (proven in tests/item.als). The CONTENT laws
+ * (ownership/refs — C1..C3) remain asserted axioms: nothing deeper derives them.
+ */
+
+open reference_data/item/item_contracts
+open meta/subject_log/subject_log[Item, ItemState] as ilog   // same params ⇒ the SAME spine instance as item_types
+
+// ── the spine adoptions ─────────────────────────────────────────────────────────────────────────
+fact ItemChain { ilog/chained }
+fact ItemCommitPolicy { ilog/commitAlwaysAccepts }
+
+// ── reason-precise admission (the witnessing idiom) ─────────────────────────────────────────────
+/** supplyRetiredViol — DT-023 cut 7b: a write INTRODUCING a supply row whose vendor pin's
+    affiliate is not Live refuses with RRetiredRef (a new supply row is a new sourcing
+    commitment — the D3 matrix row, model-realized now that both sides are log-carried);
+    re-stated rows already in the prior state are grandfathered. */
+fun supplyRetiredViol[o: ItemWriteOcc]: set Reason {
+  ((some s: o.supplies - o.pre.sSupplies |
+      some s.supplierPin and not baLiveAt[s.supplierPin.subject, o.tick])
+   => RRetiredRef else none)
+}
+/** createItemViol — Create refuses an already-created subject or a retired-vendor row. */
+fun createItemViol[o: CreateItemOcc]: set Reason {
+  (some o.pre => RItemExists else none) + supplyRetiredViol[o]
+}
+/** itemMutateViol — Update/Delete refuse an uncreated or retired subject. */
+fun itemMutateViol[o: ItemOcc]: set Reason {
+  ((no o.pre) => RItemNotCreated else none)
+  + ((some o.pre and (o.pre & ItemState).sStatus = RD_RETIRED) => RItemRetired else none)
+}
+
+fact ItemAdmissionWitnessed {
+  all o: CreateItemOcc | (o.admission = Accepted iff no createItemViol[o]) and (o.admission in Rejected implies o.admission.because = createItemViol[o])
+  all o: UpdateItemOcc | let v = itemMutateViol[o] + supplyRetiredViol[o] | (o.admission = Accepted iff no v) and (o.admission in Rejected implies o.admission.because = v)
+  all o: DeleteItemOcc | (o.admission = Accepted iff no itemMutateViol[o]) and (o.admission in Rejected implies o.admission.because = itemMutateViol[o])
+}
+
+// ── supply-pin currency (DT-023 Q-A: a committed write's vendor pins are then-current) ─────────
+fact ItemSupplyPinCurrency {
+  all o: ItemWriteOcc | committed[o] implies
+    all s: o.supplies | some s.supplierPin implies pinsCurrentBa[s.supplierPin, o.tick]
+}
+
+// ── effects (SET semantics on the write kinds; Delete carries content forward) ─────────────────
+fact ItemEffects {
+  all o: ItemWriteOcc | committed[o] implies {
+    (o.post & ItemState).sStatus = RD_LIVE
+    o.post.sSupplies            = o.supplies
+    o.post.sDefaultSupply       = o.defaultSupply
+    o.post.sCardMinimumQuantity = o.cardMinimumQuantity
+  }
+  all o: DeleteItemOcc | committed[o] implies {
+    (o.post & ItemState).sStatus = RD_RETIRED
+    o.post.sSupplies            = o.pre.sSupplies
+    o.post.sDefaultSupply       = o.pre.sDefaultSupply
+    o.post.sCardMinimumQuantity = o.pre.sCardMinimumQuantity
+  }
+}
+
+// ── the content axioms (C1..C3 — see the contracts header for why these are facts) ─────────────
+fact ItemContentLaws { supplyOwnership and uomSchemesSound and supplierPinsSound }

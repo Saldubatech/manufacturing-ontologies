@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<catalog prefer="public" xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+    <!-- Vendored public-standard ontologies: import-IRI -> local file (relative to owl/).
+         Offline resolution for consulting these references in Protégé / ROBOT. -->
+    <uri name="http://purl.obolibrary.org/obo/bfo/2020/bfo.owl" uri="imports/bfo.owl"/>
+    <uri name="http://www.w3.org/2006/time" uri="imports/www-w3-org-2006-time.ttl"/>
+    <uri name="http://qudt.org/collection/usertest" uri="imports/qudt-org-collection-usertest.ttl"/>
+    <uri name="http://qudt.org/schema/coordinateSystems" uri="imports/qudt-org-schema-coordinatesystems.ttl"/>
+    <uri name="http://qudt.org/schema/datatype" uri="imports/qudt-org-schema-datatype.ttl"/>
+    <uri name="http://qudt.org/schema/facade/qudt" uri="imports/qudt-org-schema-facade-qudt.ttl"/>
+    <uri name="http://qudt.org/schema/qudt" uri="imports/qudt-org-schema-qudt.ttl"/>
+    <uri name="http://qudt.org/vocab/dimensionvector" uri="imports/qudt-org-vocab-dimensionvector.ttl"/>
+    <uri name="http://qudt.org/vocab/prefix" uri="imports/qudt-org-vocab-prefix.ttl"/>
+    <uri name="http://qudt.org/vocab/quantitykind" uri="imports/qudt-org-vocab-quantitykind.ttl"/>
+    <uri name="http://qudt.org/vocab/soqk" uri="imports/qudt-org-vocab-soqk.ttl"/>
+    <uri name="http://qudt.org/vocab/sou" uri="imports/qudt-org-vocab-sou.ttl"/>
+    <uri name="http://qudt.org/vocab/unit" uri="imports/qudt-org-vocab-unit.ttl"/>
+    <uri name="http://www.linkedmodel.org/schema/dtype" uri="imports/www-linkedmodel-org-schema-dtype.rdf"/>
+    <uri name="http://www.linkedmodel.org/schema/vaem" uri="imports/www-linkedmodel-org-schema-vaem.rdf"/>
+    <uri name="http://www.w3.org/2004/02/skos/core" uri="imports/www-w3-org-2004-02-skos-core.rdf"/>
+    <uri name="https://spec.industrialontologies.org/ontology/202602/core/meta/AnnotationVocabulary/" uri="imports/iof-annotation-vocabulary.rdf"/>
+    <uri name="https://spec.industrialontologies.org/ontology/core/Core/" uri="imports/iof-core.rdf"/>
+</catalog>

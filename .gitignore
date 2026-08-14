@@ -141,3 +141,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Fetched analysis tools — rehydrate with `bash tools/get-tools.sh` (or `make tools`)
+/tools/*.jar
+
+# Alloy Analyzer exec output (receipts + solution dumps); the Makefile writes here via -o.
+# `make clean` wipes it. (`out` is also matched by the Next.js block above — kept explicit here.)
+/out/
+# soak batch dirs (the DT-024 chunked-runner ledgers) — repo-root only, alloy/soak stays tracked
+/soak/
+# bulk instance corpus (DT-025 R3): manifest + registered SAT dumps are regenerable
+# machine products, keyed by model SHA. The CURATED seed corpus is committed elsewhere.
+/corpus/
