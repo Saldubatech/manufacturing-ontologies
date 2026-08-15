@@ -109,15 +109,19 @@ fact SupplierBindingPinAgrees {
   }
 }
 
-// ── the item descriptor PIN — SUBSUMED BY THE IDENTITY PIN (DT-023 R3, cut 7a) ──────────────────
-// The line's identity `itemPin` IS the frozen descriptor pin (MP ruling 2026-07-08: "lines do
-// freeze the item descriptor, otherwise commitments to/from vendors are not
-// repeatable/auditable"): a VERSION reference into the item log, captured at genesis,
-// immutable BECAUSE it is identity — the former two-field apparatus (`itemRef` entity handle +
-// `sItemData` ItemDescriptorPin copy handle + the `ItemLinePinAgrees` agreement fact + the
-// `lineDescriptorFrozen` law + the `RNoDescriptor` capture guard) all DISSOLVE into the one
-// field. Pin-target agreement is now structural (one field cannot disagree with itself);
-// runtime coordinate: (entityId, rId).
+// ── the line's item reference — IDENTITY + READ-TIME EFFECTIVE VERSION (cut 10, PDEV-1536) ──────
+// The line carries the item's IDENTITY only (`itemRef`); the EFFECTIVE version is DERIVED at
+// read time (`effectiveItemAt`): the item log's CURRENT version while the parent order is
+// un-submitted, FROZEN at the version current at the parent's Submit tick afterward (MP ruling
+// 2026-08-13, the propagation-semantics refinement: "the line refers to the most current version
+// of the Item while not submitted (identified by eId), and to the frozen record after submission
+// (identified by [eId, rId]); the other fields are a denormalization of the effective Item").
+// The model keeps NO denormalized state — the runtime's C/NOTIF refresh listener, its sync
+// occurrence kind, and the heal probe are pure implementation with no model representation.
+// This supersedes the cut-7a genesis-frozen VERSION pin (`itemPin: lone ItemOcc` +
+// `LinePinCurrency`), which froze the WRONG version whenever the item was edited during DRAFT;
+// the cut-7a dissolution of the descriptor apparatus (`sItemData` + `ItemLinePinAgrees` +
+// `lineDescriptorFrozen` + `RNoDescriptor`) stands. Runtime coordinate after Submit: (eId, rId).
 
 // ── the confirmation facet (F3) ─────────────────────────────────────────────────────────────────
 /** Disposition — the vendor's per-line answer; WAIVED = an acknowledgment recorded WITHOUT an
@@ -147,16 +151,16 @@ fact OrderRefs { all o: Order | no o.dataRefs }   // the supplier binding is REC
     received tracking (F7 flag 3). Changing a line's item = Remove + Add (O5). */
 sig OrderLine extends Scoped {
   orderRef: one  EntityId,   // → Order: the parent (lines never move — O5); entity-carried composition
-  itemPin:  lone ItemOcc     // → Item VERSION PIN (DT-023 R3; was itemRef + sItemData): WHAT is
-                             //   ordered AND the frozen descriptor version, in one; absent = free-form
+  itemRef:  lone EntityId    // → Item IDENTITY (cut 10 — was the cut-7a version pin): WHAT is
+                             //   ordered; the effective VERSION is `effectiveItemAt` (read-time
+                             //   derivation, frozen at Submit); absent = free-form
 }
-fact OrderLineRefs { all l: OrderLine | l.dataRefs = l.orderRef }   // kernel isolation covers it
-// Pin tenancy (DT-023): kernel isolation reaches only EntityId dataRefs — stated here instead.
-fact LineItemPinTenancy {
-  all l: OrderLine | some l.itemPin implies l.itemPin.subject.tenantId = l.tenantId
-}
+// Both refs are EntityId dataRefs, so kernel cross-tenant isolation covers them — the cut-7a
+// `LineItemPinTenancy` side-fact DISSOLVED with the typed pin (cut 10).
+fact OrderLineRefs { all l: OrderLine | l.dataRefs = l.orderRef + l.itemRef }
 fact OrderLineRefIntegrity {
   all l: OrderLine | let o = resolve[l.orderRef] | some o implies o in Order
+  all l: OrderLine | let i = resolve[l.itemRef]  | some i implies i in Item
 }
 
 // ── the state records ───────────────────────────────────────────────────────────────────────────
@@ -191,7 +195,8 @@ sig OrderLineState extends Snapshot {
   sReceived:     lone Quantity,        // STORED, incrementally maintained (F9); none = the keyed zero
   sLineStatus:   one  OrderLineStatus, // L_OPEN / L_CLOSED (closure by act — F7)
   sDemand:       set  EntityId         // → DemandItem: the serviced demand (O3: the HOLDER carries the refs)
-  // (sItemData DISSOLVED at DT-023 cut 7a: the identity `itemPin` IS the frozen descriptor pin.)
+  // (sItemData DISSOLVED at DT-023 cut 7a; the effective item version is DERIVED at read time
+  //  since cut 10 — `effectiveItemAt`, frozen at Submit.)
 }
 fact OrderLineStateExtensional {
   all disj a, b: OrderLineState |
@@ -239,9 +244,9 @@ sig DeleteOrderOcc extends olog/SubjectOcc {} { bindings = subject }
 // ── the kinds — LINE subject ────────────────────────────────────────────────────────────────────
 /** AddLine — line genesis: from a DemandItem, from an Item, or free-form (F6). The on-the-fly
     card-less DemandItem for a naked-item line is the CALLER's demand-side Create — order-side
-    this is just genesis + attach. orderRef/itemPin ride the ENTITY — the pin IS the frozen
-    descriptor version (DT-023 cut 7a), captured current at genesis (LinePinCurrency) and
-    guarded live (RRetiredRef — line-add is a new-commitment point, D3). */
+    this is just genesis + attach. orderRef/itemRef ride the ENTITY (identity only — the
+    effective version is the read-time derivation `effectiveItemAt`, cut 10); the item is
+    guarded live on this arm (RRetiredRef — line-add is a new-commitment point, D3). */
 sig AddLineOcc extends llog/SubjectOcc { qty: lone Quantity, demand: lone EntityId }
   { bindings = subject + qty + demand }   // the descriptor pin rides the line IDENTITY (DT-023 cut 7a)
 /** UpdateLine — edit the requested quantity (SET; the item is immutable — O5). */
@@ -308,7 +313,7 @@ one sig ROrderStarted,      // create: this order already has committed history 
         RDemandIneligible,  // attach/submit C/OP gate: the demand item is dangling, not live,
                             //   not at the expected saga state (RELEASED for attach; IN_PROCESS at submit),
                             //   or not denominated in the line's item (C3b, MP 2026-07-10 — wrong
-                            //   item, or a free-form target line: no itemPin can never agree)
+                            //   item, or a free-form target line: an empty itemRef resolution can never agree)
         RLinesOpen,         // close: a live line is still L_OPEN
         RNoDemand           // record-receipt: the line is free-form (no received tracking — F7)
         extends Reason {}
@@ -362,7 +367,23 @@ fun retiredLinesOf[o: Order, t: Tick]: set OrderLine {
   { l: linesOf[o] | startedLineAt[l, t] and lineRemovedAt[l, t] }
 }
 /** freeForm — the line orders no Item: documentary only (F6/F7). */
-pred freeForm[l: OrderLine] { no l.itemPin }
+pred freeForm[l: OrderLine] { no l.itemRef }
+
+/** lineFreezeTick — the parent order's freeze instant at-or-before `t` (the committed Submit's
+    tick; at most one — Submit fires once, DRAFT → SUBMITTED). Empty while un-submitted. */
+fun lineFreezeTick[l: OrderLine, t: Tick]: lone Tick {
+  { k: Tick | some s: SubmitOcc | committed[s] and s.subject = parentOf[l] and s.tick = k and notAfter[k, t] }
+}
+/** effectiveItemAt — the line's EFFECTIVE item version at `t` (cut 10, PDEV-1536 — the ruled
+    read-time derivation): the item log's CURRENT version while the parent is un-submitted;
+    FROZEN at the version current at the parent's Submit tick afterward. Empty for a free-form
+    or dangling reference. Only Submit changes the retrieval rule — no stored version, no
+    denormalized state, nothing to keep in sync model-side. */
+fun effectiveItemAt[l: OrderLine, t: Tick]: lone ItemOcc {
+  some lineFreezeTick[l, t]
+    => itemVersionAt[resolve[l.itemRef] & Item, lineFreezeTick[l, t]]
+    else itemVersionAt[resolve[l.itemRef] & Item, t]
+}
 
 /** servicedAt — a line's serviced DemandItems, RESOLVED (soft refs may dangle out of scope). */
 fun servicedAt[l: OrderLine, t: Tick]: set DemandItem {

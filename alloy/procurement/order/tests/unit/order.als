@@ -66,8 +66,9 @@ check unit_ord_contract_orderTerminalClosure for 5 but 5 Int, 3 Scalar, 5 State,
       2 Order, 3 OrderLine, 2 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station, 2 Note expect 0
 
 // (unit_ord_contract_lineDescriptorFrozen RETIRED at DT-023 cut 7a: the law dissolved — the
-//  descriptor pin is the line's IDENTITY `itemPin`, immutable by construction. Its spirit is
-//  witnessed by unit_ord_descriptorCapturedFrozen below.)
+//  item reference is the line's IDENTITY `itemRef`; the freeze semantics are the read-time
+//  derivation — witnessed by unit_ord_effectiveItemFloatsWhileDraft /
+//  unit_ord_effectiveItemFreezesAtSubmit below, cut 10.)
 
 // ── SAT witnesses — the §2 scenarios ────────────────────────────────────────────────────────────
 // Smoke/genesis: Create births DRAFT.
@@ -218,31 +219,36 @@ run unit_ord_cancelReturnsToQueue {
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       9 Tick, 10 EntityId, 10 Snapshot, 2 Note expect 1
 
-// The pin-freeze arc (DT-023 cut 7a — the identity pin subsumes the old sItemData handle):
-// the line pins a version at genesis; a LATER item Update moves the current version on —
-// the line's frozen denotation stays at the pinned version (repeatable/auditable vendor
-// commitments with nothing legislated).
-run unit_ord_descriptorCapturedFrozen {
-  some a: AddLineOcc, u: UpdateItemOcc | {
+// The read-time derivation, DRAFT half (cut 10, PDEV-1536): while the parent is un-submitted
+// the line's EFFECTIVE item version FLOATS — an item Update after line genesis moves it to the
+// NEW current version (the runtime's C/NOTIF refresh is the performance shadow of this read).
+run unit_ord_effectiveItemFloatsWhileDraft {
+  some a: AddLineOcc, u: UpdateItemOcc, t: Tick | {
     committed[a] and committed[u]
-    a.subject.itemPin.subject = u.subject and precedes[a.tick, u.tick]
-    a.subject.itemPin != itemVersionAt[u.subject, u.tick]
+    resolve[a.subject.itemRef] = u.subject and precedes[a.tick, u.tick] and notAfter[u.tick, t]
+    no lineFreezeTick[a.subject, t]
+    effectiveItemAt[a.subject, t] = itemVersionAt[u.subject, t]
+    effectiveItemAt[a.subject, t] != itemVersionAt[u.subject, a.tick]   // it MOVED off the genesis version
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
       9 Tick, 9 EntityId, 9 Snapshot, 3 Quantity, 2 Note, 7 Occurrence expect 1
 
-// The pin-currency witness (DT-023 Q-A): a committed line genesis pins the item's CURRENT
-// version at its tick (LinePinCurrency in action; the pin's never-dangling typing rides free).
-run unit_ord_pinDenotesLineItem {
-  some a: AddLineOcc | {
-    committed[a]
-    some a.subject.itemPin
-    pinsCurrentItem[a.subject.itemPin, a.tick]
+// The read-time derivation, FROZEN half (cut 10): after the parent's Submit the effective
+// version is PINNED at the submit-tick version — a LATER item Update moves the current version
+// on, the line's denotation stays (repeatable/auditable vendor commitments: what was agreed is
+// the SUBMIT-time version, the [eId, rId] runtime coordinate).
+run unit_ord_effectiveItemFreezesAtSubmit {
+  some l: OrderLine, s: SubmitOcc, u: UpdateItemOcc, t: Tick | {
+    committed[s] and committed[u]
+    s.subject = parentOf[l] and some l.itemRef
+    precedes[s.tick, u.tick] and resolve[l.itemRef] = u.subject and notAfter[u.tick, t]
+    effectiveItemAt[l, t] = itemVersionAt[u.subject, s.tick]
+    effectiveItemAt[l, t] != itemVersionAt[u.subject, t]   // the current version moved on; the line did not
   }
-} for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
-      9 Tick, 10 EntityId, 8 Snapshot, 2 Note, 6 Occurrence expect 1
+} for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      11 Tick, 12 EntityId, 12 Snapshot, 4 Quantity, 2 Note, 10 Occurrence expect 1
 
 // The F8 arc: choose → override → ResetToSupplier discards the overrides, keeps the identity.
 run unit_ord_resetToSupplier {
@@ -342,8 +348,8 @@ run unit_ord_wrongItemRefused {
     refusedAtAdmission[o] and o.admission.because = RDemandIneligible
     resolve[o.demand] = d
     demandStatusAt[d, o.tick] = DS_RELEASED
-    some o.subject.itemPin
-    d.itemPin.subject != o.subject.itemPin.subject
+    some o.subject.itemRef
+    d.itemPin.subject != resolve[o.subject.itemRef] & Item
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
@@ -398,7 +404,7 @@ run unit_ord_lineRetiredItemRefused {
   some o: AddLineOcc | {
     no o.demand
     refusedAtAdmission[o] and o.admission.because = RRetiredRef
-    some o.subject.itemPin
+    some o.subject.itemRef
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 0 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
@@ -412,8 +418,8 @@ run unit_ord_lineRetiredItemRefused {
 run unit_ord_attachRetiredDemandAllowed {
   some o: AttachDemandOcc, x: DeleteItemOcc | {
     committed[o] and committed[x]
-    x.subject = o.subject.itemPin.subject and precedes[x.tick, o.tick]
-    not itemLiveAt[o.subject.itemPin.subject, o.tick]
+    x.subject = resolve[o.subject.itemRef] and precedes[x.tick, o.tick]
+    not itemLiveAt[resolve[o.subject.itemRef] & Item, o.tick]
   }
 } for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       1 Order, 1 OrderLine, 1 DemandItem, 0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
