@@ -3,10 +3,16 @@
 # failure means "this PR's cones are too heavy for CI; run the full gate locally"
 # (the same budget-cap philosophy as the soak watchdog, PDEV-1610). NOT the full gate:
 # `make check-alloy` remains the local push discipline, and full-gate.yaml the CI form.
+# Escape valve (MP ruling 2026-08-15): the `heavy-cone` label short-circuits the solve —
+# for PRs whose cones exceed the CI budget by construction (e.g. anything reaching the
+# receiver unit root). The label is an operator assertion that the local full gate ran
+# green on the PR head; cite the run in the PR body. The check stays required for every
+# unlabeled PR.
 name: affected-cones
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 concurrency:
   group: affected-cones-${{ github.ref }}
@@ -17,21 +23,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: heavy-cone escape valve (label = operator assertion of a green local full gate)
+        if: contains(github.event.pull_request.labels.*.name, 'heavy-cone')
+        run: |
+          echo "heavy-cone label set — this PR's cones exceed the CI budget by construction."
+          echo "Evidence discipline: the local 'make check-alloy' full gate ran green on the PR head (see the PR body)."
       - uses: actions/checkout@v4
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'heavy-cone') }}
         with:
           fetch-depth: 0
       - uses: actions/setup-java@v4
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'heavy-cone') }}
         with:
           distribution: temurin
           java-version: "21"
       - uses: actions/cache@v4
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'heavy-cone') }}
         with:
           path: |
             tools/alloy.jar
             tools/robot.jar
           key: tools-${{ hashFiles('tools/get-tools.sh') }}
       - run: make tools
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'heavy-cone') }}
       - name: pick solver (glucose native, else pure-Java SAT4J — both sound/complete)
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'heavy-cone') }}
         run: |
           printf 'sig A {}\nrun probe { some A } for 2 expect 1\n' > /tmp/probe.als
           mkdir -p /tmp/probe-out
@@ -43,6 +59,7 @@ jobs:
             echo "solver: SAT4J (glucose native failed to load on this runner)"
           fi
       - name: run the roots whose cones this PR touched
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'heavy-cone') }}
         run: |
           files="$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" -- alloy | tr '\n' ' ')"
           echo "changed alloy files: ${files:-none}"
