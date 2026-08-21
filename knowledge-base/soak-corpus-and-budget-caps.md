@@ -55,3 +55,28 @@ a foreign solver appears mid-batch logs a `QUIET-WARN` instead of blocking.
 `plan` writes `batch.meta`: `created` epoch, `model_sha` (`git rev-parse HEAD`), and a
 `dirty` flag. Launch batches from a **clean, pushed tree** — a dirty stamp makes every
 harvested instance unreproducible.
+
+## The CNF artifact cache (PDEV-1609 — the model's "class files")
+
+`make cnf-export ROOT=<root.als> COMMAND=<cmd>` translates one command to DIMACS
+(`exec -s CNF`) and stores it gzipped at `cnf/<scope_hash>/<command>.cnf.gz`, indexed
+in `cnf/manifest.tsv` (columns: `registered, model_sha, alloy_version, root, command,
+scope_hash, vars, clauses, path`). MP direction 2026-08-21.
+
+- **Cache, not artifact of record**: keyed by `(command, scope_hash, alloy_version)`
+  — the same cone hash the soak planner uses (`tools/soak-chunk.sh conehash`), so a
+  model change outside a command's cone keeps its CNF valid, and an alloy.jar bump
+  invalidates everything. `model_sha` is a browsing stamp, not part of the key. A key
+  hit is a no-op; `FORCE=1` re-exports. `cnf/` is gitignored, like `corpus/`.
+- **Determinism stance**: Alloy's translation is not byte-stable across runs; the
+  cache promises equivalence (same problem at the same scope), not identity — nobody
+  diffs class files, they rebuild.
+- **What a CNF buys**: the integration seam for EXTERNAL solvers (kissat, CaDiCaL,
+  parallel portfolios) without touching the Alloy toolchain. For a `check`, an
+  external **UNSAT verdict = the law holds at that scope** and transfers as-is. An
+  external **SAT** proves a counterexample exists but does NOT reconstruct the Alloy
+  witness (the variable↔atom mapping is not exported) — rerun in Alloy for the
+  instance, or drop scope.
+- Translation cost is minutes even for the hardest instances (the 7.2M-clause
+  receiver soak translated in ~2 min); the search time is what the cache can shop
+  around to better solvers.

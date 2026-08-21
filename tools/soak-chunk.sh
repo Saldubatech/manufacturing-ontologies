@@ -283,5 +283,6 @@ case "${1:-}" in
   status)      shift; cmd_status "$@";;
   harvest)     shift; cmd_harvest "$@";;
   harvest-one) shift; harvest_one "$@";;
-  *) die "usage: soak-chunk.sh plan|chunk|status|harvest|harvest-one <batch-dir> [args]";;
+  conehash)    shift; cone_hash "$1";;
+  *) die "usage: soak-chunk.sh plan|chunk|status|harvest|harvest-one|conehash <batch-dir|root> [args]";;
 esac
