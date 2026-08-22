@@ -80,3 +80,15 @@ scope_hash, vars, clauses, path`). MP direction 2026-08-21.
 - Translation cost is minutes even for the hardest instances (the 7.2M-clause
   receiver soak translated in ~2 min); the search time is what the cache can shop
   around to better solvers.
+- **Watching a solve** (`tools/solver-progress.sh <gimsatul.log>`): a CDCL solver has
+  no sound percent-complete — it halts on SAT (full satisfying trail), UNSAT (the
+  empty clause: a conflict at decision level 0), or its budget (UNKNOWN). The script
+  extracts the plottable proxies from a gimsatul `-v` log (TSV mode) and `--summary`
+  reads the trend: active **variables** shrinking = real simplification; mean
+  conflict **level** falling = the UNSAT proof tightening; **rate** flat = healthy.
+  Its stagnation reading (both progress proxies <1% movement over the last third)
+  is the budget-termination criterion a blind wall-clock cap lacks. Calibration
+  point: the 2026-08-21 gimsatul run on the receiver-soak CNF (4 threads, 6h) hit
+  its wall still PROGRESSING (variables −5%, level −11% in the last third) —
+  glucose's 6-day solve of the same command is formula hardness, not solver
+  weakness.
