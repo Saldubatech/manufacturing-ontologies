@@ -91,4 +91,11 @@ scope_hash, vars, clauses, path`). MP direction 2026-08-21.
   point: the 2026-08-21 gimsatul run on the receiver-soak CNF (4 threads, 6h) hit
   its wall still PROGRESSING (variables −5%, level −11% in the last third) —
   glucose's 6-day solve of the same command is formula hardness, not solver
-  weakness.
+  weakness. Second calibration point (2026-08-22, 6 threads, 10h, same CNF):
+  UNKNOWN again, with the stagnation boundary now visible — active variables
+  moved only 0.26% in the last third (340k residual, flatlined) while mean
+  conflict level still moved 3.07% (1843 → 158 over the run); conflict rate
+  decayed 184 → 12. One more equal extension would likely put both proxies
+  under the 1% threshold: the rational budget-termination point. Together the
+  three runs (glucose 6d+ blind; 4t/6h both proxies brisk; 6t/10h one proxy
+  stalled) are the DT-024 calibration set.
