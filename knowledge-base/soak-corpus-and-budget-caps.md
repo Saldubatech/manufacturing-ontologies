@@ -87,7 +87,13 @@ scope_hash, vars, clauses, path`). MP direction 2026-08-21.
   reads the trend: active **variables** shrinking = real simplification; mean
   conflict **level** falling = the UNSAT proof tightening; **rate** flat = healthy.
   Its stagnation reading (both progress proxies <1% movement over the last third)
-  is the budget-termination criterion a blind wall-clock cap lacks. Calibration
+  is the budget-termination criterion a blind wall-clock cap lacks.
+  **ADOPTED as the standing budget policy for gimsatul runs (MP ruling,
+  2026-08-24, DT-024): terminate when both proxies move <1% over the last
+  third — with operator override allowed; the rule stays under observation
+  and will be tweaked as more runs accumulate.** Application to the
+  long-running glucose closer deliberately deferred until the 8t/12h run
+  lands and is analyzed. Calibration
   point: the 2026-08-21 gimsatul run on the receiver-soak CNF (4 threads, 6h) hit
   its wall still PROGRESSING (variables −5%, level −11% in the last third) —
   glucose's 6-day solve of the same command is formula hardness, not solver
