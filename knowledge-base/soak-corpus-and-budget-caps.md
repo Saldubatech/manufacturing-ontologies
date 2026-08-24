@@ -102,6 +102,14 @@ scope_hash, vars, clauses, path`). MP direction 2026-08-21.
   moved only 0.26% in the last third (340k residual, flatlined) while mean
   conflict level still moved 3.07% (1843 → 158 over the run); conflict rate
   decayed 184 → 12. One more equal extension would likely put both proxies
-  under the 1% threshold: the rational budget-termination point. Together the
-  three runs (glucose 6d+ blind; 4t/6h both proxies brisk; 6t/10h one proxy
-  stalled) are the DT-024 calibration set.
+  under the 1% threshold: the rational budget-termination point. Fourth calibration point
+  (2026-08-24, 8 threads, 12h, same CNF, ~90% utilization under a glucose
+  co-run): UNKNOWN again, and the rule reads PROGRESSING — variables
+  flatlined at 0.89% (341k residual, same floor as 6t) but mean conflict
+  level moved 30.85% in the last third (1843 → 65 over the run), an order
+  of magnitude more proof-tightening than the 6t run, at a collapsed ~2
+  conflicts/s. Lesson: independent runs each re-pay the ramp; the marginal-
+  value question is about ONE long run, and no gimsatul run has yet ended
+  stagnant by the rule. Together the four runs (glucose 8d+ blind; 4t/6h
+  both proxies brisk; 6t/10h variables stalled / level slow; 8t/12h
+  variables stalled / level fast) are the DT-024 calibration set.
