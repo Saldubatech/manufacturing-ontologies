@@ -41,6 +41,12 @@ open resources/inventory_item/inventory_item_mock
  */
 
 // ── CONTRACT DISCHARGE (check; UNSAT = the law holds of the implementation) ─────────────────────
+assert unit_rcv_contract_linePoolProvenance { linePoolProvenance }
+check unit_rcv_contract_linePoolProvenance for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 Receiver, 3 ReceivingLine, 2 OrderAttribution, 0 Order, 2 OrderLine, 0 DemandItem, 0 ProductionDelivery,
+      0 CardCycle, 0 KanbanCard, 0 InventoryItem, 0 InventoryPool, 0 Station,
+      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation, 6 Occurrence, 8 EntityId, 6 Tick, 8 Snapshot, 2 Note expect 0
+
 assert unit_rcv_contract_captureWindowFrozen { captureWindowFrozen }
 check unit_rcv_contract_captureWindowFrozen for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 Receiver, 3 ReceivingLine, 2 OrderAttribution, 0 Order, 2 OrderLine, 0 DemandItem, 0 ProductionDelivery,

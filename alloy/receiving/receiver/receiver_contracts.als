@@ -163,6 +163,17 @@ pred receivingPoolGenesis {
   all a: ReceiveLineOcc, b: StartProductionOcc |
     (committed[a] and committed[b]) implies no (a.pool & b.holding)
 }
+/** linePoolProvenance — a line-held pool is EXACTLY the pool its committed Receive named
+    (the receiver-side mirror of kanban's `poolProvenance` and demand's `holdingProvenance`
+    — the §8.5.3 symmetric publication). A theorem of the Receive effect + the frozen
+    frames (Receive is the only `sPool` setter and names its own payload; every other kind
+    carries or clears); holds for terminal records too. Published 2026-08-24: DT-024 E7
+    proved it the load-bearing conjunct of the lattice row's inductive invariant. */
+pred linePoolProvenance {
+  all l: ReceivingLine, t: Tick | some rlStateAt[l, t].sPool implies
+    (some o: ReceiveLineOcc | committed[o] and o.subject = l and notAfter[o.tick, t]
+       and rlStateAt[l, t].sPool = o.pool)
+}
 /** linePoolExclusiveWhileLive — the receiving LATTICE ROW (§8.5.3): time-indexed over live
     holders, a line pool is (i) held by at most one line — OWN-KIND, unconditional, derived
     from the Receive guard's availability clause + the frozen frames; and (ii) under the
@@ -219,5 +230,6 @@ pred guarantees {
   and deliveriesAppendOnly
   and lineForwardMonotone
   and receiverTerminalComplete
+  and linePoolProvenance
   and linePoolExclusiveWhileLive
 }
