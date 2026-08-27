@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 # bulk instance corpus (DT-025 R3): manifest + registered SAT dumps are regenerable
 # machine products, keyed by model SHA. The CURATED seed corpus is committed elsewhere.
 /corpus/
+# CNF artifact cache (PDEV-1609): keyed, regenerable DIMACS exports — the model's
+# "class files". Manifest + payloads are machine products; rebuild via make cnf-export.
+/cnf/

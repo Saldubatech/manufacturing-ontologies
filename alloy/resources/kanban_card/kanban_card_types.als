@@ -191,7 +191,16 @@ pred rolloverEligible[c: CardCycle, t: Tick] {
 
 /** completedAt / abandonedAt — the SQ-8 "done" readings, DERIVED from how the cycle closed:
     completed = rolled over (successor genesis, no withdraw); abandoned = withdrawn. Disjoint —
-    a withdrawn-then-re-requested predecessor reads ABANDONED only. */
+    a withdrawn-then-re-requested predecessor reads ABANDONED only.
+    PRECONDITION (guard-dependence): these readings are faithful only over histories admitted
+    under `rolloverEligible` — the genesis guard (RCardInCirculation) is what makes
+    "rolled over ⇒ completed" sound. On a history containing a committed MID-TRIP rollover
+    (inadmissible here, but producible by a runtime deployed without the guard) the honest
+    reading is ABANDONED, which this derivation cannot express. The runtime additionally
+    STORES the reading at closure (`cycle_closure`, operations PR #288) as a read-side
+    denormalization from the status the cycle actually held; under the guard the stored and
+    derived readings coincide (deployment ruling 2026-08-20: the storing increment never
+    deploys without the guard increment). */
 pred completedAt[c: CardCycle, t: Tick] {
   (some r: RequestOcc | committed[r] and r.subject.precededBy = c and notAfter[r.tick, t])
   and (no w: WithdrawOcc | committed[w] and w.subject = c)

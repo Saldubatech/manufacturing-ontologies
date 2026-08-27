@@ -15,7 +15,7 @@ ALLOY_FLAGS ?= -s glucose
 # `out/` is in .gitignore; wipe it with `make clean`.
 OUT := out/alloy
 
-.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak soak-plan soak-chunk soak-status soak-harvest report report-examples check clean
+.PHONY: tools alloy check-layering check-alloy check-examples check-units check-integration test-unit test-sys soak soak-plan soak-chunk soak-status soak-harvest cnf-export report report-examples check clean
 
 ## tools: fetch/verify the pinned analysis tools (Alloy, ROBOT)
 tools:
@@ -237,6 +237,15 @@ soak-harvest:
 	@b='$(BATCH)'; [ -n "$$b" ] || b=$$(ls -d soak/2* 2>/dev/null | sort | tail -1); \
 	[ -n "$$b" ] || { echo "no batch under soak/"; exit 2; }; \
 	tools/soak-chunk.sh harvest "$$b"
+
+## cnf-export: the CNF artifact cache (PDEV-1609 program) — export a command's Kodkod
+## translation as gzipped DIMACS under cnf/<scope_hash>/, indexed in cnf/manifest.tsv.
+## Keyed by (command, cone hash, alloy version); model_sha stamped for browsing. A cache
+## key hit is a no-op (FORCE=1 re-exports). cnf/ is gitignored — a regenerable build
+## product, the model's "class files"; conventions in knowledge-base/soak-corpus-and-budget-caps.md.
+cnf-export: $(ALLOY)
+	@r='$(ROOT)'; c='$(COMMAND)'; [ -n "$$r" ] && [ -n "$$c" ] || { echo "usage: make cnf-export ROOT=alloy/.../file.als COMMAND=soak_..."; exit 2; }; \
+	tools/cnf-export.sh "$$r" "$$c"
 
 ## profiles: per gate root, print the adopted modeling profiles (transitive open walk — DT-012)
 profiles:

@@ -55,3 +55,61 @@ a foreign solver appears mid-batch logs a `QUIET-WARN` instead of blocking.
 `plan` writes `batch.meta`: `created` epoch, `model_sha` (`git rev-parse HEAD`), and a
 `dirty` flag. Launch batches from a **clean, pushed tree** — a dirty stamp makes every
 harvested instance unreproducible.
+
+## The CNF artifact cache (PDEV-1609 — the model's "class files")
+
+`make cnf-export ROOT=<root.als> COMMAND=<cmd>` translates one command to DIMACS
+(`exec -s CNF`) and stores it gzipped at `cnf/<scope_hash>/<command>.cnf.gz`, indexed
+in `cnf/manifest.tsv` (columns: `registered, model_sha, alloy_version, root, command,
+scope_hash, vars, clauses, path`). MP direction 2026-08-21.
+
+- **Cache, not artifact of record**: keyed by `(command, scope_hash, alloy_version)`
+  — the same cone hash the soak planner uses (`tools/soak-chunk.sh conehash`), so a
+  model change outside a command's cone keeps its CNF valid, and an alloy.jar bump
+  invalidates everything. `model_sha` is a browsing stamp, not part of the key. A key
+  hit is a no-op; `FORCE=1` re-exports. `cnf/` is gitignored, like `corpus/`.
+- **Determinism stance**: Alloy's translation is not byte-stable across runs; the
+  cache promises equivalence (same problem at the same scope), not identity — nobody
+  diffs class files, they rebuild.
+- **What a CNF buys**: the integration seam for EXTERNAL solvers (kissat, CaDiCaL,
+  parallel portfolios) without touching the Alloy toolchain. For a `check`, an
+  external **UNSAT verdict = the law holds at that scope** and transfers as-is. An
+  external **SAT** proves a counterexample exists but does NOT reconstruct the Alloy
+  witness (the variable↔atom mapping is not exported) — rerun in Alloy for the
+  instance, or drop scope.
+- Translation cost is minutes even for the hardest instances (the 7.2M-clause
+  receiver soak translated in ~2 min); the search time is what the cache can shop
+  around to better solvers.
+- **Watching a solve** (`tools/solver-progress.sh <gimsatul.log>`): a CDCL solver has
+  no sound percent-complete — it halts on SAT (full satisfying trail), UNSAT (the
+  empty clause: a conflict at decision level 0), or its budget (UNKNOWN). The script
+  extracts the plottable proxies from a gimsatul `-v` log (TSV mode) and `--summary`
+  reads the trend: active **variables** shrinking = real simplification; mean
+  conflict **level** falling = the UNSAT proof tightening; **rate** flat = healthy.
+  Its stagnation reading (both progress proxies <1% movement over the last third)
+  is the budget-termination criterion a blind wall-clock cap lacks.
+  **ADOPTED as the standing budget policy for gimsatul runs (MP ruling,
+  2026-08-24, DT-024): terminate when both proxies move <1% over the last
+  third — with operator override allowed; the rule stays under observation
+  and will be tweaked as more runs accumulate.** Application to the
+  long-running glucose closer deliberately deferred until the 8t/12h run
+  lands and is analyzed. Calibration
+  point: the 2026-08-21 gimsatul run on the receiver-soak CNF (4 threads, 6h) hit
+  its wall still PROGRESSING (variables −5%, level −11% in the last third) —
+  glucose's 6-day solve of the same command is formula hardness, not solver
+  weakness. Second calibration point (2026-08-22, 6 threads, 10h, same CNF):
+  UNKNOWN again, with the stagnation boundary now visible — active variables
+  moved only 0.26% in the last third (340k residual, flatlined) while mean
+  conflict level still moved 3.07% (1843 → 158 over the run); conflict rate
+  decayed 184 → 12. One more equal extension would likely put both proxies
+  under the 1% threshold: the rational budget-termination point. Fourth calibration point
+  (2026-08-24, 8 threads, 12h, same CNF, ~90% utilization under a glucose
+  co-run): UNKNOWN again, and the rule reads PROGRESSING — variables
+  flatlined at 0.89% (341k residual, same floor as 6t) but mean conflict
+  level moved 30.85% in the last third (1843 → 65 over the run), an order
+  of magnitude more proof-tightening than the 6t run, at a collapsed ~2
+  conflicts/s. Lesson: independent runs each re-pay the ramp; the marginal-
+  value question is about ONE long run, and no gimsatul run has yet ended
+  stagnant by the rule. Together the four runs (glucose 8d+ blind; 4t/6h
+  both proxies brisk; 6t/10h variables stalled / level slow; 8t/12h
+  variables stalled / level fast) are the DT-024 calibration set.

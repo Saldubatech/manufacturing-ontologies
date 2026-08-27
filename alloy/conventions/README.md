@@ -17,3 +17,7 @@ Rules (lint-enforced in `make check-layering`):
 
 Initial set (MP, 2026-07-08): pinning_freezing · call_first_saga · notification_convergence ·
 denormalized_observables · reason_precise_refusals · metrics.
+
+Added 2026-08-24 (DT-024 E7): inductive_invariant — the state-local proof of time-indexed
+exclusivity laws (havoc seeds, base/step/law obligations, faithfulness + vacuity), the idiom
+that superseded trace soaking for the receiving lattice row.

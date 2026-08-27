@@ -84,7 +84,7 @@ fun parentGateViol[o: llog/SubjectOcc]: set Reason {
 /** attachDemandViol — the C/OP attach gate (order-side ONLY — O3): the demand item must resolve
     IN-TENANT (RForeignRef), be live and standing at RELEASED (RDemandIneligible — dangling
     refuses conservatively), be DENOMINATED in the line's item (RDemandIneligible — C3b: wrong
-    item, or a FREE-FORM target line whose empty itemPin can never agree), retirement-guarded
+    item, or a FREE-FORM target line whose empty item resolution can never agree), retirement-guarded
     (RRetiredRef — DT-023 D3), and be serviced by
     NO live line (RDemandHeld; `self` excludes the acting line — its read at o.tick would be
     strictly-before anyway, but the acting line's own pre-membership is the separate
@@ -94,7 +94,7 @@ fun attachDemandViol[o: llog/SubjectOcc, m: EntityId]: set Reason {
     ((some d and d.tenantId != o.subject.tenantId) => RForeignRef else none)
     + ((no d or not liveDemandAt[d, o.tick] or demandStatusAt[d, o.tick] != DS_RELEASED)
        => RDemandIneligible else none)
-    + ((some d and d.itemPin.subject != o.subject.itemPin.subject)
+    + ((some d and d.itemPin.subject != resolve[o.subject.itemRef] & Item)
        => RDemandIneligible else none)   // C3b item-agreement (MP 2026-07-10): wrong item OR free-form target
     // (The former attach RRetiredRef clause was REMOVED at DT-023 cut 8 — MP ruling
     //  2026-08-11: servicing an EXISTING demand is reference PROPAGATION, not inception;
@@ -165,20 +165,20 @@ fun addLineViol[o: AddLineOcc]: set Reason {
   + (some o.demand => attachDemandViol[o, o.demand] else none)
   // DT-023 cut 8 (inception vs propagation): the retirement gate binds only on the
   // FROM-SCRATCH arm (`no o.demand` — the buyer directly chooses the item); the QUEUE
-  // arm (`some o.demand` — servicing an existing demand) inherits the pin — propagation,
-  // ungated. Free-form lines skip either way.
-  + ((no o.demand and some o.subject.itemPin
-      and not itemLiveAt[o.subject.itemPin.subject, o.tick])
+  // arm (`some o.demand` — servicing an existing demand) inherits the reference —
+  // propagation, ungated. Free-form lines skip either way. Cut 10 (the soft identity ref):
+  // a DANGLING item reference refuses RForeignRef, a resolvable-but-retired one RRetiredRef
+  // — the demand guardLiveItem shape one rung down. Tenancy rides the kernel (itemRef is a
+  // dataRef since cut 10 — the LineItemPinTenancy side-fact dissolved).
+  + ((no o.demand and some o.subject.itemRef and no (resolve[o.subject.itemRef] & Item))
+     => RForeignRef else none)
+  + ((no o.demand and some (resolve[o.subject.itemRef] & Item)
+      and not itemLiveAt[resolve[o.subject.itemRef] & Item, o.tick])
      => RRetiredRef else none)
-  // (No item tenancy clause: the itemPin rides LineItemPinTenancy — unrepresentable, the
-  //  kernel posture. RForeignRef here covers the RECORD-carried demand ref via
-  //  attachDemandViol.)
 }
-// DT-023 cut 7a: a committed line genesis pins the item's CURRENT version at its tick.
-fact LinePinCurrency {
-  all o: AddLineOcc | (committed[o] and some o.subject.itemPin) implies
-    pinsCurrentItem[o.subject.itemPin, o.tick]
-}
+// (LinePinCurrency RETIRED at cut 10 — PDEV-1536: the line stores the item IDENTITY only; the
+//  effective version is the read-time derivation `effectiveItemAt`, so genesis-currency of a
+//  stored version pin is no longer meaningful. Genesis liveness stays guarded in addLineViol.)
 // DT-023 cut 7b: a committed binding write's vendor pin is THEN-CURRENT (Q-A floating during
 // DRAFT — each choose/override re-pins current; the Submit freeze then freezes the pin).
 fact BindingPinCurrency {
@@ -276,9 +276,9 @@ pred sameOrderDetail[b, a: OrderState] {
 /** sameOrderButStatus — everything except the status is carried over. */
 pred sameOrderButStatus[b, a: OrderState] { a.sSupplier = b.sSupplier and sameOrderDetail[b, a] }
 /** sameLineBut… — line-record carry-overs (each effect names what it changes; the rest framed.
-    The descriptor pin needs NO framing since DT-023 cut 7a — it is the line's IDENTITY
-    `itemPin`, immutable by construction; the pinned VIEW's immutability is inherited from the
-    insert-only substrate). */
+    The item reference needs NO framing — it is the line's IDENTITY `itemRef`, immutable by
+    construction; the effective version is a read-time derivation (cut 10), never record
+    state). */
 pred sameLineButQuantity[b, a: OrderLineState] {
   a.sConfirmation = b.sConfirmation and a.sReceived = b.sReceived
   and a.sLineStatus = b.sLineStatus and a.sDemand = b.sDemand
