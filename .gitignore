@@ -156,3 +156,15 @@ vite.config.ts.timestamp-*
 # CNF artifact cache (PDEV-1609): keyed, regenerable DIMACS exports — the model's
 # "class files". Manifest + payloads are machine products; rebuild via make cnf-export.
 /cnf/
+
+# Locally built SAT solvers (DT-024) — source tarballs are version- and sha256-pinned in
+# tools/get-tools.sh; rebuild with `bash tools/get-tools.sh`. The .<name>-version files
+# are its idempotence stamps.
+/tools/kissat
+/tools/gimsatul
+/tools/.kissat-version
+/tools/.gimsatul-version
+# Compiled helpers — sources are tracked; build recipes in each tool's README.md
+# (javac for decomposed-exec, c++ against a local CaDiCaL for unit-seeding).
+/tools/decomposed-exec/*.class
+/tools/unit-seeding/extract-units
