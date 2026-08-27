@@ -90,11 +90,23 @@ assert e7_slice_faithful { (all t: Tick | lawSliceAt[t]) iff holdingExclusiveWhi
 /** The per-tick provenance slices conjoin to the PUBLISHED law (ladder rung 2b credit). */
 assert e7_prov_faithful { (all t: Tick | holdingProvenanceAt[t]) iff holdingProvenance }
 
-assert e7_base { (no h: HavocDemandOcc | h.tick = tord/first) implies e7Inv[tord/first] }
+// PREMISE-CONDITIONED (CTI at first W-window attempt, 2026-08-26, 36s at base scope):
+// unlike receiving — whose lone-holder facet is UNCONDITIONAL in its published law and
+// guard-derived — demand's lone-holder facet lives INSIDE the demandPoolGenesis premise:
+// pool distinctness across pool-attaching acts is the premise's job, not a guard's, so
+// from a havoc state where d1 holds p, a real StartProduction on d2 naming p commits
+// legally and the unconditioned invariant breaks. Induction under the trace-global
+// premise composes soundly: premise ∧ base ∧ step ⇒ ∀t e7Inv; e7Inv ⇒ lawSlice
+// (premise-conditioned itself); together: premise ⇒ the published law — exactly its form.
+assert e7_base {
+  (demandPoolGenesis and (no h: HavocDemandOcc | h.tick = tord/first))
+    implies e7Inv[tord/first]
+}
 
 assert e7_step {
   all t: Tick - tord/last | let t2 = tord/next[t] |
-    (e7Inv[t] and (no h: HavocDemandOcc | h.tick = t2)) implies e7Inv[t2]
+    (demandPoolGenesis and e7Inv[t] and (no h: HavocDemandOcc | h.tick = t2))
+      implies e7Inv[t2]
 }
 
 assert e7_law { all t: Tick | e7Inv[t] implies lawSliceAt[t] }
