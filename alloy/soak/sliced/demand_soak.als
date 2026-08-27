@@ -16,10 +16,11 @@ check soak_dem_holdingProvenance for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8
       3 DemandItem, 1 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool,
       11 Occurrence, 14 EntityId, 9 Tick, 11 Snapshot expect 0
 
-assert soak_dem_holdingExclusive { holdingExclusiveWhileLive }
-check soak_dem_holdingExclusive for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      3 DemandItem, 2 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool,
-      11 Occurrence, 14 EntityId, 9 Tick, 11 Snapshot expect 0
+// RETIRED (MP signoff 2026-08-27, DT-024 E7 ladder): `soak_dem_holdingExclusive` — the
+// law is PROVEN INDUCTIVE in demand_holding_inductive.als (premise-conditioned base +
+// step + law, state-local; both scope gates green 2026-08-27: W 1777s+45s, soak-matched
+// 453s+49s), superseding this trace search. The provenance row above stays until its
+// ladder verdict is formally ruled.
 
 // CREATED-ONLY SLICE (DT-023 Q-D / DT-024, closing pass 7c): reference-data version
 // dynamics are proven WIDE in soak/tests/reference_data_dynamics — this root reads

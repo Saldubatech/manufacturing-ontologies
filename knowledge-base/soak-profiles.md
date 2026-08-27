@@ -60,8 +60,14 @@ sibling are superseded by the E7 induction root `soak/sliced/receiver_pool_induc
 (DT-024) — the law is PROVEN INDUCTIVE (base + step + law, state-local; both scope gates
 green 2026-08-25), so its assurance no longer scales with trace length and the trace-soak
 rows are gone. The exclusivity siblings (kanban `poolExclusiveWhileLive`, demand
-`holdingExclusiveWhileLive`) have induction roots on the same template
-(`cycle_pool_inductive.als`, `demand_holding_inductive.als`) pending their W-scope gates.
+`holdingExclusiveWhileLive`) followed on 2026-08-27 (MP signoff): both proven inductive
+at BOTH gates on the same template (`cycle_pool_inductive.als`,
+`demand_holding_inductive.als`) — their trace rows are retired too. Induction cost
+tracked the trace window, not entity scopes (soak-matched gates ran FASTER than
+W-scope); the demand row needed its `demandPoolGenesis` premise threaded into base/step
+(the lone-holder facet is premise-conditioned there, unlike receiving's guard-derived
+unconditional facet — a 36s CTI taught this). The provenance trace rows stay until
+their ladder verdicts are formally ruled.
 
 ## Operational shape (BUILT 2026-08-11 — the DT-024 §6 chunked runner)
 
