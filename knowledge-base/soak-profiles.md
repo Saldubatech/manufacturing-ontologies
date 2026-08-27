@@ -55,6 +55,14 @@ the receiver cone via the pin re-point. Relocated verbatim to
 change only. Watch the other multi-holder exclusivity checks for the same cliff as 7b/7c
 widen the reference-data cones.
 
+RETIRED (MP signoff 2026-08-26): both `soak_rcv_linePoolExclusive` and its unit-scope
+sibling are superseded by the E7 induction root `soak/sliced/receiver_pool_inductive.als`
+(DT-024) — the law is PROVEN INDUCTIVE (base + step + law, state-local; both scope gates
+green 2026-08-25), so its assurance no longer scales with trace length and the trace-soak
+rows are gone. The exclusivity siblings (kanban `poolExclusiveWhileLive`, demand
+`holdingExclusiveWhileLive`) have induction roots on the same template
+(`cycle_pool_inductive.als`, `demand_holding_inductive.als`) pending their W-scope gates.
+
 ## Operational shape (BUILT 2026-08-11 — the DT-024 §6 chunked runner)
 
 - The tree split is REALIZED: `alloy/soak/lemmas/` (one root per catalog axis with a

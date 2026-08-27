@@ -23,12 +23,11 @@ check soak_rcv_capturedFactsFrozen for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal,
       0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
       11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
 
-assert soak_rcv_linePoolExclusive { linePoolExclusiveWhileLive }
-check soak_rcv_linePoolExclusive for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      2 Receiver, 3 ReceivingLine, 0 OrderAttribution, 0 Order, 0 OrderLine, 2 DemandItem, 0 ProductionDelivery,
-      2 CardCycle, 2 KanbanCard, 2 InventoryItem, 3 InventoryPool, 0 Station,
-      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
-      11 Occurrence, 16 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
+// RETIRED (MP signoff 2026-08-26, DT-024 E7): `soak_rcv_linePoolExclusive` — the law is
+// PROVEN INDUCTIVE in receiver_pool_inductive.als (base + step + law, state-local; both
+// scope gates green 2026-08-25), which supersedes the trace search this command never
+// finished (UNKNOWN at 8d glucose / 12h gimsatul-8t). Its unit-scope sibling
+// (receiver_pool_exclusive.als) retired with it.
 
 // CREATED-ONLY SLICE (DT-023 Q-D / DT-024, closing pass 7c): reference-data version
 // dynamics are proven WIDE in soak/tests/reference_data_dynamics — this root reads
