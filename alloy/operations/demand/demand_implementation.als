@@ -139,6 +139,19 @@ fun recordProductionViol[o: RecordProductionOcc]: set Reason {
   + ((liveAtOccD[o] and dPre[o].sStatus != DS_IN_PROCESS) => RBadState else none)
   + ((some pd: resolve[o.delivery] & ProductionDelivery | pd.tenantId != o.subject.tenantId)
      => RForeignRef else none)   // §8.1.2: delivery now = the PD entity, not the transient pool
+  // M3 (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2): pool-vs-demand item agreement — the act binds the
+  // delivery pool's PIN, not a caller-carried item (SPEARHEAD brief item R2). RecordProduction
+  // carries no pool field of its own (compose-don't-subsume: the paired CreateDeliveryOcc
+  // asserts it — the same asymmetric shape the Revoke/Extract pair already uses, neither side
+  // duplicating the other's fields); this reads the pool through the §8.1.2 ATOMIC pairing
+  // (`createRecordsAtomically`) — the CreateDeliveryOcc naming the SAME ProductionDelivery for
+  // the SAME demand. Independent of that CreateDeliveryOcc's OWN admission (a candidate `c`
+  // need not itself be committed): each half of the composite stays reason-precise on its own
+  // terms, not merely inheriting the sibling's guard evaluation order.
+  + ((some c: CreateDeliveryOcc, p: resolve[c.pool] & InventoryPool |
+        c.subject.eId = o.delivery and c.subject.demandRef = o.subject.eId
+        and p.itemPin.subject != o.subject.itemPin.subject)
+     => RWrongItem else none)
 }
 fun extractProductionViol[o: ExtractProductionOcc]: set Reason {
   ((not liveAtOccD[o]) => RDemandClosed else none)
@@ -159,8 +172,12 @@ fun createDeliveryViol[o: CreateDeliveryOcc]: set Reason {
   (startedBeforePD[o] => RDeliveryStarted else none)
   + ((demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] != DS_IN_PROCESS)
      => RTargetNotInProcess else none)
-  + ((o.item != (resolve[o.subject.demandRef] & DemandItem).itemPin.subject.eId)
-     => RWrongItem else none)   // §8.1.4 item agreement — the pool module's reason REUSED
+  // M3 (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2): re-based from a caller-asserted item to the
+  // DELIVERY POOL's pin — §8.1.4 item agreement, the pool module's reason REUSED. Silent
+  // (no violation) when `o.pool` doesn't resolve to an InventoryPool — a dangling/unset pool
+  // ref is not this guard's concern (mirrors the RForeignRef pattern elsewhere in this file).
+  + ((some p: resolve[o.pool] & InventoryPool | p.itemPin.subject != (resolve[o.subject.demandRef] & DemandItem).itemPin.subject)
+     => RWrongItem else none)
 }
 /** revokeDeliveryViol — §8.1.1: subject live + DI live. The content clause (holding content ≥
     contributed) is RUNTIME enforcement + probe — the standing I3 arity-4 exclusion; the
@@ -267,7 +284,8 @@ fact DemandEffectWitness {
     { dPost[o].sStatus = DS_OPEN and sameDemandButStatus[dPre[o], dPost[o]] }
   all o: StartProductionOcc | committed[o] implies {
     dPost[o].sStatus = DS_IN_PROCESS
-    dPost[o].sHolding = o.holding                     // the accumulation pool attaches (R8)
+    dPost[o].sHolding = o.holding                     // the accumulation pool attaches (R8);
+                                                       //   itemPin agreement: StartProductionHoldingPoolPin below
     dPost[o].sDemandQty = dPre[o].sDemandQty
     dPost[o].sMembership = dPre[o].sMembership
   }
@@ -281,6 +299,16 @@ fact DemandEffectWitness {
   all o: CancelOcc | committed[o] implies
     { dPost[o].sStatus = DS_CANCELED and sameDemandButStatus[dPre[o], dPost[o]] }
   all o: DeleteDemandOcc | committed[o] implies o.post = o.pre       // the tombstone (II precedent, R7)
+}
+
+/** StartProductionHoldingPoolPin — M3.2 (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2): the MINTED
+    holding pool carries the demand's item pin (already how PDEV-1528 built it at runtime).
+    Genesis is runtime-side (no create kind for pools), so this is stated wherever the model
+    CAN name the minted pool (`resolve[o.holding] & InventoryPool`) — an annotation on the
+    resolved pool, not a create-kind effect; vacuously true when `o.holding` doesn't resolve. */
+fact StartProductionHoldingPoolPin {
+  all o: StartProductionOcc | committed[o] implies
+    (all p: resolve[o.holding] & InventoryPool | p.itemPin.subject = o.subject.itemPin.subject)
 }
 
 // (NO cross-log enforcement facts — C/OP, 2026-07-06: the guards above ARE the saga commit

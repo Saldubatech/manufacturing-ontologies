@@ -381,6 +381,28 @@ run unit_dem_deliveryWrongItemRefused {
       1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery,
       9 EntityId, 8 Snapshot expect 1
 
+// M3 (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2, MINESWEEPER model-deltas M3.1): pool-vs-demand item
+// agreement on the RECORD side too — a RecordProduction correlated (by the §8.1.2 ATOMIC
+// pairing) with a CreateDelivery whose pool disagrees with the demand's item is refused with
+// exactly RWrongItem. RED before the arm: recordProductionViol had no item-agreement clause at
+// all (see the commit body for the RED evidence).
+run unit_dem_recordProductionWrongPoolItemRefused {
+  some r: RecordProductionOcc | refusedAtAdmission[r] and r.admission.because = RWrongItem
+} for 7 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      1 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 1 ProductionDelivery, 1 InventoryPool,
+      10 EntityId, 9 Snapshot expect 1
+
+// M3.2: the minted holding pool's itemPin always agrees with the demand's item — a THEOREM of
+// the StartProduction effect (`StartProductionHoldingPoolPin`). RED before the fact: nothing
+// constrained a resolved holding pool's itemPin, so the solver could freely disagree them.
+assert unit_dem_holdingPoolPinMatchesItem {
+  all o: StartProductionOcc, p: resolve[o.holding] & InventoryPool |
+    committed[o] implies p.itemPin.subject = o.subject.itemPin.subject
+}
+check unit_dem_holdingPoolPinMatchesItem for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 DemandItem, 0 CardCycle, 1 KanbanCard, 0 InventoryItem, 2 InventoryPool,
+      8 Occurrence, 10 EntityId, 7 Tick, 8 Snapshot expect 0
+
 // Revoke on an already-REVOKED delivery — exactly RDeliveryClosed (terminal §8.1.1).
 run unit_dem_revokeRevokedRefused {
   some o: RevokeDeliveryOcc | refusedAtAdmission[o] and o.admission.because = RDeliveryClosed

@@ -112,14 +112,18 @@ pred withdrawnDetachReconciles {
 }
 
 // ── C8 · the ProductionDelivery subject (§8.1.2/§8.1.4, DT-020 build cut 3) ─────────────────────
-/** A committed CreateDelivery saw its target IN_PROCESS and was denominated in the target's
+/** A committed CreateDelivery saw its target IN_PROCESS and its POOL agreed with the target's
     item (§8.1.4 — both typed refusals at the guard; the OPEN→IN_PROCESS StartProduction
     choreography belongs to a service composite OUTSIDE the model, A4 caller-responsibility;
-    item agreement here rather than as a downstream pool-homogeneity violation). ATOMIC. */
+    item agreement here rather than as a downstream pool-homogeneity violation). RE-BASED (M3,
+    DT-020 §8.5.3 / SPEARHEAD-D1 A′-2): was a direct `o.item = ...eId` equality against a
+    caller-asserted Item; now the resolved pool's pin (vacuously true when `o.pool` doesn't
+    resolve — a dangling ref carries no item claim to check). ATOMIC. */
 pred createDeliveryGated {
   all o: CreateDeliveryOcc | committed[o] implies {
     demandStatusAt[resolve[o.subject.demandRef] & DemandItem, o.tick] = DS_IN_PROCESS
-    o.item = (resolve[o.subject.demandRef] & DemandItem).itemPin.subject.eId
+    (let p = resolve[o.pool] & InventoryPool | some p implies
+       p.itemPin.subject = (resolve[o.subject.demandRef] & DemandItem).itemPin.subject)
   }
 }
 /** Create COMPOSES with RecordProduction (§8.1.2 compose-don't-subsume — ONE atomic demand

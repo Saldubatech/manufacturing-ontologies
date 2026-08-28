@@ -183,10 +183,14 @@ sig DeleteDemandOcc extends dlog/SubjectOcc {} { bindings = subject }
 /** CreateDelivery — PD genesis, the F7 accrual edge's demand-side commit (§8.1.2 ATOMIC:
     target guards + the PD row + the RecordProduction effect in ONE demand commit; the I3
     quantity band is RUNTIME enforcement + probe — the pool-content fold stays out of the
-    model, the standing arity-4 exclusion). `item` carries the delivery's Item (from the
-    split delivery pool, caller-supplied) for the §8.1.4 item-agreement guard — deliberately
-    an OCCURRENCE binding, not an entity field (D5 ruled the entity shape without it). */
-sig CreateDeliveryOcc extends pdlog/SubjectOcc { item: lone EntityId } { bindings = subject + item }
+    model, the standing arity-4 exclusion). `pool` carries the delivery's SPLIT POOL
+    (caller-supplied) for the §8.1.4 item-agreement guard — deliberately an OCCURRENCE
+    binding, not an entity field (D5 ruled the entity shape without it). RE-BASED (M3,
+    DT-020 §8.5.3 / SPEARHEAD-D1 A′-2, MINESWEEPER model-deltas M3): was
+    `item: lone EntityId`, a caller-ASSERTED Item compared directly to the demand's item;
+    with typed pools (I3a) the caller supplies the POOL instead and the guard reads its
+    `itemPin` — the pool's pin is authoritative, no separate item assertion needed. */
+sig CreateDeliveryOcc extends pdlog/SubjectOcc { pool: lone EntityId } { bindings = subject + pool }
 /** RevokeDelivery — terminal reversal (§8.1.1 reversing-entry): the delivery contributes
     nothing from here on; corrections are Revoke + recreate. The caller (the producing
     process) checks its OWN source state per ordinary call-first; the content clause
