@@ -73,6 +73,11 @@ check-alloy: $(ALLOY) check-layering
 
 ## check-affected: cone-aware incremental gate — run only roots whose open-cone touches changed files
 ## (scaling-outlook to-do #1). FILES="a.als b.als" overrides; default = git-changed alloy files.
+## merge-plan: deterministic re-verification plan for a merge (model-merge gate, MP-5 protocol
+## 2026-08-28). RANGE=a..b or FILES="..." ; prints tiers/roots/rungs, runs nothing.
+merge-plan:
+	@tools/merge-plan.sh $(if $(RANGE),RANGE=$(RANGE)) $(if $(FILES),FILES="$(FILES)")
+
 check-affected: $(ALLOY) check-layering
 	@files="$(FILES)"; \
 	[ -z "$$files" ] && files="$$( (git diff --name-only HEAD -- alloy; git diff --cached --name-only -- alloy) | sort -u)"; \
