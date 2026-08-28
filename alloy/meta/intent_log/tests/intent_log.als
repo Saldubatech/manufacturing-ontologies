@@ -111,7 +111,7 @@ run unit_il_subIntentRoundTrip {
     hold/phaseAt[k, a.tick] = I_ACTING and hold/pendingActAt[k, a.tick] = a.act
     hold/phaseAt[k, b.tick] = I_HELD and hold/holderAt[k, b.tick] = c.holder
   }
-} for 6 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1
+} for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1   // at the CHECK scope: the checks over sub-intents are not vacuous (MINESWEEPER D2 review, point 6)
 
 /** Closing sub-intent (the shelve leg): HELD → ACT_RESERVE(act, CLOSE) → ACT_CONFIRM frees the key in
     that same occurrence — no tick in which the key reads HELD with the peer gone back. */
@@ -123,7 +123,7 @@ run unit_il_closingSubIntentFrees {
     hold/phaseAt[k, a.tick] = I_ACTING
     hold/phaseAt[k, b.tick] = I_FREE and no hold/holderAt[k, b.tick]
   }
-} for 6 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1
+} for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1   // at the CHECK scope (point 6)
 
 /** Invariant (b) refusal: a second ACT_RESERVE while one sub-intent is pending is refused RActPending. */
 run unit_il_secondSubIntentRefused {
@@ -131,7 +131,7 @@ run unit_il_secondSubIntentRefused {
     a.subject = k and b.subject = k and precedes[a.tick, b.tick]
     committed[a] and refusedAtAdmission[b] and b.admission.because = RActPending
   }
-} for 6 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1
+} for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1   // at the CHECK scope (point 6)
 
 /** MOVEMENT: RESERVE → CONFIRM frees the key (I_DONE) and a second movement's RESERVE is admitted. */
 run unit_il_movementFreesThenReserves {
@@ -155,6 +155,7 @@ run unit_il_movementRefusesTransfer {
 run unit_il_redriveCells {
   hold/redrive[I_RESERVED, PV_MOVED_BY_THIS] = RD_CONFIRM
   hold/redrive[I_RESERVED, PV_ABSENT] = RD_GENESIS
+  move/redrive[I_RESERVED, PV_ABSENT] = RD_NOT_DEFINABLE
   hold/redrive[I_HELD, PV_MOVED_OTHERWISE] = RD_RELEASE_DETACH
   hold/redrive[I_FREE, PV_MOVED_BY_THIS] = RD_NOT_DEFINABLE
   move/redrive[I_FREE, PV_MOVED_BY_THIS] = RD_LATE_ACT_ALERT
@@ -163,6 +164,7 @@ run unit_il_redriveCells {
 
 // ── theorems (check; UNSAT = holds) ─────────────────────────────────────────────────────────────
 assert unit_il_reserveReadsFree      { hold/reserveReadsFree and move/reserveReadsFree }
+assert unit_il_reservationsSeparated { hold/reservationsSeparatedByFreeing and move/reservationsSeparatedByFreeing }
 assert unit_il_oneLiveHolderPerKey   { hold/oneLiveHolderPerKey and move/oneLiveHolderPerKey }
 assert unit_il_confirmRequiresLanded { hold/confirmRequiresLanded and move/confirmRequiresLanded }
 assert unit_il_releaseRequiresUnlanded { hold/releaseRequiresUnlanded and move/releaseRequiresUnlanded }
@@ -177,6 +179,7 @@ assert unit_il_redriveIdempotent     { hold/redriveIdempotent and move/redriveId
 assert unit_il_guarantees            { hold/guarantees and move/guarantees }
 
 check unit_il_reserveReadsFree       for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
+check unit_il_reservationsSeparated  for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
 check unit_il_oneLiveHolderPerKey    for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
 check unit_il_confirmRequiresLanded  for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
 check unit_il_releaseRequiresUnlanded for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0

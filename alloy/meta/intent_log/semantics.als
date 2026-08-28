@@ -52,7 +52,10 @@ one sig AM_KEEP, AM_CLOSE extends ActMode {}
 /** PeerView — the peer head classified relative to an intent (DT-027 §6): the binding a CONFIRM /
     RELEASE carries ("what the owner read of the peer at this tick"); the mapping from the real
     peer head to the view is the APPLYING module's fact — exclusive arm (a transition only this
-    holder could have made) or additive arm (a peer row citing this intent's rId), DT-027 §7. */
+    holder could have made) or additive arm (a peer row citing this intent's rId), DT-027 §7.
+    LEVEL: the view is relative to the PENDING intent — while a sub-intent is pending (I_ACTING)
+    it classifies the peer against the ACT ("the act landed": e.g. the held cart is now parked),
+    not against the hold; once the sub-intent settles the view is the hold's again. */
 abstract sig PeerView {}
 one sig PV_UNMOVED,          // no effect attributable to this intent (for a HOLD: the peer went back)
         PV_ABSENT,           // the peer entity does not exist yet (genesis legs only)

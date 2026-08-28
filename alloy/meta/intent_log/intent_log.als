@@ -28,6 +28,11 @@ module meta/intent_log/intent_log[Key, Sem]
  *   fact ClaimVersions { all o: claim/ReserveOcc | o.ownerVersion in dlog/SubjectOcc }
  */
 
+// BINDING CAVEAT (MINESWEEPER D2 review, point 2): every law over `peerView` (confirmRequiresLanded,
+// releaseRequiresUnlanded, subIntentReturnsToHold, redriveIdempotent) holds only under the APPLYING
+// module's view fact (`all o: claim/ViewOcc | o.peerView = <view of the real peer head at o.tick>`);
+// a wrong binding — a timeout read as a refusal — is exactly DT-027 §6's runtime residual.
+
 open meta/kernel                                       // EntityId (the holder's identity)
 open meta/action/stateful                              // Snapshot, StatefulAction, committed
 open meta/model_time/model_time                        // Tick, precedes, notAfter
@@ -212,7 +217,7 @@ fun redrive[ph: Phase, v: PeerView]: one RedriveAction {
       else RD_SETTLED)
   else (ph = I_RESERVED) => (
       (v = PV_UNMOVED)         => RD_OWNER_REDRIVE
-      else (v = PV_ABSENT)     => RD_GENESIS
+      else (v = PV_ABSENT)     => (isHold => RD_GENESIS else RD_NOT_DEFINABLE)   // genesis legs are HOLD (custody) chains
       else (v = PV_MOVED_BY_THIS) => RD_CONFIRM
       else RD_RELEASE)
   else (ph = I_HELD) => (
@@ -231,6 +236,15 @@ fun redrive[ph: Phase, v: PeerView]: one RedriveAction {
     free key. Two racing reservations are two appends on one head; the loser is refused
     RKeyTaken before the peer is touched. No membership table is consulted. */
 pred reserveReadsFree { all o: ReserveOcc | committed[o] implies prePhase[o] in freePhases }
+/** reservationsSeparatedByFreeing — EXCLUSIVITY WITHOUT THE ADMISSION VOCABULARY (MINESWEEPER D2
+    review, point 1): two committed reservations on one key are separated by a committed occurrence
+    that left the key free (a RELEASE, a movement's CONFIRM, or a closing act's confirmation). Stated
+    over kinds and effects only, so a later edit to `reserveViol` cannot silently weaken exclusivity. */
+pred reservationsSeparatedByFreeing {
+  all disj a, b: ReserveOcc | (committed[a] and committed[b] and a.subject = b.subject and precedes[a.tick, b.tick]) implies
+    (some f: intentOccKinds | committed[f] and f.subject = a.subject and precedes[a.tick, f.tick] and precedes[f.tick, b.tick]
+       and iPost[f].iPhase in freePhases)
+}
 /** oneLiveHolderPerKey — at any tick a key has at most one holder, and a holder exactly while live. */
 pred oneLiveHolderPerKey {
   all k: Key, t: Tick | lone holderAt[k, t] and ((some holderAt[k, t]) iff liveAt[k, t])
@@ -299,6 +313,7 @@ pred redriveIdempotent {
     actor-independence — hold by construction and are carded, not checked). */
 pred guarantees {
   reserveReadsFree
+  and reservationsSeparatedByFreeing
   and oneLiveHolderPerKey
   and confirmRequiresLanded
   and releaseRequiresUnlanded

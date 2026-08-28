@@ -49,7 +49,7 @@ fun cartsOf[p: Porter, t: Tick]: set Cart { { c: Cart | claim/holderAt[c, t] = p
 
 // ── peer 1: the Cart (exclusive) ────────────────────────────────────────────────────────────────
 abstract sig CartStatus {}
-one sig C_FREE, C_TAKEN, C_RETIRED extends CartStatus {}
+one sig C_FREE, C_TAKEN, C_LOADED, C_RETIRED extends CartStatus {}
 /** Cart — the exclusive peer: free / taken / retired; knows nothing about who took it. */
 sig Cart extends Scoped {}
 fact CartRefs { all c: Cart | no c.dataRefs }
@@ -58,19 +58,24 @@ fact CartRecExtensional { all disj a, b: CartRec | a.cStat != b.cStat }
 
 sig AddCartOcc extends clog/SubjectOcc {} { bindings = subject }   // genesis → FREE
 sig TakeOcc    extends clog/SubjectOcc {} { bindings = subject }   // FREE → TAKEN (the exclusive act)
-sig ParkOcc    extends clog/SubjectOcc {} { bindings = subject }   // TAKEN → FREE (the inverse act)
+sig LoadOcc    extends clog/SubjectOcc {} { bindings = subject }   // TAKEN → LOADED (an act UNDER the hold: a KEEP sub-intent)
+sig ParkOcc    extends clog/SubjectOcc {} { bindings = subject }   // TAKEN/LOADED → FREE (the inverse act; as a sub-intent: CLOSE — ends the hold)
 sig RetireOcc  extends clog/SubjectOcc {} { bindings = subject }   // → RETIRED (a peer-side transition the owner cannot prevent)
 
 fun cartStatusAt[c: Cart, t: Tick]: lone CartStatus { clog/recordAt[c, t].cStat }
 fun cPre[o: clog/SubjectOcc]: lone CartRec { o.pre & CartRec }
 fun cPost[o: clog/SubjectOcc]: lone CartRec { o.post & CartRec }
 
-one sig RCartStarted, RCartUnborn, RCartBusy, RCartFree, RCartGone extends Reason {}
+one sig RCartStarted, RCartUnborn, RCartBusy, RCartFree, RCartGone, RCartNotTaken extends Reason {}
 fun addCartViol[o: AddCartOcc]: set Reason { (some clog/priorOn[o]) => RCartStarted else none }
 fun takeViol[o: TakeOcc]: set Reason {
   ((no o.pre) => RCartUnborn else none)
   + ((cPre[o].cStat = C_TAKEN) => RCartBusy else none)
   + ((cPre[o].cStat = C_RETIRED) => RCartGone else none)
+}
+fun loadViol[o: LoadOcc]: set Reason {
+  ((no o.pre) => RCartUnborn else none)
+  + ((cPre[o].cStat != C_TAKEN) => RCartNotTaken else none)
 }
 fun parkViol[o: ParkOcc]: set Reason {
   ((no o.pre) => RCartUnborn else none)
@@ -83,12 +88,14 @@ fun retireViol[o: RetireOcc]: set Reason {
 fact CartAdmission {
   all o: AddCartOcc | (o.admission = Accepted iff no addCartViol[o]) and (o.admission in Rejected implies o.admission.because = addCartViol[o])
   all o: TakeOcc    | (o.admission = Accepted iff no takeViol[o])    and (o.admission in Rejected implies o.admission.because = takeViol[o])
+  all o: LoadOcc    | (o.admission = Accepted iff no loadViol[o])    and (o.admission in Rejected implies o.admission.because = loadViol[o])
   all o: ParkOcc    | (o.admission = Accepted iff no parkViol[o])    and (o.admission in Rejected implies o.admission.because = parkViol[o])
   all o: RetireOcc  | (o.admission = Accepted iff no retireViol[o])  and (o.admission in Rejected implies o.admission.because = retireViol[o])
 }
 fact CartEffects {
   all o: AddCartOcc | committed[o] implies cPost[o].cStat = C_FREE
   all o: TakeOcc    | committed[o] implies cPost[o].cStat = C_TAKEN
+  all o: LoadOcc    | committed[o] implies cPost[o].cStat = C_LOADED
   all o: ParkOcc    | committed[o] implies cPost[o].cStat = C_FREE
   all o: RetireOcc  | committed[o] implies cPost[o].cStat = C_RETIRED
 }
@@ -137,7 +144,9 @@ fact OwnerBindings {
   all o: pour/CitingOcc  | o.peerRid in PourOcc
   all r: claim/IntentRec | r.iVersion in PorterVersion
   all r: pour/IntentRec  | r.iVersion in PorterVersion
-  no claim/ActReserveOcc and no pour/ActReserveOcc and no pour/TransferOcc   // sub-intents are not this exemplar's subject
+  all o: claim/ActReserveOcc | (o.act = LoadOcc and o.mode = sem/AM_KEEP) or (o.act = ParkOcc and o.mode = sem/AM_CLOSE)   // the two acts under a hold: load KEEPs, park CLOSEs
+  all r: claim/IntentRec | some r.iAct implies r.iAct in LoadOcc + ParkOcc
+  no pour/ActReserveOcc and no pour/TransferOcc   // MOVEMENT chains carry no sub-intents
 }
 
 // ── ARM 1 — the EXCLUSIVE attribution (cart claim) ──────────────────────────────────────────────
@@ -153,11 +162,25 @@ pred takeOnlyByClaimants {
 fun cartViewAt[c: Cart, t: Tick]: one sem/PeerView {
   (no clog/recordAt[c, t])           => sem/PV_ABSENT
   else (cartStatusAt[c, t] = C_FREE)  => sem/PV_UNMOVED
-  else (cartStatusAt[c, t] = C_TAKEN) => sem/PV_MOVED_BY_THIS
+  else (cartStatusAt[c, t] in C_TAKEN + C_LOADED) => sem/PV_MOVED_BY_THIS
   else sem/PV_MOVED_OTHERWISE
 }
-/** The saga discipline: every claim CONFIRM / RELEASE reads the cart as it is at its tick. */
-fact ClaimViews { all o: claim/ViewOcc | o.peerView = cartViewAt[o.subject, o.tick] }
+/** actViewAt — THE LEVEL RULE: while a sub-intent is pending the view classifies the cart against
+    the ACT, not the hold — `load` landed iff LOADED; `park` landed iff FREE (which the HOLD's view
+    would call "unmoved"). The peer head cannot tell a parked-by-me from a parked-by-a-third-party;
+    the intent head (a pending `park`) can. */
+fun actViewAt[c: Cart, act: univ, t: Tick]: one sem/PeerView {
+  (no clog/recordAt[c, t])                => sem/PV_ABSENT
+  else (cartStatusAt[c, t] = C_RETIRED)   => sem/PV_MOVED_OTHERWISE
+  else (act = LoadOcc)                     => ((cartStatusAt[c, t] = C_LOADED) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
+  else ((cartStatusAt[c, t] = C_FREE) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
+}
+/** The saga discipline: every claim CONFIRM / RELEASE reads the cart as it is at its tick — at the
+    HOLD level for CONFIRM / RELEASE, at the ACT level for ACT_CONFIRM / ACT_RELEASE. */
+fact ClaimViews {
+  all o: claim/ConfirmOcc + claim/ReleaseOcc | o.peerView = cartViewAt[o.subject, o.tick]
+  all o: claim/ActConfirmOcc + claim/ActReleaseOcc | o.peerView = actViewAt[o.subject, claim/iPre[o].iAct, o.tick]
+}
 
 // ── ARM 2 — the ADDITIVE attribution (vat pour) ─────────────────────────────────────────────────
 /** reserveOf — the RESERVE a pour-chain CONFIRM / RELEASE settles: the latest committed RESERVE on

@@ -59,6 +59,30 @@ run conv_il_retiredUnderHold {
   }
 } for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 7 Tick, 6 Occurrence, 8 Snapshot, 6 EntityId expect 1
 
+/** KEEP act under the hold: HELD → ACT_RESERVE(load, KEEP) → load → ACT_CONFIRM (view = LOADED) → HELD again. */
+run conv_il_loadUnderHold {
+  some c: Cart, f: claim/ConfirmOcc, a: claim/ActReserveOcc, k: LoadOcc, b: claim/ActConfirmOcc | {
+    committed[f] and committed[a] and committed[k] and committed[b]
+    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = LoadOcc
+    precedes[f.tick, a.tick] and precedes[a.tick, k.tick] and precedes[k.tick, b.tick]
+    claim/phaseAt[c, b.tick] = sem/I_HELD and claim/holderAt[c, b.tick] = f.holder
+    takeOnlyByClaimants
+  }
+} for 6 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 8 Tick, 7 Occurrence, 9 Snapshot, 6 EntityId expect 1
+
+/** CLOSE act under the hold (the shelve leg): ACT_RESERVE(park, CLOSE) → park → ONE ACT_CONFIRM that ends
+    the hold — the cart is FREE and unheld at that row; no tick reads "held, cart gone back". */
+run conv_il_parkClosesHold {
+  some c: Cart, f: claim/ConfirmOcc, a: claim/ActReserveOcc, k: ParkOcc, b: claim/ActConfirmOcc | {
+    committed[f] and committed[a] and committed[k] and committed[b]
+    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = ParkOcc
+    precedes[f.tick, a.tick] and precedes[a.tick, k.tick] and precedes[k.tick, b.tick]
+    claim/phaseAt[c, k.tick] = sem/I_ACTING
+    claim/phaseAt[c, b.tick] = sem/I_FREE and no claim/holderAt[c, b.tick] and cartStatusAt[c, b.tick] = C_FREE
+    takeOnlyByClaimants
+  }
+} for 6 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 8 Tick, 7 Occurrence, 9 Snapshot, 6 EntityId expect 1
+
 assert conv_il_takenCartsAreClaimed { takenCartsAreClaimed }
 check conv_il_takenCartsAreClaimed for 5 but 5 Int, 2 Porter, 2 Cart, 0 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0
 
