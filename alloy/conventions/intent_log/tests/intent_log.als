@@ -1,0 +1,117 @@
+module conventions/intent_log/tests/intent_log
+
+open conventions/intent_log/intent_log
+open meta/intent_log/semantics as sem
+// Identical parameters re-open the SAME instances the exemplar built (the DT-024 rule): a root
+// cannot see a library's alias for a parametric instance, so it re-opens them under the same names.
+open meta/intent_log/intent_log[Cart, sem/HoldSem] as claim
+open meta/intent_log/intent_log[Vat, sem/MoveSem]  as pour
+
+/*
+ * Root for the INTENT-LOG exemplar (DT-027). Tiny scopes; command prefix `conv_il_*`. Verifies the
+ * two attribution arms and the crash-window story the pattern exists for: the loser of a race
+ * is refused before the peer is touched, the lost acknowledgement is recovered by CONFIRM without
+ * a second act, a late additive act is detectable and its reversal is not re-detected, and the
+ * owner's holdings are read from the claim head.
+ */
+
+// ── ARM 1 (cart claim, HOLD) ────────────────────────────────────────────────────────────────────
+/** The full arc: RESERVE → take → CONFIRM; the porter's holdings read the head. */
+run conv_il_claimArc {
+  some p: Porter, c: Cart, r: claim/ReserveOcc, k: TakeOcc, f: claim/ConfirmOcc | {
+    committed[r] and committed[k] and committed[f]
+    r.subject = c and k.subject = c and f.subject = c and r.holder = p.eId and f.holder = p.eId
+    precedes[r.tick, k.tick] and precedes[k.tick, f.tick]
+    c in cartsOf[p, f.tick] and claim/phaseAt[c, f.tick] = sem/I_HELD
+    takeOnlyByClaimants
+  }
+} for 5 but 5 Int, 2 Porter, 1 Cart, 0 Vat, 2 PorterVersion, 7 Tick, 6 Occurrence, 8 Snapshot, 8 EntityId expect 1
+
+/** Crash window 2 is LEGAL and recoverable: take committed, CONFIRM never appended; the re-drive
+    verdict at (RESERVED, moved-by-this) is CONFIRM — no second take. */
+run conv_il_lostAckWindow {
+  some c: Cart, r: claim/ReserveOcc, k: TakeOcc, t: Tick | {
+    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick]
+    no f: claim/ConfirmOcc | committed[f]
+    notAfter[k.tick, t] and claim/phaseAt[c, t] = sem/I_RESERVED and cartViewAt[c, t] = sem/PV_MOVED_BY_THIS
+    claim/redrive[claim/phaseAt[c, t], cartViewAt[c, t]] = sem/RD_CONFIRM
+    takeOnlyByClaimants
+  }
+} for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
+
+/** The race: two porters reserve one cart; the second is refused RKeyTaken and the cart is taken once. */
+run conv_il_raceSerialized {
+  some c: Cart, disj a, b: claim/ReserveOcc | {
+    committed[a] and refusedAtAdmission[b] and b.admission.because = sem/RKeyTaken
+    a.subject = c and b.subject = c and a.holder != b.holder and precedes[a.tick, b.tick]
+    lone k: TakeOcc | committed[k] and k.subject = c
+    takeOnlyByClaimants
+  }
+} for 5 but 5 Int, 2 Porter, 1 Cart, 0 Vat, 2 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 8 EntityId expect 1
+
+/** The peer moves otherwise under a hold (retired): the verdict is RELEASE + detach (the R7 shape). */
+run conv_il_retiredUnderHold {
+  some c: Cart, f: claim/ConfirmOcc, x: RetireOcc, t: Tick | {
+    committed[f] and committed[x] and f.subject = c and x.subject = c and precedes[f.tick, x.tick]
+    notAfter[x.tick, t] and claim/phaseAt[c, t] = sem/I_HELD
+    claim/redrive[claim/phaseAt[c, t], cartViewAt[c, t]] = sem/RD_RELEASE_DETACH
+    takeOnlyByClaimants
+  }
+} for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 7 Tick, 6 Occurrence, 8 Snapshot, 6 EntityId expect 1
+
+assert conv_il_takenCartsAreClaimed { takenCartsAreClaimed }
+check conv_il_takenCartsAreClaimed for 5 but 5 Int, 2 Porter, 2 Cart, 0 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0
+
+assert conv_il_holdingsReadTheHead { holdingsReadTheHead }
+check conv_il_holdingsReadTheHead for 5 but 5 Int, 2 Porter, 2 Cart, 0 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0
+
+// ── ARM 2 (vat pour, MOVEMENT) ──────────────────────────────────────────────────────────────────
+/** The movement arc: RESERVE → pour citing it → CONFIRM (moved-by-this by the citation); the key frees. */
+run conv_il_pourArc {
+  some v: Vat, r: pour/ReserveOcc, p: PourOcc, f: pour/ConfirmOcc | {
+    committed[r] and committed[p] and committed[f]
+    r.subject = v and p.subject = v and f.subject = v and p.movement = r
+    precedes[r.tick, p.tick] and precedes[p.tick, f.tick]
+    pour/phaseAt[v, f.tick] = sem/I_DONE
+  }
+} for 5 but 5 Int, 1 Porter, 0 Cart, 1 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
+
+/** Two pours by two sagas: the additive head cannot tell them apart, the citations can. */
+run conv_il_twoPoursAttributed {
+  some v: Vat, disj r1, r2: pour/ReserveOcc, disj p1, p2: PourOcc | {
+    committed[r1] and committed[r2] and committed[p1] and committed[p2]
+    r1.subject = v and r2.subject = v and p1.subject = v and p2.subject = v
+    p1.movement = r1 and p2.movement = r2
+  }
+} for 6 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 8 Tick, 7 Occurrence, 9 Snapshot, 8 EntityId expect 1
+
+/** The LATE ACT is detectable: a pour citing a reservation already RELEASEd (R1 broken upstream). */
+run conv_il_lateActDetected {
+  some v: Vat, r: pour/ReserveOcc, l: pour/ReleaseOcc, p: PourOcc | {
+    committed[r] and committed[l] and committed[p]
+    r.subject = v and l.subject = v and p.subject = v and p.movement = r
+    precedes[r.tick, l.tick] and precedes[l.tick, p.tick]
+    lateAct[p]
+  }
+} for 5 but 5 Int, 1 Porter, 0 Cart, 1 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
+
+/** The reversal is NOT re-detected: a reversing pour under its own new intent names the late row,
+    and the detector excludes the reversed row. */
+run conv_il_reversalExcluded {
+  some v: Vat, r: pour/ReserveOcc, l: pour/ReleaseOcc, p: PourOcc, r2: pour/ReserveOcc, q: PourOcc | {
+    committed[r] and committed[l] and committed[p] and committed[r2] and committed[q]
+    r.subject = v and l.subject = v and p.subject = v and r2.subject = v and q.subject = v
+    p.movement = r and q.movement = r2 and q.reverses = p
+    precedes[r.tick, l.tick] and precedes[l.tick, p.tick] and precedes[p.tick, r2.tick] and precedes[r2.tick, q.tick]
+    not lateAct[p] and not lateAct[q]
+  }
+} for 7 but 5 Int, 1 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 9 Tick, 8 Occurrence, 10 Snapshot, 6 EntityId expect 1
+
+assert conv_il_confirmedPourCited { confirmedPourCited }
+check conv_il_confirmedPourCited for 5 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 8 EntityId expect 0
+
+assert conv_il_releasedReserveUncited { releasedReserveUncited }
+check conv_il_releasedReserveUncited for 5 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 8 EntityId expect 0
+
+assert conv_il_guarantees { intent_log/guarantees }
+check conv_il_guarantees for 5 but 5 Int, 2 Porter, 1 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0

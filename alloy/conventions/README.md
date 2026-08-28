@@ -21,3 +21,9 @@ denormalized_observables · reason_precise_refusals · metrics.
 Added 2026-08-24 (DT-024 E7): inductive_invariant — the state-local proof of time-indexed
 exclusivity laws (havoc seeds, base/step/law obligations, faithfulness + vacuity), the idiom
 that superseded trace soaking for the receiving lattice row.
+
+Added 2026-08-28 (DT-027, SAMWISE): intent_log — the intent-log pattern for "two logs, one fact":
+reserve on an own chain keyed by the peer entity, act once, confirm/release; both ATTRIBUTION arms
+(exclusive cart claim under the claimants-only premise; additive vat pour carrying the intent
+identity, with the late-act detector and the reversal-as-new-intent rule). Instantiates
+`meta/intent_log` twice (HOLD + MOVEMENT).
