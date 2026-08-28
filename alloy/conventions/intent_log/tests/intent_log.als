@@ -63,7 +63,7 @@ run conv_il_retiredUnderHold {
 run conv_il_loadUnderHold {
   some c: Cart, f: claim/ConfirmOcc, a: claim/ActReserveOcc, k: LoadOcc, b: claim/ActConfirmOcc | {
     committed[f] and committed[a] and committed[k] and committed[b]
-    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = LoadOcc
+    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = A_LOAD
     precedes[f.tick, a.tick] and precedes[a.tick, k.tick] and precedes[k.tick, b.tick]
     claim/phaseAt[c, b.tick] = sem/I_HELD and claim/holderAt[c, b.tick] = f.holder
     takeOnlyByClaimants
@@ -75,7 +75,7 @@ run conv_il_loadUnderHold {
 run conv_il_parkClosesHold {
   some c: Cart, f: claim/ConfirmOcc, a: claim/ActReserveOcc, k: ParkOcc, b: claim/ActConfirmOcc | {
     committed[f] and committed[a] and committed[k] and committed[b]
-    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = ParkOcc
+    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = A_PARK
     precedes[f.tick, a.tick] and precedes[a.tick, k.tick] and precedes[k.tick, b.tick]
     claim/phaseAt[c, k.tick] = sem/I_ACTING
     claim/phaseAt[c, b.tick] = sem/I_FREE and no claim/holderAt[c, b.tick] and cartStatusAt[c, b.tick] = C_FREE

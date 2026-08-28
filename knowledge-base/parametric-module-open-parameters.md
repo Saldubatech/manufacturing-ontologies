@@ -46,6 +46,15 @@ applying module binds to its own atoms (the runtime's `owner_rid` / `movementId`
 through such a field (`p.movement.subject`) is a type error — cast first:
 `(p.movement & pour/ReserveOcc).subject`.
 
+## 3a. A `univ` binding names a MARKER atom, never a kind SET
+
+`act: one univ` on a sub-intent is bound by the applying module. `o.act = LoadOcc` compares the
+singleton binding with the SET of all `LoadOcc` atoms — true only when exactly one such atom
+exists, so witnesses pass by scope coincidence and laws quantify over the wrong thing. Bind to a
+marker atom (`abstract sig CartAct {} one sig A_LOAD, A_PARK extends CartAct {}`; `o.act = A_LOAD`)
+— the act's occurrence does not exist yet at reservation time, and a kind set is not a value.
+(Caught writing the E7 rung for `conventions/intent_log`, 2026-08-28.)
+
 ## 4. Never redirect the solver log INTO the `-o` directory
 
 `alloy exec -f -o DIR` wipes DIR before running. A shell redirect `> DIR/run.log` created

@@ -56,6 +56,11 @@ fact CartRefs { all c: Cart | no c.dataRefs }
 sig CartRec extends Snapshot { cStat: one CartStatus }
 fact CartRecExtensional { all disj a, b: CartRec | a.cStat != b.cStat }
 
+/** CartAct — the act MARKERS a sub-intent names (the binding is a marker atom, never the act's
+    occurrence — which does not exist yet at ACT_RESERVE time, and never the kind SET). */
+abstract sig CartAct {}
+one sig A_LOAD, A_PARK extends CartAct {}
+
 sig AddCartOcc extends clog/SubjectOcc {} { bindings = subject }   // genesis → FREE
 sig TakeOcc    extends clog/SubjectOcc {} { bindings = subject }   // FREE → TAKEN (the exclusive act)
 sig LoadOcc    extends clog/SubjectOcc {} { bindings = subject }   // TAKEN → LOADED (an act UNDER the hold: a KEEP sub-intent)
@@ -144,8 +149,8 @@ fact OwnerBindings {
   all o: pour/CitingOcc  | o.peerRid in PourOcc
   all r: claim/IntentRec | r.iVersion in PorterVersion
   all r: pour/IntentRec  | r.iVersion in PorterVersion
-  all o: claim/ActReserveOcc | (o.act = LoadOcc and o.mode = sem/AM_KEEP) or (o.act = ParkOcc and o.mode = sem/AM_CLOSE)   // the two acts under a hold: load KEEPs, park CLOSEs
-  all r: claim/IntentRec | some r.iAct implies r.iAct in LoadOcc + ParkOcc
+  all o: claim/ActReserveOcc | (o.act = A_LOAD and o.mode = sem/AM_KEEP) or (o.act = A_PARK and o.mode = sem/AM_CLOSE)   // the two acts under a hold: load KEEPs, park CLOSEs
+  all r: claim/IntentRec | some r.iAct implies r.iAct in CartAct
   no pour/ActReserveOcc and no pour/TransferOcc   // MOVEMENT chains carry no sub-intents
 }
 
@@ -172,7 +177,7 @@ fun cartViewAt[c: Cart, t: Tick]: one sem/PeerView {
 fun actViewAt[c: Cart, act: univ, t: Tick]: one sem/PeerView {
   (no clog/recordAt[c, t])                => sem/PV_ABSENT
   else (cartStatusAt[c, t] = C_RETIRED)   => sem/PV_MOVED_OTHERWISE
-  else (act = LoadOcc)                     => ((cartStatusAt[c, t] = C_LOADED) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
+  else (act = A_LOAD)                      => ((cartStatusAt[c, t] = C_LOADED) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
   else ((cartStatusAt[c, t] = C_FREE) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
 }
 /** The saga discipline: every claim CONFIRM / RELEASE reads the cart as it is at its tick — at the
@@ -208,7 +213,7 @@ fact MovementIdentity {
   all p: PourOcc | some p.movement implies
     (p.movement in pour/ReserveOcc and committed[p.movement & pour/ReserveOcc] and (p.movement & pour/ReserveOcc).subject = p.subject
      and precedes[(p.movement & pour/ReserveOcc).tick, p.tick])
-  all disj p, q: PourOcc | (committed[p] and committed[q] and some p.movement) implies p.movement != q.movement
+  all disj p, q: PourOcc | (committed[p] and committed[q] and some p.movement and p.subject = q.subject) implies p.movement != q.movement   // per (movement, vat): a transfer's two halves on two vats share one identity (SAMWISE-S1)
   all p: PourOcc | some p.reverses implies (p.reverses in PourOcc and committed[p.reverses & PourOcc] and (p.reverses & PourOcc).subject = p.subject
                                             and precedes[(p.reverses & PourOcc).tick, p.tick] and p.amount = minus[0, (p.reverses & PourOcc).amount])
 }
