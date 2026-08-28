@@ -167,3 +167,35 @@ e7_step_s: check e7_step for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transit
 e7_law_s: check e7_law for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       3 DemandItem, 2 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool, 0 ProductionDelivery,
       6 Occurrence, 14 EntityId, 6 Tick, 9 Snapshot expect 0
+
+// ── ladder rung 2b — the provenance row's OWN verdict (DT-024 priority 2; NIGHTWATCH 2026-08-27) ──
+// `soak_dem_holdingProvenance` is the retained trace row. Its formal induction verdict:
+//   e7_prov_faithful (above) — per-tick provenance slice ≡ the published `holdingProvenance`;
+//   e7_prov_base / e7_prov_step — holdingProvenanceAt is inductive BY ITSELF: NO lone-holder
+//   conjunct and NO genesis premise in the antecedent (provenance is frame-only —
+//   StartProduction is the only sHolding setter and witnesses itself; every other kind
+//   carries or clears — so, unlike the lone-holder facet, it owes the premise nothing).
+//   Strictly stronger than the credit e7_step gives it. Gates: _w then _s.
+assert e7_prov_base {
+  (no h: HavocDemandOcc | h.tick = tord/first) implies holdingProvenanceAt[tord/first]
+}
+assert e7_prov_step {
+  all t: Tick - tord/last | let t2 = tord/next[t] |
+    (holdingProvenanceAt[t] and (no h: HavocDemandOcc | h.tick = t2)) implies holdingProvenanceAt[t2]
+}
+
+check e7_prov_base for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 DemandItem, 2 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool, 0 ProductionDelivery,
+      5 Occurrence, 14 EntityId, 5 Tick, 8 Snapshot expect 0
+
+check e7_prov_step for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 DemandItem, 2 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool, 0 ProductionDelivery,
+      5 Occurrence, 14 EntityId, 5 Tick, 8 Snapshot expect 0
+
+e7_prov_step_w: check e7_prov_step for 5 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 DemandItem, 2 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool, 0 ProductionDelivery,
+      8 Occurrence, 14 EntityId, 7 Tick, 10 Snapshot expect 0
+
+e7_prov_step_s: check e7_prov_step for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 DemandItem, 2 CardCycle, 2 KanbanCard, 1 InventoryItem, 3 InventoryPool, 0 ProductionDelivery,
+      6 Occurrence, 14 EntityId, 6 Tick, 9 Snapshot expect 0

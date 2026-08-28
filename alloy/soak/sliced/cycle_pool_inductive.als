@@ -141,3 +141,35 @@ e7_step_s: check e7_step for 6 but 5 Int, 3 Scalar, 5 Quantity, 5 State, 8 Signa
 e7_law_s: check e7_law for 6 but 5 Int, 3 Scalar, 5 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       4 CardCycle, 3 KanbanCard, 3 InventoryItem, 3 InventoryPool,
       6 Occurrence, 14 EntityId, 6 Tick, 9 Snapshot expect 0
+
+// ── ladder rung 2a — the provenance row's OWN verdict (DT-024 priority 2; NIGHTWATCH 2026-08-27) ──
+// `soak_cyc_poolProvenance` is the retained trace row. Its formal induction verdict:
+//   e7_prov_faithful (above) — per-tick provenance slice ≡ the published `poolProvenance`;
+//   e7_prov_base / e7_prov_step — poolProvenanceAt is inductive BY ITSELF: the antecedent
+//   carries NO lone-holder conjunct (the single-setter + carry-frames argument verbatim —
+//   StartProcessing is the only sPool setter and witnesses itself; every other kind carries
+//   or clears). Strictly stronger than the credit e7_step gives it (where it rides inside
+//   e7Inv). Gates: _w then _s, the receiving supersession standard.
+assert e7_prov_base {
+  (no h: HavocCycleOcc | h.tick = tord/first) implies poolProvenanceAt[tord/first]
+}
+assert e7_prov_step {
+  all t: Tick - tord/last | let t2 = tord/next[t] |
+    (poolProvenanceAt[t] and (no h: HavocCycleOcc | h.tick = t2)) implies poolProvenanceAt[t2]
+}
+
+check e7_prov_base for 5 but 5 Int, 3 Scalar, 5 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 3 InventoryPool,
+      5 Occurrence, 12 EntityId, 5 Tick, 8 Snapshot expect 0
+
+check e7_prov_step for 5 but 5 Int, 3 Scalar, 5 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 3 InventoryPool,
+      5 Occurrence, 12 EntityId, 5 Tick, 8 Snapshot expect 0
+
+e7_prov_step_w: check e7_prov_step for 5 but 5 Int, 3 Scalar, 5 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      3 CardCycle, 2 KanbanCard, 2 InventoryItem, 3 InventoryPool,
+      8 Occurrence, 12 EntityId, 7 Tick, 10 Snapshot expect 0
+
+e7_prov_step_s: check e7_prov_step for 6 but 5 Int, 3 Scalar, 5 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      4 CardCycle, 3 KanbanCard, 3 InventoryItem, 3 InventoryPool,
+      6 Occurrence, 14 EntityId, 6 Tick, 9 Snapshot expect 0
