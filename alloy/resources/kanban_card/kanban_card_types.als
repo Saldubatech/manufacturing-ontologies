@@ -109,7 +109,11 @@ fun cycle[o: CycleOcc]: one CardCycle { o.subject }
 sig RequestOcc            extends CycleOcc { qtyOverride: lone Quantity } { bindings = subject + qtyOverride }
 sig AcceptOcc             extends CycleOcc {} { bindings = subject }
 sig ShelveOcc             extends CycleOcc {} { bindings = subject }
-sig StartProcessingOcc    extends CycleOcc { pool: one EntityId } { bindings = subject + pool }   // ATTACHES the pool (exclusive while the cycle lives)
+sig StartProcessingOcc    extends CycleOcc { pool: one EntityId } { bindings = subject + pool }   // ATTACHES the pool (exclusive while the cycle lives).
+  // M1 annotation (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2, MINESWEEPER model-deltas M1): `pool` is
+  // the pool the act MINTS for this cycle (ownership-by-genesis) — NEVER a pre-existing pool
+  // being attached. See `startViol` (kanban_card_implementation.als) for the freshness guard
+  // this annotation implies.
 sig CompleteProcessingOcc extends CycleOcc {} { bindings = subject }
 sig FulfillOcc            extends CycleOcc {} { bindings = subject }
 sig ReceiveOcc            extends CycleOcc {} { bindings = subject }   // status-only: material arrivals are PoolAddOcc events on the attached pool
@@ -144,6 +148,9 @@ one sig RClosed,            // the cycle is not live (never started, withdrawn, 
         RPoolInUse,         // attach: another LIVE cycle currently holds this pool (exclusivity)
         RForeignPool,       // attach: the pool must be in the cycle's tenant
         RPoolWrongItem,     // attach: the pool's Item must be the card's demanded Item (homogeneity — DT-015 R1)
+        RPoolNotFresh,      // attach: `o.pool` already has committed pool-log history strictly
+                            //   before `o.tick` (M1, DT-020 §8.5.3 — ownership-by-genesis: a
+                            //   minted pool is fresh; a used pool is never re-attached)
         RNotInProcess       // ProductionFailure from a status other than IN_PROCESS (R8)
         extends Reason {}
 

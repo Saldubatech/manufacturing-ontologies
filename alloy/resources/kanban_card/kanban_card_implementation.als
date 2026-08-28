@@ -49,14 +49,24 @@ fun forwardViol[o: CycleOcc]: set Reason {
       and some m: LifecycleConfig.active | regionBetween[m, o.pre.sStatus, targetOf[o]])
      => RSkippedActive else none)
 }
+// R2 discharge statement (D3, MINESWEEPER model-deltas M1.4): holder EXCLUSIVITY is enforced
+// in the DEMAND module by the per-cycle claim log (`cycleIndivisible`/`attachRequiresAccepted`
+// — a cycle belongs to at most one live DemandItem, and attach reads the cycle's own ACCEPTED
+// state). Kanban contributes only its OWN monotonic guarantees toward that: the forward-only
+// `accept` discipline (`RBackward` — a cycle can't be re-requested/re-accepted underneath a
+// claim) and the cycle-table fork guard (`RCardInCirculation`/`OneChainPerCard` — at most one
+// open cycle per card at a time). No law change here; this module never re-checks demand-side
+// exclusivity.
 /** startViol — StartProcessing = the forward step PLUS the pool attach: the resolved pool (if it
     resolves — dangling allowed, soft ref) must be in-tenant, not held by another LIVE cycle
-    (EXCLUSIVE while the holder lives — Miguel 2026-07-03), and classify under the card's demanded
+    (EXCLUSIVE while the holder lives — Miguel 2026-07-03), classify under the card's demanded
     Item (HOMOGENEITY — DT-015 R1, MP 2026-07-16: sight-of-card, the admission reads the OWNING
     card's itemRef; `cycles.(o.subject)` is unique by CardCycleOwnership; comparison at the
-    EntityId level, like the pool-side RWrongItem). Residue is ALLOWED: a pool with left-over
-    stock (e.g. over-receiving) may attach directly — with enough stock the cycle can move
-    straight on toward READY. */
+    EntityId level, like the pool-side RWrongItem), and be FRESH (M1, DT-020 §8.5.3 —
+    ownership-by-genesis: `pool` is minted inside this act, never a pre-existing pool being
+    attached — RPoolNotFresh below). These three arms stay CHECKS over the minted pool; residue
+    reaches a cycle's pool only by item-level moves (M2's PoolTransferOcc), never by attaching a
+    used pool. */
 fun startViol[o: StartProcessingOcc]: set Reason {
   forwardViol[o]
   + ((some p: resolve[o.pool] & InventoryPool | p.tenantId != o.subject.tenantId) => RForeignPool else none)
@@ -65,6 +75,8 @@ fun startViol[o: StartProcessingOcc]: set Reason {
      => RPoolInUse else none)
   + ((some p: resolve[o.pool] & InventoryPool | p.itemPin.subject != (cycles.(o.subject)).itemPin.subject)
      => RPoolWrongItem else none)
+  + ((some p: resolve[o.pool] & InventoryPool, b: PoolOcc | committed[b] and b.pool = p and precedes[b.tick, o.tick])
+     => RPoolNotFresh else none)
 }
 /** shelveViol — the sanctioned backward operation: exactly REQUESTED → REQUESTING. */
 fun shelveViol[o: ShelveOcc]: set Reason {

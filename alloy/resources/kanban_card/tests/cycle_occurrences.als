@@ -67,14 +67,27 @@ run unit_cyc_poolAttachesThenFills {
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
-// RESIDUE attach (Miguel): a pool with left-over stock (e.g. over-receiving) attaches DIRECTLY —
-// no emptiness requirement; with enough stock the cycle can move straight on toward READY.
-run unit_cyc_residuePoolAttaches {
-  some sp: StartProcessingOcc, cp: CompleteProcessingOcc | {
-    committed[sp] and committed[cp] and cp.cycle = sp.cycle
-    some heldAt[resolve[sp.pool] & InventoryPool, sp.tick]       // residue present AT attach
-    precedes[sp.tick, cp.tick]                                    // and straight on to READY
+// TOMBSTONE: `unit_cyc_residuePoolAttaches` stood here (RESIDUE ALLOWED — a pool with
+// left-over stock could attach DIRECTLY). RETIRED — reverses the 2026-07-03 residue-at-attach
+// ruling per DT-020 §8.5.3 (ownership-by-genesis; residue reaches a cycle's pool only by
+// item-level moves) and docket SPEARHEAD-D1 A′-2 (MP, 2026-08-27). Its exact scenario is
+// folded into `unit_start_usedPoolRefused` below as the RED→GREEN pair: before the
+// `RPoolNotFresh` arm, `sp` was ACCEPTED in this shape (this old test, expect 1/SAT); after,
+// it is REFUSED with exactly `RPoolNotFresh` — same shape, opposite verdict.
+run unit_start_usedPoolRefused {
+  some sp: StartProcessingOcc | {
+    some heldAt[resolve[sp.pool] & InventoryPool, sp.tick]        // residue present AT attach —
+                                                                   //   i.e. committed history before sp.tick
+    refusedAtAdmission[sp] and sp.admission.because = RPoolNotFresh
   }
+} for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
+      2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
+
+// The POSITIVE companion: a FRESH pool (no committed history before the attach tick) is
+// accepted normally — freshness does not block an ordinary first attach.
+run unit_start_freshPoolAccepted {
+  some sp: StartProcessingOcc | committed[sp]
+    and no b: PoolOcc | committed[b] and b.pool = (resolve[sp.pool] & InventoryPool) and precedes[b.tick, sp.tick]
 } for 6 but 5 Int, 3 Scalar, 4 Quantity, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
       2 CardCycle, 1 KanbanCard, 2 InventoryItem, 1 InventoryPool expect 1
 
