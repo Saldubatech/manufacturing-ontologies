@@ -42,8 +42,14 @@ sig InventoryPool extends Scoped {
   itemPin: one ItemOcc              // → Item VERSION PIN (DT-023 R3; was itemRef): constrains
                                     //   membership (immutable); entity-wise reads via `.subject`.
                                     //   Genesis is runtime-side (no create kind), so pin CURRENCY
-                                    //   anchors at the minting process (receiving) — here only
-                                    //   typing + tenancy.
+                                    //   anchors at the minting process — as of M2a (DT-020
+                                    //   §8.5.3 / SPEARHEAD-D1 A′-2) THREE minting holders:
+                                    //   ReceivingLine at Receive, DemandItem at StartProduction
+                                    //   (the holding pool) and again at delivery split, and
+                                    //   CardCycle at StartProcessing (kanban_card M1). Annotation
+                                    //   only — no law change: the runtime carries the pin as a
+                                    //   floating ItemReference refreshed by the Item channel (R3);
+                                    //   here only typing + tenancy.
 }
 
 // The classifier is a PIN (typed, never dangles) — no soft dataRefs remain on the identity.
@@ -66,9 +72,20 @@ fun pool[o: PoolOcc]: one InventoryPool { o.subject }
 
 sig PoolAddOcc    extends PoolOcc { item: one InventoryItem } { bindings = subject + item }
 sig PoolRemoveOcc extends PoolOcc { item: one InventoryItem } { bindings = subject + item }
+/** PoolTransferOcc — M2b (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2): the ONE kind that moves an
+    InventoryItem between pools (ownership-by-genesis — items move between pools, pools never
+    re-attach). `subject` (the spine field, read via `pool[o]`/`o.pool`) is the SOURCE pool
+    (`from`); atomic remove-then-add. `to` is the destination. This is the model seat of R2 —
+    "take inventory from Inventory-at-Rest into a new DemandItem without receiving". */
+sig PoolTransferOcc extends PoolOcc { item: one InventoryItem, to: one InventoryPool }
+  { bindings = subject + item + to }
 
 // ── refusal reasons ──────────────────────────────────────────────────────────────────────────────
-one sig RWrongItem, RWrongTenant, RAlreadyMember, RNotMember extends Reason {}
+one sig RWrongItem, RWrongTenant, RAlreadyMember, RNotMember,
+        RHeldElsewhere,  // M2b (DT-020 §8.5.3): add refused — the item is already held by ANOTHER
+                         //   live pool (poolMembershipExclusive: at most one pool per item per tick)
+        RSameTarget      // M2b: transfer refused — `to` names the same pool as `from` (no-op move)
+        extends Reason {}
 
 // ── the spine adoption: chaining (unconditional — a refused occurrence still read the real
 // membership) + v1 result policy ────────────────────────────────────────────────────────────────
@@ -80,21 +97,73 @@ fun poolAddViol[o: PoolAddOcc]: set Reason {
   ((o.item.itemPin.subject != o.pool.itemPin.subject) => RWrongItem else none)
   + ((o.item.tenantId != o.pool.tenantId) => RWrongTenant   else none)
   + ((o.item in o.pre.holds)              => RAlreadyMember else none)
+  // M2b (DT-020 §8.5.3 / SPEARHEAD-D1 A′-2): poolMembershipExclusive as a GUARD-DERIVED
+  // theorem — an add is refused if the item is currently held by ANY OTHER pool at this
+  // tick (RAlreadyMember above only catches the SAME pool).
+  + ((some q: InventoryPool - o.pool | o.item in heldAt[q, o.tick]) => RHeldElsewhere else none)
 }
 fun poolRemoveViol[o: PoolRemoveOcc]: set Reason {
   ((o.item not in o.pre.holds) => RNotMember else none)
 }
+/** poolTransferViol — M2b: RSameTarget (a no-op move), RNotMember (the item isn't at the
+    SOURCE — `subject`/`from`), RWrongItem/RWrongTenant judged at the DESTINATION (`to`) — the
+    same item-agreement shape `poolAddViol` uses, since the destination gain IS an ordinary
+    add (`transferPairing`). */
+fun poolTransferViol[o: PoolTransferOcc]: set Reason {
+  ((o.to = o.subject) => RSameTarget else none)
+  + ((o.item not in o.pre.holds) => RNotMember else none)
+  + ((o.item.itemPin.subject != o.to.itemPin.subject) => RWrongItem else none)
+  + ((o.item.tenantId != o.to.tenantId) => RWrongTenant else none)
+}
 fact PoolAdmissionWitness {
-  all o: PoolAddOcc    | (o.admission = Accepted iff no poolAddViol[o])    and (o.admission in Rejected implies o.admission.because = poolAddViol[o])
-  all o: PoolRemoveOcc | (o.admission = Accepted iff no poolRemoveViol[o]) and (o.admission in Rejected implies o.admission.because = poolRemoveViol[o])
+  all o: PoolAddOcc      | (o.admission = Accepted iff no poolAddViol[o])      and (o.admission in Rejected implies o.admission.because = poolAddViol[o])
+  all o: PoolRemoveOcc   | (o.admission = Accepted iff no poolRemoveViol[o])   and (o.admission in Rejected implies o.admission.because = poolRemoveViol[o])
+  all o: PoolTransferOcc | (o.admission = Accepted iff no poolTransferViol[o]) and (o.admission in Rejected implies o.admission.because = poolTransferViol[o])
 }
 // No result policy in v1 (mirrors the InventoryItem log).
 fact PoolCommitAccepts { plog/commitAlwaysAccepts }
 
 // ── effects ──────────────────────────────────────────────────────────────────────────────────────
 fact PoolEffectWitness {
-  all o: PoolAddOcc    | committed[o] implies o.post.holds = o.pre.holds + o.item
-  all o: PoolRemoveOcc | committed[o] implies o.post.holds = o.pre.holds - o.item
+  all o: PoolAddOcc      | committed[o] implies o.post.holds = o.pre.holds + o.item
+  all o: PoolRemoveOcc   | committed[o] implies o.post.holds = o.pre.holds - o.item
+  all o: PoolTransferOcc | committed[o] implies o.post.holds = o.pre.holds - o.item   // the SOURCE half
+}
+
+/** adjacentCommit — `b` is the very NEXT COMMITTED occurrence causally after `a` (nothing
+    committed sits between them). SAME-TICK PAIRING IS IMPOSSIBLE in this model:
+    `meta/occurrence`'s `OneOccurrencePerTick` fact is GLOBAL (at most one Occurrence atom per
+    tick across the WHOLE model, not per subject-log) — two distinct occurrence atoms can never
+    share a tick. ADJACENCY (ticks are global, so "nothing committed between" is exactly what
+    atomicity means here) is the model-consistent rendering of the M2 spec's "at the same tick"
+    / "same tick" wording for `transferPairing` and `splitInPool` below (team-lead ruling,
+    2026-08-28, on the STOP raised for this exact obstacle). */
+pred adjacentCommit[a, b: Occurrence] {
+  precedes[a.tick, b.tick] and no c: Occurrence | committed[c] and precedes[a.tick, c.tick] and precedes[c.tick, b.tick]
+}
+
+/** transferPairing — M2b: a committed PoolTransferOcc's DESTINATION gain is a matching
+    PoolAddOcc on `o.to`, the immediately-next COMMITTED occurrence (`adjacentCommit`) — so
+    `heldAt` stays a single projection (the paired PoolAddOcc's OWN effect, above) and
+    `poolMembershipExclusive` still discharges through the ordinary add guard. The transfer's
+    OWN guard (`poolTransferViol`) already judges `RWrongItem`/`RWrongTenant` at the
+    DESTINATION — the same clauses the paired add's guard evaluates — and the item was JUST
+    removed from every other pool (this transfer's own source effect), so the paired add's
+    `RAlreadyMember`/`RHeldElsewhere` cannot fire: the pairing is always admissible once the
+    transfer itself is. */
+fact TransferPairing {
+  all o: PoolTransferOcc | committed[o] implies
+    (some a: PoolAddOcc | committed[a] and a.pool = o.to and a.item = o.item and adjacentCommit[o, a])
+}
+
+/** splitInPool — M2b composite (a DERIVED predicate, not a kind): a committed SplitOcc whose
+    new sibling (`nu`) is PoolAdd'ed into the SAME pool that already held the split target, as
+    the immediately-next COMMITTED occurrence (`adjacentCommit` — same OneOccurrencePerTick
+    reasoning as `transferPairing` above). Witnesses that a split residue stays co-located with
+    its origin without any pool-side re-attach machinery. */
+pred splitInPool[s: SplitOcc, a: PoolAddOcc] {
+  committed[s] and committed[a] and a.item = s.nu and adjacentCommit[s, a]
+  and s.target in heldAt[a.pool, s.tick]
 }
 
 // ── the projections (wrappers over the spine's reads — public surface preserved) ────────────────
@@ -102,3 +171,11 @@ fact PoolEffectWitness {
 fun lastPoolTouch[p: InventoryPool, t: Tick]: lone PoolOcc { plog/lastTouch[p, t] }
 /** heldAt — the pool's membership as of `t` (empty before any committed history). */
 fun heldAt[p: InventoryPool, t: Tick]: set InventoryItem { plog/recordAt[p, t].holds }
+
+// M2c (DT-020 §8.5.3/§8.2.1, SPEARHEAD-D1 A′-2): "AT REST" IS THE POOL'S CUSTODY READING —
+// a pool CANNOT know who holds it (the DAG requirement: this module sees no ReceivingLine /
+// DemandItem / CardCycle), so "at rest" (no live holder among the three kinds) is DERIVED,
+// never a stored pool-side state (§8.2.1: "Bin ≠ Pool" — items carry their own location and
+// availability). The predicate itself (`atRestAt`) is defined at the COMPOSITION level, where
+// all three holder kinds are visible: `tests/pool_lattice.als` (the existing root that already
+// composes ReceivingLine/DemandItem/CardCycle over their MOCKS for the global exclusivity row).
