@@ -16,12 +16,12 @@ open resources/kanban_card/kanban_card_mock
 open resources/inventory_item/inventory_item_mock
 open reference_data/staff/staff_mock
 
-assert soak_rcv_capturedFactsFrozen { capturedFactsFrozen }
-check soak_rcv_capturedFactsFrozen for 6 but 5 Int, 3 Scalar, 5 State, 8 Signal, 8 Transition, 1 StateMachine, 0 Guard,
-      3 Receiver, 4 ReceivingLine, 3 OrderAttribution, 0 Order, 3 OrderLine, 0 DemandItem, 2 ProductionDelivery,
-      0 CardCycle, 0 KanbanCard, 2 InventoryItem, 2 InventoryPool, 0 Station,
-      0 SupplierBinding, 0 SupplierName, 0 SupplierData, 0 Confirmation,
-      11 Occurrence, 14 EntityId, 9 Tick, 13 Snapshot, 2 Note expect 0
+// RETIRED (MP signoff 2026-08-28, DT-024 E7 ladder window 2): `soak_rcv_capturedFactsFrozen`
+// — LC-RCV-03 is PROVEN INDUCTIVE as a per-occurrence rung
+// (receiver_captured_facts_inductive.als: slice-faithful + base + step + law, state-local;
+// both scope gates green 2026-08-27; vacuity guards SAT 2026-08-28), superseding the trace
+// search at these scopes. This root now carries no commands (the CreatedOnlySlice fact stays
+// for any future row).
 
 // RETIRED (MP signoff 2026-08-26, DT-024 E7): `soak_rcv_linePoolExclusive` — the law is
 // PROVEN INDUCTIVE in receiver_pool_inductive.als (base + step + law, state-local; both
