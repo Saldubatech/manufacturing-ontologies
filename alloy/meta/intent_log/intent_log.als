@@ -190,7 +190,13 @@ fun wrongHolder[o: HolderOcc]: set Reason {
   (some iPre[o].iHolder and iPre[o].iHolder != o.holder) => RWrongHolder else none
 }
 
-fun reserveViol[o: ReserveOcc]: set Reason { (prePhase[o] not in freePhases) => RKeyTaken else none }
+fun reserveViol[o: ReserveOcc]: set Reason {
+  ((prePhase[o] not in freePhases) => RKeyTaken else none)
+  + (ilog/archeDuplicate[o] => RDuplicateArche else none)   // the LEG-level idempotent callee (DT-029 Q8): a RESERVE re-sent under the
+                                                             //   same cause on the same key is refused typed and reads "already landed" —
+                                                             //   two legs of one saga on ONE key need two causes; the module fact
+                                                             //   `ArcheUnique` would otherwise leave the re-send admitted-but-uncommittable
+}
 fun confirmViol[o: ConfirmOcc]: set Reason {
   ((prePhase[o] != I_RESERVED) => RNotReserved else none)
   + wrongHolder[o]
@@ -210,6 +216,7 @@ fun actReserveViol[o: ActReserveOcc]: set Reason {
   ((not isHold) => RNotHoldSemantics else none)
   + ((prePhase[o] != I_HELD) => ((prePhase[o] = I_ACTING) => RActPending else RNotHeld) else none)
   + wrongHolder[o]
+  + (ilog/archeDuplicate[o] => RDuplicateArche else none)   // as reserveViol: a re-sent sub-intent under one cause is refused typed (Q8)
 }
 fun actConfirmViol[o: ActConfirmOcc]: set Reason {
   ((prePhase[o] != I_ACTING) => RNoActPending else none)

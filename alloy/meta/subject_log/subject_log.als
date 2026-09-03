@@ -79,10 +79,18 @@ pred archeDuplicate[o: SubjectOcc] {
     subject) BY CONSTRUCTION, so one origin may span two subjects (a transfer's paired rows, SAMWISE-S1).
     Ranges over EXPLICIT origins only (`o.arche != o` — the partial index's `WHERE arche_id <> id`, by identity). A THEOREM of `archeDuplicate`
     sitting in every kind's guard; adopt it as a FACT instead where a log models the index without modelling
-    the refusal (D-3: opt-in — roots that ignore origins pay nothing). */
+    the refusal (D-3 as written: opt-in — SUPERSEDED by Q8: the module FACT `ArcheUnique` below carries it everywhere;
+    an adopter's own `fact X { log/archeUniquePerSubject }` is now redundant and harmless). */
 pred archeUniquePerSubject {
   all disj a, b: SubjectOcc | (committed[a] and committed[b] and a.subject = b.subject and a.arche != a and b.arche != b) implies a.arche != b.arche
 }
+/** ArcheUnique — THE LAW AS A MODULE FACT (DT-029 Q8, 2026-09-03; D-3's opt-in amended): every instance carries it,
+    nothing adopts it, nothing can forget it. Vacuously true wherever no row cites (every row is `o.arche = o`), so a
+    log that ignores origins pays only the CNF of a quantifier that cannot bite — measured: primary vars identical,
+    clauses ≤ +1.21 % on the canary roots. The runtime mirror: EVERY occurrence table carries the partial index
+    (17.0.0 pin), which selects nothing where every row self-mints — broader together, narrow together. The guard
+    `archeDuplicate` stays: the fact forbids two COMMITTED duplicates, the guard says the second is REFUSED. */
+fact ArcheUnique { archeUniquePerSubject }
 
 /** lastTouch — the latest committed occurrence on `s` at-or-before `t`. */
 fun lastTouch[s: Subject, t: Tick]: lone SubjectOcc {

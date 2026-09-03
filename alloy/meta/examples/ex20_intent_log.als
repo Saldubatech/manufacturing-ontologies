@@ -44,7 +44,10 @@ fact LuggageCartStateExtensional { all disj a, b: LuggageCartState | a.avail != 
 sig RackOcc     extends lcart/SubjectOcc {} { bindings = subject }   // genesis / return → IN_RACK
 sig CheckOutOcc extends lcart/SubjectOcc {} { bindings = subject }   // IN_RACK → CHECKED_OUT (the exclusive act)
 one sig RCartOut extends Reason {}
-fun checkOutViol[o: CheckOutOcc]: set Reason { ((o.pre & LuggageCartState).avail = CHECKED_OUT) => RCartOut else none }
+fun checkOutViol[o: CheckOutOcc]: set Reason {
+  (((o.pre & LuggageCartState).avail = CHECKED_OUT) => RCartOut else none)
+  + (lcart/archeDuplicate[o] => sem/RDuplicateArche else none)   // the idempotent callee (DT-029 Q8): a re-sent citation is refused, typed
+}
 fact CartWitnessing {
   all o: RackOcc     | o.admission = Accepted
   all o: CheckOutOcc | (o.admission = Accepted iff no checkOutViol[o]) and (o.admission in Rejected implies o.admission.because = checkOutViol[o])

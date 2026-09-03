@@ -31,8 +31,8 @@ abstract sig Occurrence {
                          //   caller context; the runtime's NOT-NULL `arche_id` column carries the row's own id
                          //   (MP 3.1: no branch, no null) and maps to this field by IDENTITY — `arche_id = id`
                          //   IS `o.arche = o`, no encoding between model and column (D-4 as reversed by A).
-                         //   Uniqueness is per (arche, SUBJECT) and is ADOPTED per log in meta/subject_log
-                         //   (D-3); no root / audit column ever exists (MP 3.2: the call tree is walkable
+                         //   Uniqueness is per (arche, SUBJECT) and is a FACT of
+                         //   meta/subject_log (`ArcheUnique`, D-3 as amended by Q8 2026-09-03); no root / audit column ever exists (MP 3.2: the call tree is walkable
                          //   through this one field).
 }
 

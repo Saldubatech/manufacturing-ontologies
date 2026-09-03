@@ -80,15 +80,18 @@ fun takeViol[o: TakeOcc]: set Reason {
   ((no o.pre) => RCartUnborn else none)
   + ((cPre[o].cStat = C_TAKEN) => RCartBusy else none)
   + ((cPre[o].cStat = C_RETIRED) => RCartGone else none)
+  + (clog/archeDuplicate[o] => sem/RDuplicateArche else none)   // the idempotent callee on the cart log too (DT-029 Q8: the module fact needs the typed refusal wherever rows cite)
 }
 fun loadViol[o: LoadOcc]: set Reason {
   ((no o.pre) => RCartUnborn else none)
   + ((cPre[o].cStat != C_TAKEN) => RCartNotTaken else none)
+  + (clog/archeDuplicate[o] => sem/RDuplicateArche else none)
 }
 fun parkViol[o: ParkOcc]: set Reason {
   ((no o.pre) => RCartUnborn else none)
   + ((cPre[o].cStat = C_FREE) => RCartFree else none)
   + ((cPre[o].cStat = C_RETIRED) => RCartGone else none)
+  + (clog/archeDuplicate[o] => sem/RDuplicateArche else none)
 }
 fun retireViol[o: RetireOcc]: set Reason {
   ((no o.pre) => RCartUnborn else none) + ((cPre[o].cStat = C_RETIRED) => RCartGone else none)

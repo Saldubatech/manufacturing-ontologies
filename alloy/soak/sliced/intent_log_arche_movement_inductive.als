@@ -208,12 +208,26 @@ run e7_seeded_twoLegsOneOrigin {
 /** SPEARHEAD's DISCRIMINATING witness: two legs of ONE saga land on ONE subject, sequentially — both pours commit under
     per-leg arche (distinct leg ids on one vat); under a per-saga arche the second would collide. The only check that
     tells the two readings apart; every other check is blind to it. */
+/** Two legs of ONE saga on ONE subject — legal only with TWO immediate causes (g1 / g2: two planned-leg rows in the
+    owner's saga). Under the module fact `ArcheUnique` (DT-029 Q8) a second leg RESERVE on the same key citing the SAME
+    cause is the duplicate the leg-level idempotent callee refuses (next witness). SPEARHEAD's discriminating case
+    survives at the POOL-row level: p1 cites r1, p2 cites r2 — per-leg arche; a per-saga arche would collide on the vat. */
 run e7_seeded_twoLegsOneSubject {
-  some v: Vat, g: OriginatorOcc, disj r1, r2: move/ReserveOcc - TransferIntent, disj p1, p2: PourOcc, f: move/ConfirmOcc |
-    committed[g] and committed[r1] and committed[p1] and committed[f] and committed[r2] and committed[p2]
+  some v: Vat, disj g1, g2: OriginatorOcc, disj r1, r2: move/ReserveOcc - TransferIntent, disj p1, p2: PourOcc, f: move/ConfirmOcc |
+    committed[g1] and committed[g2] and committed[r1] and committed[p1] and committed[f] and committed[r2] and committed[p2]
     and r1.subject = v and r2.subject = v and p1.subject = v and p2.subject = v and f.subject = v
-    and r1.arche = g and r2.arche = g and p1.arche = r1 and p2.arche = r2
-    and precedes[g.tick, r1.tick] and precedes[r1.tick, p1.tick] and precedes[p1.tick, f.tick] and precedes[f.tick, r2.tick] and precedes[r2.tick, p2.tick]
+    and r1.arche = g1 and r2.arche = g2 and p1.arche = r1 and p2.arche = r2
+    and precedes[g1.tick, r1.tick] and precedes[r1.tick, p1.tick] and precedes[p1.tick, f.tick] and precedes[f.tick, r2.tick] and precedes[r2.tick, p2.tick] and precedes[g2.tick, r2.tick]
+} for 8 but 5 Int, 2 Vat, 2 Owner, 2 Version, 9 Tick, 8 Occurrence, 9 Snapshot, 8 EntityId expect 1
+/** The ONE-cause spelling is REFUSED, typed: the second leg RESERVE on the same key citing the same originator is the
+    re-sent leg (the saga's re-drive) and reads "already landed" — `RDuplicateArche` from `reserveViol` (Q8). */
+run e7_seeded_twoLegsOneSubjectOneCauseRefused {
+  some v: Vat, g: OriginatorOcc, disj r1, r2: move/ReserveOcc - TransferIntent, p1: PourOcc, f: move/ConfirmOcc |
+    committed[g] and committed[r1] and committed[p1] and committed[f]
+    and r1.subject = v and r2.subject = v and p1.subject = v and f.subject = v
+    and r1.arche = g and r2.arche = g and p1.arche = r1
+    and precedes[g.tick, r1.tick] and precedes[r1.tick, p1.tick] and precedes[p1.tick, f.tick] and precedes[f.tick, r2.tick]
+    and r2.admission in Rejected and r2.admission.because = sem/RDuplicateArche
 } for 7 but 5 Int, 2 Vat, 2 Owner, 2 Version, 8 Tick, 7 Occurrence, 9 Snapshot, 8 EntityId expect 1
 /** The LATE ACT is representable and B says it is never confirmed: a pour citing a RELEASEd intent lands on a free
     chain; the owner's view reads moved-by-this beside I_FREE — the module's RD_LATE_ACT_ALERT cell. */
