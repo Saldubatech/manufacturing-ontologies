@@ -65,7 +65,13 @@ pred commitAlwaysAccepts { all o: SubjectOcc | some o.commit implies o.commit = 
     form forbade a legal runtime state). CONSEQUENCE, stated on its own because it is load-bearing on its own:
     a pattern deriving "who cited my intent" must exclude its own log's rows from the citers it counts
     (meta/intent_log `citers`, E2) — a chain's CONFIRM may legally cite its RESERVE and is not the peer act.
-    Idiom, in a kind's violation set: `(log/archeDuplicate[o] => RDuplicateArche else none)`. */
+    Idiom, in a kind's violation set: `(log/archeDuplicate[o] => RDuplicateArche else none)`.
+    THE REFUSAL ATOM IS THE ADOPTER'S, NOT THIS MODULE'S (MINESWEEPER's E1 review, point 2): the guard CONDITION
+    lives here, in the general layer; the atom `RDuplicateArche` lives in `meta/intent_log/semantics` (the pattern
+    layer, which this module does not open — a one-sig in `outcome.als` would be a new atom in every root). An
+    intent-log applier names `sem/RDuplicateArche`; a log that adopts uniqueness WITHOUT being an applier declares
+    its own reason atom (as this module's test root does) or opens the pattern layer for the name — the idiom as
+    written does not compile without one of the two. */
 pred archeDuplicate[o: SubjectOcc] {
   o.arche != o and some b: SubjectOcc | committed[b] and b.subject = o.subject and precedes[b.tick, o.tick] and b.arche = o.arche
 }

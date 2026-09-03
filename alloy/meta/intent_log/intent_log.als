@@ -150,11 +150,18 @@ fun settledIntent[o: ViewOcc]: lone ilog/SubjectOcc {
     peer row; saga legs cite the ORIGINATOR). Intent rows are excluded because an owner-side row may legally cite a
     cited row on its own chain (E1) and a SIBLING chain's RESERVE may cite this one (nested intents) — neither is
     the peer act (the E2 self-check found both). A self-initiated `x` (`x.arche = x`) never matches: `i` is an intent
-    row and `x` is not one (ruling A: the field is total, so no `some x.arche` guard is needed). */
+    row and `x` is not one (ruling A: the field is total, so no `some x.arche` guard is needed).
+    CONSEQUENCE, stated on its own (MINESWEEPER's E2 review, point 3): under `citationView` an intent chain is
+    NEVER the peer of another intent chain — a chain's RESERVE citing another chain's intent reads
+    PV_MOVED_BY_THIS as FALSE, always, silently, with no counterexample. Deliberate: cross-chain COMPOSITION is
+    the owner's saga fold (DT-029 E3), never one chain citing another as if it were the peer act. */
 /** intentRows — every committed row of ANY intent chain, recognized structurally: its records are IntentRecords. */
 fun intentRows: set Action { { a: StatefulAction | some ((a.pre + a.post) & IntentRecord) } }
 fun citers[i: ilog/SubjectOcc]: set Action { { x: Action - intentRows | committed[x] and x.arche = i } }
-/** cited — the intent `o` settles has a citer committed before `o`. */
+/** cited — the intent `o` settles has a citer committed STRICTLY before `o` (`precedes`): a view row's citer
+    must precede it. BOUNDARY TICK (MINESWEEPER's E2 review, point 4): `citedAt` / `actCitedAt` below read
+    "as of" (`notAfter`) and so differ from `cited` by exactly one tick — the probe's own tick. Porting a probe
+    reading into a guard is an off-by-one no witness in either suite catches; keep the two spellings apart. */
 pred cited[o: ViewOcc] { some x: citers[settledIntent[o]] | precedes[x.tick, o.tick] }
 /** citedAt / actCitedAt — the tick-level readings (probes, view functions): the key's latest RESERVE /
     ACT_RESERVE (opener / act opener) before `t` has a citer at-or-before `t`. */
