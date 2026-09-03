@@ -108,12 +108,12 @@ run unit_slog_archeTwoSubjectsOneArche {
     and a.arche = o and b.arche = o and o.subject != a.subject and o.subject != b.subject
 } for 5 but 4 Int expect 1
 
-// Citing a SELF-MINTED row on the same subject is unrepresentable: that row's origin IS its own identity
-// (archeOf[o] = o), so the citer re-sends it — the runtime index refuses it too. Consequence: a chain's own
-// follow-up rows never cite their own chain's originator via `arche` (they are self-minted, or cite THEIR caller).
-run unit_slog_archeSelfMintedSameSubjectRefused {
+// A same-subject reaction may cite a SELF-MINTED row (E1 as amended on MINESWEEPER's review, 2026-09-03): the
+// row's own identity never occupies a uniqueness slot — the law is over CITATIONS, one-for-one with the
+// runtime's partial index. (The first E1 cut forbade this; the negative witness it carried was retired.)
+run unit_slog_archeSelfMintedReactionAllowed {
   some w: Widget, o, a: SetLevelOcc | committed[o] and no o.arche and committed[a] and o.subject = w and a.subject = w and a.arche = o
-} for 5 but 4 Int expect 0
+} for 5 but 4 Int expect 1
 
 // But citing an already-CITED row on the same subject is a DISTINCT origin (immediate cause, not a root — MP 3.2),
 // so it is legal: the first run of this pair was written as "never along a chain" and the solver refuted it
