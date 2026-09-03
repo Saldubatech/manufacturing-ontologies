@@ -118,7 +118,7 @@ fact VatRecExtensional { all disj a, b: VatRec | a.vLevel != b.vLevel }
 
 sig AddVatOcc extends vlog/SubjectOcc {} { bindings = subject }   // genesis → level 0
 /** PourOcc — the additive act. `arche` — the ORIGIN identity every occurrence carries since DT-029 E1
-    (kernel-typed `lone Occurrence`, no field of its own here) — is bound to the RESERVE the pour fulfils (the
+    (kernel-typed `one Occurrence` since ruling A, no field of its own here) — is bound to the RESERVE the pour fulfils (the
     runtime `arche_id` = the RESERVE's rId, SAMWISE-S1); `reverses` names the pour this pour undoes, if any. */
 sig PourOcc extends vlog/SubjectOcc { amount: one Int, reverses: lone univ }
   { bindings = subject + amount + arche + reverses }
@@ -144,7 +144,7 @@ fact VatEffects {
 fact VatSpine { vlog/chained and vlog/commitAlwaysAccepts }
 /** The vat rows' citation discipline: only the ACT (`pour`) cites — genesis is nobody's leg (a genesis row citing a
     movement intent read as the movement landing: the E2 self-check found it). */
-fact VatCitations { all o: AddVatOcc | no o.arche }
+fact VatCitations { all o: AddVatOcc | o.arche = o }
 
 // ── the two intent chains: spine adoption + owner-side bindings ─────────────────────────────────
 fact ClaimSpine { claim/spineAdopted }
@@ -172,9 +172,9 @@ fact OwnerBindings {
     vat's RESERVE would read as that movement landing: the E2 self-check found exactly that). Takes cite the claim's
     opener; acts under the hold cite the pending ACT_RESERVE. */
 fact CartCitations {
-  all o: TakeOcc + LoadOcc + ParkOcc | some o.arche implies
+  all o: TakeOcc + LoadOcc + ParkOcc | o.arche != o implies
     (o.arche in claim/IntentOcc and (o.arche & claim/IntentOcc).subject = o.subject)
-  all o: AddCartOcc + RetireOcc | no o.arche
+  all o: AddCartOcc + RetireOcc | o.arche = o
 }
 /** takeOnlyByClaimants — THE EXCLUSIVE-ARM PREMISE of the law `takenCartsAreClaimed` (assume when: the peer
     act is performed only by owners holding a live reservation AND cites it — the runtime's `accept` carrying
@@ -225,7 +225,7 @@ fact PourViews { all o: pour/ViewOcc | not pour/cited[o] implies o.peerView = se
     by construction. Keying is PER LEG (SAMWISE-S1 as ruled): a pour cites its OWN vat's RESERVE; a multi-vat movement
     is N+1 leg intents whose RESERVEs share one ORIGINATOR — that is where one origin spans subjects. */
 fact ArcheIdentity {
-  all p: PourOcc | some p.arche implies
+  all p: PourOcc | p.arche != p implies
     (p.arche in pour/ReserveOcc and committed[p.arche & pour/ReserveOcc] and (p.arche & pour/ReserveOcc).subject = p.subject)
   all p: PourOcc | some p.reverses implies (p.reverses in PourOcc and committed[p.reverses & PourOcc] and (p.reverses & PourOcc).subject = p.subject
                                             and precedes[(p.reverses & PourOcc).tick, p.tick] and p.amount = minus[0, (p.reverses & PourOcc).amount])
@@ -234,7 +234,7 @@ fact ArcheIdentity {
     (the intent was RELEASEd before the act landed — rule R1 broken by a timeout read as a refusal),
     unless a committed reversal names it. */
 pred lateAct[p: PourOcc] {
-  committed[p] and some p.arche and pour/phaseAt[p.subject, p.tick] = sem/I_FREE
+  committed[p] and p.arche != p and pour/phaseAt[p.subject, p.tick] = sem/I_FREE
   and no q: PourOcc | committed[q] and q.reverses = p
 }
 

@@ -89,7 +89,7 @@ run conv_il_parkClosesHold {
     CONFIRM crediting a stranger's take. No premise assumed. */
 run conv_il_uncitedTakeMovedOtherwise {
   some c: Cart, r: claim/ReserveOcc, k: TakeOcc, t: Tick | {
-    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick] and no k.arche
+    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick] and k.arche = k
     notAfter[k.tick, t] and claim/phaseAt[c, t] = sem/I_RESERVED and not claim/citedAt[c, t]
     cartResidualAt[c, t] = sem/PV_MOVED_OTHERWISE
     claim/redrive[claim/phaseAt[c, t], cartResidualAt[c, t]] = sem/RD_RELEASE

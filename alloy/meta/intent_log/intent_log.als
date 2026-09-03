@@ -149,10 +149,11 @@ fun settledIntent[o: ViewOcc]: lone ilog/SubjectOcc {
     exactly the peer rows the intent caused (a refused peer row is not committed; a peer's own follow-ups cite the
     peer row; saga legs cite the ORIGINATOR). Intent rows are excluded because an owner-side row may legally cite a
     cited row on its own chain (E1) and a SIBLING chain's RESERVE may cite this one (nested intents) — neither is
-    the peer act (the E2 self-check found both). `some x.arche` keeps an empty `i` from matching uncited rows. */
+    the peer act (the E2 self-check found both). A self-initiated `x` (`x.arche = x`) never matches: `i` is an intent
+    row and `x` is not one (ruling A: the field is total, so no `some x.arche` guard is needed). */
 /** intentRows — every committed row of ANY intent chain, recognized structurally: its records are IntentRecords. */
 fun intentRows: set Action { { a: StatefulAction | some ((a.pre + a.post) & IntentRecord) } }
-fun citers[i: ilog/SubjectOcc]: set Action { { x: Action - intentRows | committed[x] and some x.arche and x.arche = i } }
+fun citers[i: ilog/SubjectOcc]: set Action { { x: Action - intentRows | committed[x] and x.arche = i } }
 /** cited — the intent `o` settles has a citer committed before `o`. */
 pred cited[o: ViewOcc] { some x: citers[settledIntent[o]] | precedes[x.tick, o.tick] }
 /** citedAt / actCitedAt — the tick-level readings (probes, view functions): the key's latest RESERVE /

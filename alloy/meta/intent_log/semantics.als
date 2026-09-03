@@ -104,7 +104,7 @@ one sig RKeyTaken,          // RESERVE on a key with a live intent (the fork los
         RNotHeld,           // TRANSFER / sub-intent while the key is not HELD
         RActPending,        // a second sub-intent, or a RELEASE / TRANSFER, while one sub-intent is pending
         RNoActPending,      // ACT_CONFIRM / ACT_RELEASE with no pending sub-intent
-        RDuplicateArche     // a callee row whose origin (`archeOf`) a committed row on the same subject already
+        RDuplicateArche     // a callee row whose cited origin (`arche != self`) a committed row on the same subject already
                             //   carries — the idempotent callee's refusal (DT-029 E1; the runtime's partial unique
                             //   index per (arche_id, subject)); condition = meta/subject_log `archeDuplicate`
         extends Reason {}

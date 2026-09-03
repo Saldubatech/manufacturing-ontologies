@@ -23,12 +23,14 @@ abstract sig Occurrence {
                          //   Immutable with the occurrence (acts never change after commit).
                          //   Distinct from RECORD-carried notes (shared/note's `Note` atoms
                          //   on state records — LOCF-read, freeze-governed).
-  arche: lone Occurrence // ORIGIN identity (DT-029 E1; MP 2026-08-28: "use arche across the board"): the
+  arche: one Occurrence  // ORIGIN identity (DT-029 E1; MP 2026-08-28: "use arche across the board"; TOTAL since
+                         //   MP's D13 ruling A, 2026-09-03 — "first hand: my ruling is A"): the
                          //   occurrence this one originates from — the immediate CALLER's context, i.e. the
                          //   caller's own RESERVE row when this row is the leg of an intent (meta/intent_log).
-                         //   ABSENT means SELF-MINTED (`archeOf[o] = o`): no caller context; the runtime's
-                         //   NOT-NULL `arche_id` column then carries the row's own id (MP 3.1: no branch, no
-                         //   null). `lone`, not `one`, so roots that ignore origins pay nothing (D-4).
+                         //   SELF-INITIATED means the row cites ITSELF (`o.arche = o`, `selfInitiated`): no
+                         //   caller context; the runtime's NOT-NULL `arche_id` column carries the row's own id
+                         //   (MP 3.1: no branch, no null) and maps to this field by IDENTITY — `arche_id = id`
+                         //   IS `o.arche = o`, no encoding between model and column (D-4 as reversed by A).
                          //   Uniqueness is per (arche, SUBJECT) and is ADOPTED per log in meta/subject_log
                          //   (D-3); no root / audit column ever exists (MP 3.2: the call tree is walkable
                          //   through this one field).
@@ -41,12 +43,13 @@ fact OneOccurrencePerTick { all disj a, b: Occurrence | a.tick != b.tick }
 /** occPrecedes — the causal (model-time) order lifted to occurrences. */
 pred occPrecedes[a, b: Occurrence] { precedes[a.tick, b.tick] }
 
-/** archeOf — THE ORIGIN READING: an occurrence's origin, or itself when none is recorded. Absence IS
-    self-minting, so "no caller context" has exactly one representation (never a self-loop — see below). */
-fun archeOf[o: Occurrence]: one Occurrence { some o.arche => o.arche else o }
+/** selfInitiated — the occurrences that cite THEMSELVES: no caller context. The self-loop is the ONE spelling
+    of "self-initiated" — the field is total, like the runtime column (MP's D13 ruling A, 2026-09-03). */
+fun selfInitiated: set Occurrence { { o: Occurrence | o.arche = o } }
 
-/** An origin is STRICTLY earlier than the occurrence citing it: origins never point forward, and an
-    occurrence never cites itself (self-minting is the ABSENCE of a citation, which spares the solver a
-    second spelling of the same state). The one universal, cheap truth about origins — everything else
-    about `arche` is adopted per log (meta/subject_log) or derived per pattern (meta/intent_log). */
-fact ArcheOriginPrecedes { all o: Occurrence | some o.arche implies precedes[o.arche.tick, o.tick] }
+/** A CITED origin is STRICTLY earlier than the occurrence citing it: origins never point forward; the only
+    occurrence an occurrence may cite at its own tick is itself (self-initiation, exempt below). Proper cycles
+    are a THEOREM of strict precedence, checked in the tests (unit_occ_archeNoProperCycle), never a fact. The
+    one universal, cheap truth about origins — everything else about `arche` is adopted per log
+    (meta/subject_log) or derived per pattern (meta/intent_log). */
+fact ArcheOriginPrecedes { all o: Occurrence | o.arche != o implies precedes[o.arche.tick, o.tick] }

@@ -53,7 +53,7 @@ sig OriginatorOcc extends Action {} { no bindings }
 one sig RVatStarted, RVatUnborn, RForeignClaim extends Reason {}
 /** foreignPour — a citation that is neither this vat's committed opener nor a composite leg paired with this vat. */
 pred foreignPour[o: PourOcc] {
-  some o.arche and o.arche != move/openerBefore[o.subject, o.tick]
+  o.arche != o and o.arche != move/openerBefore[o.subject, o.tick]
   and not (o.arche in TransferIntent and (o.arche & TransferIntent).other = o.subject and committed[o.arche & TransferIntent])
 }
 fun addVatViol[o: AddVatOcc]: set Reason { (some vlog/priorOn[o]) => RVatStarted else none }
@@ -71,7 +71,7 @@ fact VatEffects {
   all o: PourOcc   | committed[o] implies vPost[o].vLevel = plus[vPre[o].vLevel, o.amount]
 }
 fact VatSpine { vlog/chained and vlog/commitAlwaysAccepts and vlog/archeUniquePerSubject }
-fact VatOrigins { all o: AddVatOcc | no o.arche }
+fact VatOrigins { all o: AddVatOcc | o.arche = o }
 
 // ── the owner side: the movement chain over Vat, bindings, the adopted citation view + the residual ─
 sig Owner extends Scoped {}
@@ -85,8 +85,8 @@ fact MoveBindings {
   all o: move/CitingOcc  | o.peerRid in PourOcc
   all r: move/IntentRec  | r.iVersion in Version
   no move/ActReserveOcc and no move/TransferOcc   // MOVEMENT chains carry no sub-intents
-  all o: move/IntentOcc  | some o.arche implies o.arche in OriginatorOcc   // a leg's RESERVE cites the saga root, nothing else
-  all o: OriginatorOcc   | o.admission = Accepted and no o.arche
+  all o: move/IntentOcc  | o.arche != o implies o.arche in OriginatorOcc   // a leg's RESERVE cites the saga root, nothing else
+  all o: OriginatorOcc   | o.admission = Accepted and o.arche = o
 }
 /** The residual for an additive peer: no "otherwise" (another owner's pour does not touch this intent) and vats
     are not minted by owners (no ABSENT) — an uncited view reads UNMOVED. */
@@ -99,7 +99,7 @@ fun openerAt[v: Vat, t: Tick]: lone move/IntentOcc {
       and no r2: move/IntentOcc | committed[r2] and r2.subject = v and precedes[r.tick, r2.tick] and notAfter[r2.tick, t]
                                    and move/prePhase[r2] in sem/freePhases and move/iPost[r2].iPhase in sem/livePhases }
 }
-fun poursCiting[v: Vat, i: move/IntentOcc]: set PourOcc { { x: PourOcc | committed[x] and x.subject = v and some x.arche and x.arche = i } }
+fun poursCiting[v: Vat, i: move/IntentOcc]: set PourOcc { { x: PourOcc | committed[x] and x.subject = v and x.arche = i } }
 /** poursCitingAt — the same, at-or-before `t` (never count a FUTURE pour in a per-tick invariant). */
 fun poursCitingAt[v: Vat, i: move/IntentOcc, t: Tick]: set PourOcc { { x: poursCiting[v, i] | notAfter[x.tick, t] } }
 /** THE COMPOSITE FINDING (first base run, law A and the step both): the module's citation view credits a CONFIRM from
@@ -128,7 +128,7 @@ pred lawC {
 sig HavocVatOcc  extends vlog/SubjectOcc {} { bindings = subject }
 sig HavocMoveOcc extends move/IntentOcc {}  { bindings = subject }
 fact HavocDiscipline {
-  all h: HavocVatOcc + HavocMoveOcc | h.admission = Accepted and no h.arche
+  all h: HavocVatOcc + HavocMoveOcc | h.admission = Accepted and h.arche = h
   all h: HavocVatOcc,  o: vlog/SubjectOcc - HavocVatOcc   | precedes[h.tick, o.tick]
   all h: HavocMoveOcc, o: move/IntentOcc - HavocMoveOcc   | precedes[h.tick, o.tick]
 }
@@ -172,7 +172,7 @@ run e7_seeded_citedPour {
 run e7_seeded_uncitedPour {
   some hm: HavocMoveOcc, hv: HavocVatOcc, p: PourOcc |
     committed[hm] and move/iPost[hm].iPhase = sem/I_RESERVED and committed[hv]
-    and committed[p] and p.subject = hm.subject and p.subject = hv.subject and no p.arche
+    and committed[p] and p.subject = hm.subject and p.subject = hv.subject and p.arche = p
     and precedes[hm.tick, p.tick] and precedes[hv.tick, p.tick]
 } for 5 but 5 Int, 2 Vat, 2 Owner, 2 Version, 6 Tick, 5 Occurrence, 8 Snapshot, 8 EntityId expect 1
 run e7_seeded_foreignCite {

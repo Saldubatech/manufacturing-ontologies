@@ -35,21 +35,24 @@ run unit_occ_noteOptional {
   some disj a, b: TestOcc | some a.note and no b.note
 } for 4 but exactly 1 String expect 1
 
-// The ORIGIN seat (DT-029 E1): absence reads as self-minted — exactly one representation of "no caller".
-run unit_occ_archeOfSelfMinted {
-  some o: TestOcc | no o.arche and archeOf[o] = o
+// The ORIGIN seat (DT-029 E1, total since ruling A): a self-initiated occurrence cites itself — the one spelling of "no caller".
+run unit_occ_archeSelfInitiated {
+  some o: TestOcc | o.arche = o and o in selfInitiated
 } for 4 expect 1
 
-// An origin is strictly earlier than the occurrence citing it.
-assert unit_occ_archeOriginPrecedes { all o: TestOcc | some o.arche implies occPrecedes[o.arche, o] }
+// A cited origin is strictly earlier than the occurrence citing it.
+assert unit_occ_archeOriginPrecedes { all o: TestOcc | o.arche != o implies occPrecedes[o.arche, o] }
 check unit_occ_archeOriginPrecedes for 5 expect 0
 
-// A self-citation is unrepresentable — "self-minted" cannot be spelled as a loop (negative run).
-run unit_occ_archeSelfCiteImpossible {
-  some o: TestOcc | o.arche = o
-} for 4 expect 0
+// Proper cycles are unrepresentable: the only loop is the self-initiated one (a theorem of strict precedence).
+assert unit_occ_archeNoProperCycle { all o: TestOcc | o in o.^arche implies o.arche = o }
+check unit_occ_archeNoProperCycle for 5 expect 0
 
-// The field is genuinely optional: a cited origin and an uncited (self-minted) occurrence coexist.
-run unit_occ_archeOptional {
-  some disj a, b: TestOcc | a.arche = b and no b.arche
+// The field is total: every occurrence has an origin, itself or an earlier one (a theorem of `one`).
+assert unit_occ_archeTotal { all o: TestOcc | one o.arche and (o.arche = o or occPrecedes[o.arche, o]) }
+check unit_occ_archeTotal for 5 expect 0
+
+// A citing occurrence and its self-initiated origin coexist: the walk `a.*arche` ends at the self-loop.
+run unit_occ_archeCitesSelfInitiated {
+  some disj a, b: TestOcc | a.arche = b and b.arche = b and b in a.^arche
 } for 4 expect 1

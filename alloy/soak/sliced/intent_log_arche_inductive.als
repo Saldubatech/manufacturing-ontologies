@@ -46,8 +46,8 @@ fun slotStatusAt[s: Slot, t: Tick]: lone SlotStatus { slog/recordAt[s, t].sStat 
 
 one sig RSlotStarted, RSlotUnborn, RSlotBusy, RSlotFree, RSlotGone, RForeignClaim extends Reason {}
 /** foreignTake / foreignPark — a citation whose target is not this slot's committed opener / pending act opener. */
-pred foreignTake[o: TakeOcc] { some o.arche and o.arche != claim/openerBefore[o.subject, o.tick] }
-pred foreignPark[o: ParkOcc] { some o.arche and o.arche != claim/actOpenerBefore[o.subject, o.tick] }
+pred foreignTake[o: TakeOcc] { o.arche != o and o.arche != claim/openerBefore[o.subject, o.tick] }
+pred foreignPark[o: ParkOcc] { o.arche != o and o.arche != claim/actOpenerBefore[o.subject, o.tick] }
 fun addSlotViol[o: AddSlotOcc]: set Reason { (some slog/priorOn[o]) => RSlotStarted else none }
 fun takeViol[o: TakeOcc]: set Reason {
   ((no o.pre) => RSlotUnborn else none)
@@ -79,7 +79,7 @@ fact SlotEffects {
   all o: RetireOcc  | committed[o] implies sPost[o].sStat = S_RETIRED
 }
 fact SlotSpine { slog/chained and slog/commitAlwaysAccepts and slog/archeUniquePerSubject }
-fact SlotOriginsCite { all o: AddSlotOcc + RetireOcc | no o.arche }   // genesis and retirement are nobody's leg
+fact SlotOriginsCite { all o: AddSlotOcc + RetireOcc | o.arche = o }   // genesis and retirement are nobody's leg
 
 // ── the owner side: the claim chain over Slot, bindings, the adopted citation view + the residual ─
 sig Owner extends Scoped {}
@@ -95,7 +95,7 @@ fact ClaimBindings {
   all o: claim/CitingOcc   | o.peerRid in slog/SubjectOcc
   all o: claim/ActReserveOcc | o.act = ParkAct and o.mode = sem/AM_CLOSE
   all r: claim/IntentRec   | r.iVersion in Version and (some r.iAct implies r.iAct = ParkAct)
-  all o: claim/IntentOcc   | no o.arche   // the owner's rows are originators here (no saga above them, E3)
+  all o: claim/IntentOcc   | o.arche = o   // the owner's rows are originators here (no saga above them, E3)
 }
 /** The RESIDUAL split (D-2): when no committed row cites the intent — ABSENT before genesis, UNMOVED while the
     slot is in the act's precondition state, MOVED_OTHERWISE otherwise (taken by a stranger, retired). */
@@ -123,17 +123,17 @@ fun openerAt[s: Slot, t: Tick]: lone claim/IntentOcc {
                                     and claim/prePhase[r2] in sem/freePhases and claim/iPost[r2].iPhase in sem/livePhases }
 }
 /** takesCiting — the committed takes on `s` citing intent `i`. */
-fun takesCiting[s: Slot, i: claim/IntentOcc]: set TakeOcc { { x: TakeOcc | committed[x] and x.subject = s and some x.arche and x.arche = i } }
+fun takesCiting[s: Slot, i: claim/IntentOcc]: set TakeOcc { { x: TakeOcc | committed[x] and x.subject = s and x.arche = i } }
 /** takesCitingAt — the same, at-or-before `t` (the invariant must never count a FUTURE take: the first base run's CTI). */
 fun takesCitingAt[s: Slot, i: claim/IntentOcc, t: Tick]: set TakeOcc { { x: takesCiting[s, i] | notAfter[x.tick, t] } }
 pred lawA {
   all o: claim/ViewOcc | committed[o] implies
     ((o.peerView = sem/PV_MOVED_BY_THIS) iff
-     (some x: TakeOcc + ParkOcc | committed[x] and x.subject = o.subject and some x.arche and x.arche = claim/settledIntent[o] and precedes[x.tick, o.tick]))
+     (some x: TakeOcc + ParkOcc | committed[x] and x.subject = o.subject and x.arche = claim/settledIntent[o] and precedes[x.tick, o.tick]))
 }
 pred lawB {
   all o: claim/ConfirmOcc + claim/ActConfirmOcc | committed[o] implies
-    (all x: TakeOcc + ParkOcc | (committed[x] and x.subject = o.subject and some x.arche and x.arche = claim/settledIntent[o] and precedes[x.tick, o.tick])
+    (all x: TakeOcc + ParkOcc | (committed[x] and x.subject = o.subject and x.arche = claim/settledIntent[o] and precedes[x.tick, o.tick])
        implies claim/phaseAt[o.subject, x.tick] in sem/livePhases)
 }
 pred lawC {
@@ -144,7 +144,7 @@ pred lawC {
 sig HavocSlotOcc  extends slog/SubjectOcc {} { bindings = subject }
 sig HavocClaimOcc extends claim/IntentOcc {}  { bindings = subject }
 fact HavocDiscipline {
-  all h: HavocSlotOcc + HavocClaimOcc | h.admission = Accepted and no h.arche
+  all h: HavocSlotOcc + HavocClaimOcc | h.admission = Accepted and h.arche = h
   all h: HavocSlotOcc,  o: slog/SubjectOcc - HavocSlotOcc   | precedes[h.tick, o.tick]
   all h: HavocClaimOcc, o: claim/IntentOcc - HavocClaimOcc  | precedes[h.tick, o.tick]
 }
@@ -188,7 +188,7 @@ run e7_seeded_citedTake {
 run e7_seeded_uncitedTake {
   some hc: HavocClaimOcc, hs: HavocSlotOcc, k: TakeOcc |
     committed[hc] and claim/iPost[hc].iPhase = sem/I_RESERVED and committed[hs] and sPost[hs].sStat = S_FREE
-    and committed[k] and k.subject = hc.subject and k.subject = hs.subject and no k.arche
+    and committed[k] and k.subject = hc.subject and k.subject = hs.subject and k.arche = k
     and precedes[hc.tick, k.tick] and precedes[hs.tick, k.tick]
 } for 5 but 5 Int, 2 Slot, 2 Owner, 2 Version, 6 Tick, 5 Occurrence, 8 Snapshot, 8 EntityId expect 1
 run e7_seeded_foreignCite {

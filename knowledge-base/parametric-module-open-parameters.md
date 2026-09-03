@@ -42,7 +42,7 @@ matches".
 ## 3. `univ`-typed fields need a cast before a join
 
 `ownerVersion: one univ` lets a meta module carry an identity the applying module binds to its
-own atoms (the runtime's `owner_rid`); `arche` is kernel-typed `lone Occurrence` since DT-029 E1.
+own atoms (the runtime's `owner_rid`); `arche` is kernel-typed `one Occurrence` since DT-029 E1 (total since ruling A, 2026-09-03: `o.arche = o` is self-initiation).
 Either way a join to a PER-INSTANTIATION field (`p.arche.subject` — every `subject_log` instance
 declares its own `subject`) is ambiguous — cast first: `(p.arche & pour/ReserveOcc).subject`.
 (`p.arche.tick` needs no cast: `tick` is the kernel's.)

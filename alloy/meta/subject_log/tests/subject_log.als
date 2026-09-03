@@ -112,7 +112,7 @@ run unit_slog_archeTwoSubjectsOneArche {
 // row's own identity never occupies a uniqueness slot — the law is over CITATIONS, one-for-one with the
 // runtime's partial index. (The first E1 cut forbade this; the negative witness it carried was retired.)
 run unit_slog_archeSelfMintedReactionAllowed {
-  some w: Widget, o, a: SetLevelOcc | committed[o] and no o.arche and committed[a] and o.subject = w and a.subject = w and a.arche = o
+  some w: Widget, o, a: SetLevelOcc | committed[o] and o.arche = o and committed[a] and o.subject = w and a.subject = w and a.arche = o
 } for 5 but 4 Int expect 1
 
 // But citing an already-CITED row on the same subject is a DISTINCT origin (immediate cause, not a root — MP 3.2),
