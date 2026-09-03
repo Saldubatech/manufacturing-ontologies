@@ -12,15 +12,18 @@ module conventions/intent_log/intent_log
  * on one chain; the peer keeps NO holder knowledge; recovery is the re-drive function of two heads
  * (meta/intent_log `redrive`). What the module `meta/intent_log/intent_log[Key, Sem]` cannot know
  * — and this exemplar shows — is the ATTRIBUTION LAW binding each CONFIRM / RELEASE's `peerView`
- * to the real peer head. It has two arms:
- *   - the EXCLUSIVE arm (HOLD chain): the peer act is a transition only a claimant can make
- *     (`take` on a free Cart), under the named PREMISE that only claimants perform it — then
- *     "peer moved" IS "moved by this intent";
- *   - the ADDITIVE arm (MOVEMENT chain): the peer act stacks (`pour` into a Vat) and the peer head
- *     cannot tell one pour from another — so the peer ROW carries the intent's identity
- *     (`arche` = the RESERVE it fulfils, its ORIGIN identity — SAMWISE-S1; the runtime's `arche_id`
- *     column + partial unique index), a late pour citing a RELEASEd intent is DETECTABLE, and a reversal is itself a new
- *     movement intent naming the row it reverses (the detector excludes reversed rows).
+ * to the real peer head. Since DT-029 E2 BOTH arms attribute BY CITATION — the peer row's `arche` names the
+ * intent it fulfils and the module derives moved-by-this from it (`claim/citationView`, adopted); what the
+ * exemplar still supplies is the RESIDUAL split (absent / unmoved / moved-otherwise when not cited). The arms
+ * differ in the peer's transition, not in attribution:
+ *   - the EXCLUSIVE arm (HOLD chain): the peer act is a transition only one taker can make (`take` on a free
+ *     Cart); an UNCITED take (the UI's) reads moved-OTHERWISE on a TAKEN cart — DT-027 §7's uncited-accept
+ *     cell — so the owner RELEASEs and detaches instead of confirming; the named PREMISE `takeOnlyByClaimants`
+ *     (takes cite their live claim) is what the exclusive-arm LAW rides, never attribution;
+ *   - the ADDITIVE arm (MOVEMENT chain): the peer act stacks (`pour` into a Vat) and the peer head cannot
+ *     tell one pour from another — only the citation can (`arche` = the RESERVE it fulfils; the runtime's
+ *     `arche_id` column + partial unique index, SAMWISE-S1); a late pour citing a RELEASEd intent is
+ *     DETECTABLE, and a reversal is itself a new movement intent naming the row it reverses.
  *
  * THE CAST: a Porter (owner) claims Carts (exclusive peer, HOLD) and pours into Vats (additive
  * peer, MOVEMENT). Carts and Vats keep their own logs and never mention porters. Both peers share
@@ -139,10 +142,15 @@ fact VatEffects {
   all o: PourOcc   | committed[o] implies vPost[o].vLevel = plus[vPre[o].vLevel, o.amount]
 }
 fact VatSpine { vlog/chained and vlog/commitAlwaysAccepts }
+/** The vat rows' citation discipline: only the ACT (`pour`) cites — genesis is nobody's leg (a genesis row citing a
+    movement intent read as the movement landing: the E2 self-check found it). */
+fact VatCitations { all o: AddVatOcc | no o.arche }
 
 // ── the two intent chains: spine adoption + owner-side bindings ─────────────────────────────────
 fact ClaimSpine { claim/spineAdopted }
 fact PourSpine  { pour/spineAdopted }
+fact ClaimAttribution { claim/citationView }   // DT-029 E2: moved-by-this = a committed peer row cites the intent
+fact PourAttribution  { pour/citationView }
 fact OwnerBindings {
   all o: claim/HolderOcc | o.holder in Porter.eId           // per instance: a union over two instances' `holder` is ambiguous (knowledge-base)
   all o: pour/HolderOcc  | o.holder in Porter.eId
@@ -158,63 +166,64 @@ fact OwnerBindings {
   no pour/ActReserveOcc and no pour/TransferOcc   // MOVEMENT chains carry no sub-intents
 }
 
-// ── ARM 1 — the EXCLUSIVE attribution (cart claim) ──────────────────────────────────────────────
-/** takeOnlyByClaimants — THE EXCLUSIVE-ARM PREMISE (assume when: the peer act is performed only
-    by owners holding a live reservation on the key — `accept` is demand-only). A NAMED
-    ASSUMPTION, never a fact: a discipline breach (a bare `take`) stays representable. */
-pred takeOnlyByClaimants {
-  all o: TakeOcc | committed[o] implies claim/phaseAt[o.subject, o.tick] = sem/I_RESERVED
+// ── ARM 1 — the EXCLUSIVE arm (cart claim): the citation attributes; the residual is supplied here ──
+/** The cart rows' citation discipline (the counterpart of `ArcheIdentity` for vats): a cart row cites a row of the
+    CLAIM chain on its own cart, or nothing — never a pour intent, never another cart's claim (a cart row citing a
+    vat's RESERVE would read as that movement landing: the E2 self-check found exactly that). Takes cite the claim's
+    opener; acts under the hold cite the pending ACT_RESERVE. */
+fact CartCitations {
+  all o: TakeOcc + LoadOcc + ParkOcc | some o.arche implies
+    (o.arche in claim/IntentOcc and (o.arche & claim/IntentOcc).subject = o.subject)
+  all o: AddCartOcc + RetireOcc | no o.arche
 }
-/** cartViewAt — the peer view of a cart relative to a claim: ABSENT before genesis, UNMOVED when
-    free, MOVED_BY_THIS when taken (exclusive arm: under the premise the taker IS the claimant),
-    MOVED_OTHERWISE when retired. */
-fun cartViewAt[c: Cart, t: Tick]: one sem/PeerView {
+/** takeOnlyByClaimants — THE EXCLUSIVE-ARM PREMISE of the law `takenCartsAreClaimed` (assume when: the peer
+    act is performed only by owners holding a live reservation AND cites it — the runtime's `accept` carrying
+    the claim's `arche_id`). A NAMED ASSUMPTION, never a fact: a breach — a bare or uncited `take` — stays
+    representable, and E2 makes it READ as moved-otherwise instead of moved-by-this (`conv_il_uncitedTake…`).
+    Strengthened at E2 with the citation: without it an uncited take at RESERVED lets the owner RELEASE and
+    leaves a TAKEN cart with no holder — the very hazard the citation exists to expose. */
+pred takeOnlyByClaimants {
+  all o: TakeOcc | committed[o] implies
+    (claim/phaseAt[o.subject, o.tick] = sem/I_RESERVED and o.arche = claim/openerBefore[o.subject, o.tick])
+}
+/** cartResidualAt — the RESIDUAL split the applier supplies when NO committed peer row cites the intent
+    (D-2): ABSENT before genesis, UNMOVED when free (the peer went back), otherwise MOVED_OTHERWISE — taken
+    by someone else (the uncited take, DT-027 §7's uncited-accept cell) or retired. */
+fun cartResidualAt[c: Cart, t: Tick]: one sem/PeerView {
   (no clog/recordAt[c, t])           => sem/PV_ABSENT
   else (cartStatusAt[c, t] = C_FREE)  => sem/PV_UNMOVED
-  else (cartStatusAt[c, t] in C_TAKEN + C_LOADED) => sem/PV_MOVED_BY_THIS
   else sem/PV_MOVED_OTHERWISE
 }
-/** actViewAt — THE LEVEL RULE: while a sub-intent is pending the view classifies the cart against
-    the ACT, not the hold — `load` landed iff LOADED; `park` landed iff FREE (which the HOLD's view
-    would call "unmoved"). The peer head cannot tell a parked-by-me from a parked-by-a-third-party;
-    the intent head (a pending `park`) can. */
-fun actViewAt[c: Cart, act: univ, t: Tick]: one sem/PeerView {
+/** actResidualAt — THE LEVEL RULE's residual: while a sub-intent is pending and its act is UNCITED, the cart
+    reads UNMOVED if it still sits in the act's precondition state (retry — `load` needs TAKEN, `park` needs
+    TAKEN or LOADED) and MOVED_OTHERWISE if it does not (someone else moved it; the act cannot land). */
+fun actResidualAt[c: Cart, act: univ, t: Tick]: one sem/PeerView {
   (no clog/recordAt[c, t])                => sem/PV_ABSENT
-  else (cartStatusAt[c, t] = C_RETIRED)   => sem/PV_MOVED_OTHERWISE
-  else (act = A_LOAD)                      => ((cartStatusAt[c, t] = C_LOADED) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
-  else ((cartStatusAt[c, t] = C_FREE) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
+  else (act = A_LOAD)                      => ((cartStatusAt[c, t] = C_TAKEN) => sem/PV_UNMOVED else sem/PV_MOVED_OTHERWISE)
+  else ((cartStatusAt[c, t] in C_TAKEN + C_LOADED) => sem/PV_UNMOVED else sem/PV_MOVED_OTHERWISE)
 }
-/** The saga discipline: every claim CONFIRM / RELEASE reads the cart as it is at its tick — at the
-    HOLD level for CONFIRM / RELEASE, at the ACT level for ACT_CONFIRM / ACT_RELEASE. */
+/** The saga discipline, residual half (the moved-by-this half is `claim/citationView`): every claim CONFIRM /
+    RELEASE reads the cart as it is at its tick — at the HOLD level, and at the ACT level for ACT_CONFIRM /
+    ACT_RELEASE. */
 fact ClaimViews {
-  all o: claim/ConfirmOcc + claim/ReleaseOcc | o.peerView = cartViewAt[o.subject, o.tick]
-  all o: claim/ActConfirmOcc + claim/ActReleaseOcc | o.peerView = actViewAt[o.subject, claim/iPre[o].iAct, o.tick]
+  all o: claim/ConfirmOcc + claim/ReleaseOcc | not claim/cited[o] implies o.peerView = cartResidualAt[o.subject, o.tick]
+  all o: claim/ActConfirmOcc + claim/ActReleaseOcc | not claim/cited[o] implies o.peerView = actResidualAt[o.subject, claim/iPre[o].iAct, o.tick]
 }
 
-// ── ARM 2 — the ADDITIVE attribution (vat pour) ─────────────────────────────────────────────────
-/** reserveOf — the RESERVE a pour-chain CONFIRM / RELEASE settles: the latest committed RESERVE on
-    the same vat before it (the chain has at most one live intent, so this is the one). */
-fun reserveOf[o: pour/ViewOcc]: lone pour/ReserveOcc {
-  { r: pour/ReserveOcc | committed[r] and r.subject = o.subject and precedes[r.tick, o.tick]
-      and (no r2: pour/ReserveOcc | committed[r2] and r2.subject = o.subject
-             and precedes[r.tick, r2.tick] and precedes[r2.tick, o.tick]) }
-}
-/** poursCiting — the committed pours on the vat carrying this intent's identity. */
-fun poursCiting[r: pour/ReserveOcc]: set PourOcc {
-  { p: PourOcc | committed[p] and p.subject = r.subject and p.arche = r }
-}
-/** The saga discipline for the additive arm: MOVED_BY_THIS iff a committed pour cites the
-    reservation this occurrence settles; there is no "otherwise" for an additive peer (another
-    owner's pour does not touch this intent), and vats are not minted by porters (no ABSENT). */
-fact PourViews {
-  all o: pour/ViewOcc |
-    o.peerView = ((some p: poursCiting[reserveOf[o]] | precedes[p.tick, o.tick]) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
-}
+// ── ARM 2 — the ADDITIVE arm (vat pour): the citation attributes; the residual is UNMOVED ───────────
+/** reserveOf / poursCiting — the exemplar's names for the module's readings (DT-029 E2 moved them in):
+    the RESERVE a pour-chain view settles, and the committed pours citing an intent. */
+fun reserveOf[o: pour/ViewOcc]: lone pour/ReserveOcc { pour/settledIntent[o] & pour/ReserveOcc }
+fun poursCiting[r: pour/ReserveOcc]: set PourOcc { pour/citers[r] & PourOcc }
+/** The residual for an additive peer: there is no "otherwise" (another owner's pour does not touch this
+    intent) and vats are not minted by porters (no ABSENT) — an uncited view reads UNMOVED. */
+fact PourViews { all o: pour/ViewOcc | not pour/cited[o] implies o.peerView = sem/PV_UNMOVED }
 /** The peer-row citation discipline (the runtime's `arche_id` column): a pour's arche is a committed RESERVE
     on this vat (strict precedence is the kernel's `ArcheOriginPrecedes`; the cast is needed because `subject`
     is per-instantiation — knowledge-base §3). Uniqueness per (arche, vat) is no longer stated here: it is
     a THEOREM of the `archeDuplicate` refusal in `pourViol` (`conv_il_archeUniquePerVat`), per (arche, subject)
-    by construction — a transfer's two halves on two vats still share one identity (SAMWISE-S1). */
+    by construction. Keying is PER LEG (SAMWISE-S1 as ruled): a pour cites its OWN vat's RESERVE; a multi-vat movement
+    is N+1 leg intents whose RESERVEs share one ORIGINATOR — that is where one origin spans subjects. */
 fact ArcheIdentity {
   all p: PourOcc | some p.arche implies
     (p.arche in pour/ReserveOcc and committed[p.arche & pour/ReserveOcc] and (p.arche & pour/ReserveOcc).subject = p.subject)
@@ -230,8 +239,8 @@ pred lateAct[p: PourOcc] {
 }
 
 // ── the exemplar's laws ─────────────────────────────────────────────────────────────────────────
-/** takenCartsAreClaimed — under the exclusive-arm premise, a TAKEN cart is always held on the
-    claim chain: the peer's exclusive state is credited to exactly the claim holder. */
+/** takenCartsAreClaimed — under the exclusive-arm premise (takes cite their live claim), a TAKEN cart is
+    always held on the claim chain: the peer's exclusive state is credited to exactly the claim holder. */
 pred takenCartsAreClaimed {
   takeOnlyByClaimants implies
     all c: Cart, t: Tick | cartStatusAt[c, t] = C_TAKEN implies some claim/holderAt[c, t]

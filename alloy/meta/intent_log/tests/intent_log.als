@@ -31,6 +31,10 @@ sig Version {}
 sig PeerRid {}
 sig Act {}
 
+/** CiterOcc — a stand-in for a PEER module's committed row (DT-029 E2): an Action outside both chains'
+    logs, bound to a key, citing an intent through the kernel's `arche`. Only the `unit_il_cit*` rows use it. */
+sig CiterOcc extends Action { onKey: one Peg + Slab } { bindings = onKey }
+
 fact HoldSpine { hold/spineAdopted }
 fact MoveSpine { move/spineAdopted }
 
@@ -192,3 +196,63 @@ check unit_il_subIntentsRequireHold  for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 
 check unit_il_redriveTotal           for 3 but 4 Int, 1 Peg, 1 Slab, 1 Owner, 1 Version, 1 PeerRid, 1 Act expect 0
 check unit_il_redriveIdempotent      for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
 check unit_il_guarantees             for 5 but 4 Int, 2 Peg, 2 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
+
+// ── citation-derived attribution (DT-029 E2) — under `hold/citationView` ────────────────────────
+/** A CONFIRM is admitted exactly when a committed peer row cites its RESERVE. */
+run unit_il_citConfirmAdmitted {
+  hold/citationView
+  some k: Peg, r: hold/ReserveOcc, x: CiterOcc, c: hold/ConfirmOcc | {
+    r.subject = k and c.subject = k and x.onKey = k and x.arche = r
+    precedes[r.tick, x.tick] and precedes[x.tick, c.tick]
+    committed[r] and committed[x] and committed[c] and c.holder = r.holder
+  }
+} for 5 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1
+
+/** An UNCITED CONFIRM is refused RNotLanded — no peer row credits the intent. */
+run unit_il_citUncitedConfirmRefused {
+  hold/citationView
+  some k: Peg, r: hold/ReserveOcc, c: hold/ConfirmOcc | {
+    r.subject = k and c.subject = k and precedes[r.tick, c.tick] and committed[r] and c.holder = r.holder
+    no x: CiterOcc | committed[x] and x.arche = r
+    refusedAtAdmission[c] and c.admission.because = RNotLanded
+  }
+} for 5 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 1
+
+/** An OWN-LOG citer does not count: the chain's CONFIRM citing its own RESERVE never reads as the peer act
+    (negative run — E1's finding made a rule). */
+run unit_il_citOwnLogCiterDoesNotCount {
+  hold/citationView
+  some k: Peg, r: hold/ReserveOcc, c: hold/ConfirmOcc | {
+    r.subject = k and c.subject = k and precedes[r.tick, c.tick] and committed[r] and c.arche = r
+    hold/settledIntent[c] = r   // pin the intent c settles (the first run's witness slipped a RELEASE + a second RESERVE in between)
+    no x: CiterOcc | committed[x] and x.arche = r
+    committed[c]
+  }
+} for 5 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
+
+/** A SIBLING CHAIN's row does not count either: a MOVE-chain RESERVE citing the HOLD RESERVE (a nested intent) is an
+    intent row, not the peer act — the CONFIRM stays refused (negative run; the E2 self-check's counterexample made a rule). */
+run unit_il_citSiblingChainCiterDoesNotCount {
+  hold/citationView
+  some k: Peg, s: Slab, r: hold/ReserveOcc, m: move/ReserveOcc, c: hold/ConfirmOcc | {
+    r.subject = k and m.subject = s and c.subject = k and m.arche = r and hold/settledIntent[c] = r
+    precedes[r.tick, m.tick] and precedes[m.tick, c.tick] and committed[r] and committed[m] and c.holder = r.holder
+    no x: CiterOcc | committed[x] and x.arche = r
+    committed[c]
+  }
+} for 5 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act expect 0
+
+/** The ACT level: a citer of the pending ACT_RESERVE reads the act as landed — ACT_CONFIRM admitted, the hold
+    continues (KEEP). */
+run unit_il_citActCitationLands {
+  hold/citationView
+  some k: Peg, r: hold/ReserveOcc, x1: CiterOcc, c: hold/ConfirmOcc, a: hold/ActReserveOcc, x2: CiterOcc, b: hold/ActConfirmOcc | {
+    r.subject = k and c.subject = k and a.subject = k and b.subject = k and x1.onKey = k and x2.onKey = k
+    x1.arche = r and x2.arche = a and a.mode = AM_KEEP
+    c.holder = r.holder and a.holder = r.holder and b.holder = r.holder
+    precedes[r.tick, x1.tick] and precedes[x1.tick, c.tick] and precedes[c.tick, a.tick]
+    precedes[a.tick, x2.tick] and precedes[x2.tick, b.tick]
+    committed[r] and committed[x1] and committed[c] and committed[a] and committed[x2] and committed[b]
+    hold/phaseAt[k, b.tick] = I_HELD
+  }
+} for 7 but 4 Int, 2 Peg, 1 Slab, 2 Owner, 2 Version, 2 PeerRid, 2 Act, 8 Tick, 7 Occurrence, 9 Snapshot expect 1

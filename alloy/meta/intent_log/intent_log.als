@@ -24,14 +24,17 @@ module meta/intent_log/intent_log[Key, Sem]
  * Usage (chain A, the demand cycle claim):
  *   open meta/intent_log/intent_log[CardCycle, HoldSem] as claim
  *   fact ClaimSpine { claim/spineAdopted }
- *   fact ClaimViews { all o: claim/ViewOcc | o.peerView = cycleViewOf[o.subject, o.holder, o.tick] }
+ *   fact ClaimAttribution { claim/citationView }   // moved-by-this = a peer row cites the intent (DT-029 E2)
+ *   fact ClaimViews { all o: claim/ViewOcc | not claim/cited[o] implies o.peerView = cycleResidualOf[o.subject, o.tick] }
  *   fact ClaimVersions { all o: claim/ReserveOcc | o.ownerVersion in dlog/SubjectOcc }
  */
 
-// BINDING CAVEAT (MINESWEEPER D2 review, point 2): every law over `peerView` (confirmRequiresLanded,
-// releaseRequiresUnlanded, subIntentReturnsToHold, redriveIdempotent) holds only under the APPLYING
-// module's view fact (`all o: claim/ViewOcc | o.peerView = <view of the real peer head at o.tick>`);
-// a wrong binding — a timeout read as a refusal — is exactly DT-027 §6's runtime residual.
+// BINDING CAVEAT (MINESWEEPER D2 review, point 2; SHRUNK by DT-029 E2): every law over `peerView`
+// (confirmRequiresLanded, releaseRequiresUnlanded, subIntentReturnsToHold, redriveIdempotent) reads the
+// view the applier bound. With `citationView` ADOPTED the moved-by-this half is DERIVED — a committed row
+// outside this log cites the intent (`arche`, unforgeable) — and only the RESIDUAL split (absent / unmoved /
+// moved-otherwise when NOT cited) is the applier's word, witnessed at its root; a wrong residual — a
+// timeout read as a refusal — is exactly DT-027 §6's runtime residual.
 
 open meta/kernel                                       // EntityId (the holder's identity)
 open meta/action/stateful                              // Snapshot, StatefulAction, committed
@@ -44,7 +47,7 @@ open meta/subject_log/subject_log[Key, IntentRec] as ilog   // the chain SPINE (
     identity), the owner's ACTING VERSION (`owner_rid` — how owner liveness is read from the owner's
     own log; DT-027 §4.1), and the pending sub-intent's act, if any. `iVersion` / `iAct` are typed
     `univ`: the applying module binds them to its own occurrence and act atoms. */
-sig IntentRec extends Snapshot {
+sig IntentRec extends IntentRecord {   // IntentRecord: the non-parametric parent every instance shares (semantics.als)
   iPhase:   one  Phase,
   iHolder:  lone EntityId,
   iVersion: lone univ,
@@ -116,6 +119,54 @@ fun holderAt[k: Key, t: Tick]: lone EntityId { recAt[k, t].iHolder }
 fun holderVersionAt[k: Key, t: Tick]: lone univ { recAt[k, t].iVersion }
 /** pendingActAt — the ONE pending sub-intent's act, if any. */
 fun pendingActAt[k: Key, t: Tick]: lone univ { recAt[k, t].iAct }
+
+// ── citation-derived attribution (DT-029 E2) — ADOPT `citationView` per instance ─────────────────
+/** openerBefore / actOpenerBefore — THE INTENT A KEY IS UNDER, read kind-agnostically: the latest committed
+    occurrence before `t` that took the key from a free phase into a live one (a RESERVE in every real trace;
+    a seeded head in an E7 slice), and the latest one that took it from HELD into ACTING (an ACT_RESERVE).
+    Kind-agnostic on purpose: the identity a callee cites is "the row that opened the intent", and a rung's
+    havoc seed must be able to play that row or the ladder's seeded states could never satisfy the invariant. */
+fun openerBefore[k: Key, t: Tick]: lone ilog/SubjectOcc {
+  { r: ilog/SubjectOcc | committed[r] and r.subject = k and precedes[r.tick, t]
+      and prePhase[r] in freePhases and iPost[r].iPhase in livePhases
+      and no r2: ilog/SubjectOcc | committed[r2] and r2.subject = k and precedes[r.tick, r2.tick] and precedes[r2.tick, t]
+                                    and prePhase[r2] in freePhases and iPost[r2].iPhase in livePhases }
+}
+fun actOpenerBefore[k: Key, t: Tick]: lone ilog/SubjectOcc {
+  { a: ilog/SubjectOcc | committed[a] and a.subject = k and precedes[a.tick, t]
+      and prePhase[a] = I_HELD and iPost[a].iPhase = I_ACTING
+      and no a2: ilog/SubjectOcc | committed[a2] and a2.subject = k and precedes[a.tick, a2.tick] and precedes[a2.tick, t]
+                                    and prePhase[a2] = I_HELD and iPost[a2].iPhase = I_ACTING }
+}
+/** settledIntent — the intent a view occurrence settles: the key's opener for CONFIRM / RELEASE, its act
+    opener for ACT_CONFIRM / ACT_RELEASE (the LEVEL rule: an act's peer row cites the ACT_RESERVE — its
+    immediate caller). */
+fun settledIntent[o: ViewOcc]: lone ilog/SubjectOcc {
+  (o in ActConfirmOcc + ActReleaseOcc) => actOpenerBefore[o.subject, o.tick] else openerBefore[o.subject, o.tick]
+}
+/** citers — the committed PEER rows whose origin (`arche`) is `i`: every committed Action outside EVERY intent
+    chain's rows (`intentRows`: a row whose records are `IntentRecord`s — structural, no free marker set). Under the immediate-caller rule these are
+    exactly the peer rows the intent caused (a refused peer row is not committed; a peer's own follow-ups cite the
+    peer row; saga legs cite the ORIGINATOR). Intent rows are excluded because an owner-side row may legally cite a
+    cited row on its own chain (E1) and a SIBLING chain's RESERVE may cite this one (nested intents) — neither is
+    the peer act (the E2 self-check found both). `some x.arche` keeps an empty `i` from matching uncited rows. */
+/** intentRows — every committed row of ANY intent chain, recognized structurally: its records are IntentRecords. */
+fun intentRows: set Action { { a: StatefulAction | some ((a.pre + a.post) & IntentRecord) } }
+fun citers[i: ilog/SubjectOcc]: set Action { { x: Action - intentRows | committed[x] and some x.arche and x.arche = i } }
+/** cited — the intent `o` settles has a citer committed before `o`. */
+pred cited[o: ViewOcc] { some x: citers[settledIntent[o]] | precedes[x.tick, o.tick] }
+/** citedAt / actCitedAt — the tick-level readings (probes, view functions): the key's latest RESERVE /
+    ACT_RESERVE (opener / act opener) before `t` has a citer at-or-before `t`. */
+pred citedAt[k: Key, t: Tick]    { some x: citers[openerBefore[k, t]]    | notAfter[x.tick, t] }
+pred actCitedAt[k: Key, t: Tick] { some x: citers[actOpenerBefore[k, t]] | notAfter[x.tick, t] }
+/** citationView — THE ATTRIBUTION LAW's derivable half (ADOPT as a fact per instance, like `spineAdopted`
+    and `subject_log`'s `archeUniquePerSubject`): the owner reads the peer as moved-by-this exactly when a
+    committed row outside this log cites the intent being settled. The RESIDUAL split — ABSENT / UNMOVED /
+    MOVED_OTHERWISE when NOT cited — stays the applier's fact, witnessed at its root (DT-029 D-2). No guard
+    or law changes: `confirmRequiresLanded` / `releaseRequiresUnlanded` now read "a CONFIRM is cited, a
+    RELEASE is not". Adopted, not global, because the module's own suite binds the view freely to test
+    guards, effects and re-drive with no peer domain at all. */
+pred citationView { all o: ViewOcc | (o.peerView = PV_MOVED_BY_THIS) iff cited[o] }
 /** closingAct — an ACT_CONFIRM whose sub-intent was reserved in CLOSE mode: it ends the hold. */
 pred closingAct[o: ilog/SubjectOcc] { o in ActConfirmOcc and iPre[o].iMode = AM_CLOSE }
 /** liveAt / heldAt — the key is taken / a hold is in force as of `t`. */

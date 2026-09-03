@@ -21,7 +21,7 @@ open meta/subject_log/subject_log[Vat, VatRec] as vlog   // the vat's own log to
 run conv_il_claimArc {
   some p: Porter, c: Cart, r: claim/ReserveOcc, k: TakeOcc, f: claim/ConfirmOcc | {
     committed[r] and committed[k] and committed[f]
-    r.subject = c and k.subject = c and f.subject = c and r.holder = p.eId and f.holder = p.eId
+    r.subject = c and k.subject = c and f.subject = c and r.holder = p.eId and f.holder = p.eId and k.arche = r
     precedes[r.tick, k.tick] and precedes[k.tick, f.tick]
     c in cartsOf[p, f.tick] and claim/phaseAt[c, f.tick] = sem/I_HELD
     takeOnlyByClaimants
@@ -32,10 +32,10 @@ run conv_il_claimArc {
     verdict at (RESERVED, moved-by-this) is CONFIRM — no second take. */
 run conv_il_lostAckWindow {
   some c: Cart, r: claim/ReserveOcc, k: TakeOcc, t: Tick | {
-    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick]
+    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick] and k.arche = r
     no f: claim/ConfirmOcc | committed[f]
-    notAfter[k.tick, t] and claim/phaseAt[c, t] = sem/I_RESERVED and cartViewAt[c, t] = sem/PV_MOVED_BY_THIS
-    claim/redrive[claim/phaseAt[c, t], cartViewAt[c, t]] = sem/RD_CONFIRM
+    notAfter[k.tick, t] and claim/phaseAt[c, t] = sem/I_RESERVED and claim/citedAt[c, t]
+    claim/redrive[claim/phaseAt[c, t], sem/PV_MOVED_BY_THIS] = sem/RD_CONFIRM
     takeOnlyByClaimants
   }
 } for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
@@ -55,7 +55,7 @@ run conv_il_retiredUnderHold {
   some c: Cart, f: claim/ConfirmOcc, x: RetireOcc, t: Tick | {
     committed[f] and committed[x] and f.subject = c and x.subject = c and precedes[f.tick, x.tick]
     notAfter[x.tick, t] and claim/phaseAt[c, t] = sem/I_HELD
-    claim/redrive[claim/phaseAt[c, t], cartViewAt[c, t]] = sem/RD_RELEASE_DETACH
+    claim/redrive[claim/phaseAt[c, t], cartResidualAt[c, t]] = sem/RD_RELEASE_DETACH   // retired: the residual says moved-otherwise
     takeOnlyByClaimants
   }
 } for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 7 Tick, 6 Occurrence, 8 Snapshot, 6 EntityId expect 1
@@ -64,7 +64,7 @@ run conv_il_retiredUnderHold {
 run conv_il_loadUnderHold {
   some c: Cart, f: claim/ConfirmOcc, a: claim/ActReserveOcc, k: LoadOcc, b: claim/ActConfirmOcc | {
     committed[f] and committed[a] and committed[k] and committed[b]
-    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = A_LOAD
+    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = A_LOAD and k.arche = a
     precedes[f.tick, a.tick] and precedes[a.tick, k.tick] and precedes[k.tick, b.tick]
     claim/phaseAt[c, b.tick] = sem/I_HELD and claim/holderAt[c, b.tick] = f.holder
     takeOnlyByClaimants
@@ -76,13 +76,26 @@ run conv_il_loadUnderHold {
 run conv_il_parkClosesHold {
   some c: Cart, f: claim/ConfirmOcc, a: claim/ActReserveOcc, k: ParkOcc, b: claim/ActConfirmOcc | {
     committed[f] and committed[a] and committed[k] and committed[b]
-    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = A_PARK
+    f.subject = c and a.subject = c and k.subject = c and b.subject = c and a.act = A_PARK and k.arche = a
     precedes[f.tick, a.tick] and precedes[a.tick, k.tick] and precedes[k.tick, b.tick]
     claim/phaseAt[c, k.tick] = sem/I_ACTING
     claim/phaseAt[c, b.tick] = sem/I_FREE and no claim/holderAt[c, b.tick] and cartStatusAt[c, b.tick] = C_FREE
     takeOnlyByClaimants
   }
 } for 6 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 8 Tick, 7 Occurrence, 9 Snapshot, 6 EntityId expect 1
+
+/** DT-027 §7's UNCITED-ACCEPT cell made a theorem (DT-029 E2): a take that does NOT cite the live reservation
+    (the UI's eight call sites) reads moved-OTHERWISE, so the owner's verdict at RESERVED is RELEASE — never a
+    CONFIRM crediting a stranger's take. No premise assumed. */
+run conv_il_uncitedTakeMovedOtherwise {
+  some c: Cart, r: claim/ReserveOcc, k: TakeOcc, t: Tick | {
+    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick] and no k.arche
+    notAfter[k.tick, t] and claim/phaseAt[c, t] = sem/I_RESERVED and not claim/citedAt[c, t]
+    cartResidualAt[c, t] = sem/PV_MOVED_OTHERWISE
+    claim/redrive[claim/phaseAt[c, t], cartResidualAt[c, t]] = sem/RD_RELEASE
+    no f: claim/ConfirmOcc | committed[f]
+  }
+} for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
 
 assert conv_il_takenCartsAreClaimed { takenCartsAreClaimed }
 check conv_il_takenCartsAreClaimed for 5 but 5 Int, 2 Porter, 2 Cart, 0 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0

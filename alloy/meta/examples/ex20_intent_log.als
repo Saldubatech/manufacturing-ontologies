@@ -26,7 +26,9 @@ open meta/intent_log/intent_log[LuggageCart, sem/HoldSem] as claim
  *   1. open meta/intent_log/semantics as sem ; open meta/intent_log/intent_log[PeerEntity, sem/HoldSem] as claim
  *   2. fact { claim/spineAdopted }
  *   3. bind the opaque fields: holder ∈ your owner's eId, ownerVersion ∈ your owner's occurrences, peerRid ∈ the peer's occurrences
- *   4. the ATTRIBUTION law: `all o: claim/ViewOcc | o.peerView = <your view of the peer head at o.tick>`
+ *   4. the ATTRIBUTION law: adopt `fact { claim/citationView }` (moved-by-this = the peer's row cites your
+ *      intent through its `arche`, DT-029 E2) and supply the RESIDUAL: `all o: claim/ViewOcc | not claim/cited[o]
+ *      implies o.peerView = <absent / unmoved / moved-otherwise from the peer head at o.tick>`
  *   5. read holdings FROM THE HEAD: claim/holderAt[peer, t] — never from a membership copy
  *   6. recover with claim/redrive[claim/phaseAt[peer, t], <view>] — the same function for the saga and the probe
  */
@@ -69,22 +71,29 @@ fact ClaimBindings {
   all r: claim/IntentRec  | r.iVersion in Shift
   no claim/ActReserveOcc
 }
-/** THE ATTRIBUTION LAW (exclusive arm): checked out = moved by this claim, under the premise that
-    only claimants check carts out. */
-pred checkOutOnlyByClaimants {
-  all o: CheckOutOcc | committed[o] implies claim/phaseAt[o.subject, o.tick] = sem/I_RESERVED
-}
-fun viewAt[c: LuggageCart, t: Tick]: one sem/PeerView {
+/** THE ATTRIBUTION LAW (DT-029 E2): the desk's check-out row CITES the claim (its `arche` = the RESERVE it
+    fulfils — the request carried the claim's id), and the module derives moved-by-this from that citation
+    (`claim/citationView`, adopted). The bellhop supplies only the RESIDUAL: a cart still in the rack is
+    unmoved; a cart checked out by a row that does not cite this claim is moved-OTHERWISE. */
+fact ClaimAttribution { claim/citationView }
+fun residualAt[c: LuggageCart, t: Tick]: one sem/PeerView {
   (no lcart/recordAt[c, t]) => sem/PV_ABSENT
-  else (availAt[c, t] = IN_RACK) => sem/PV_UNMOVED else sem/PV_MOVED_BY_THIS
+  else (availAt[c, t] = IN_RACK) => sem/PV_UNMOVED else sem/PV_MOVED_OTHERWISE
 }
-fact ClaimViews { all o: claim/ViewOcc | o.peerView = viewAt[o.subject, o.tick] }
+fact ClaimViews { all o: claim/ViewOcc | not claim/cited[o] implies o.peerView = residualAt[o.subject, o.tick] }
+/** viewAt — the view as the bellhop reads it at `t` (the probe's input): cited → moved-by-this, else the residual. */
+fun viewAt[c: LuggageCart, t: Tick]: one sem/PeerView { claim/citedAt[c, t] => sem/PV_MOVED_BY_THIS else residualAt[c, t] }
+/** checkOutOnlyByClaimants — the exclusive-arm PREMISE of the theorem below: check-outs cite their live claim. */
+pred checkOutOnlyByClaimants {
+  all o: CheckOutOcc | committed[o] implies
+    (claim/phaseAt[o.subject, o.tick] = sem/I_RESERVED and o.arche = claim/openerBefore[o.subject, o.tick])
+}
 
 // ── the story: reserve → check out → confirm; the bellhop holds the cart, read from the head ─────
 run ex20_claimStory {
   some b: Bellhop, c: LuggageCart, r: claim/ReserveOcc, k: CheckOutOcc, f: claim/ConfirmOcc | {
     committed[r] and committed[k] and committed[f]
-    r.subject = c and k.subject = c and f.subject = c and r.holder = b.eId and f.holder = b.eId
+    r.subject = c and k.subject = c and f.subject = c and r.holder = b.eId and f.holder = b.eId and k.arche = r
     precedes[r.tick, k.tick] and precedes[k.tick, f.tick]
     c in cartsOf[b, f.tick]
     checkOutOnlyByClaimants
@@ -102,7 +111,7 @@ run ex20_raceLoserRefused {
 // ── the crash: checked out, confirm lost — the two heads prescribe CONFIRM, not a second check-out ─
 run ex20_lostAckRedrive {
   some c: LuggageCart, r: claim/ReserveOcc, k: CheckOutOcc, t: Tick | {
-    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick]
+    committed[r] and committed[k] and r.subject = c and k.subject = c and precedes[r.tick, k.tick] and k.arche = r
     no f: claim/ConfirmOcc | committed[f]
     notAfter[k.tick, t] and claim/redrive[claim/phaseAt[c, t], viewAt[c, t]] = sem/RD_CONFIRM
     checkOutOnlyByClaimants

@@ -13,6 +13,15 @@ module meta/intent_log/semantics
  */
 
 open meta/action/outcome   // Reason
+open meta/action/stateful  // Snapshot — the IntentRecord parent below
+
+// ── the intent-record parent (DT-029 E2) ─────────────────────────────────────────────────────────
+/** IntentRecord — the common parent of EVERY instance's `IntentRec` (intent_log[Key, Sem] declares
+    `sig IntentRec extends IntentRecord`). What lets one instance recognize "a row of SOME intent chain" —
+    a committed row whose records are IntentRecords — without naming other instances (parametric, invisible)
+    and without a free marker set (a subset sig the solver could stuff peer rows into: the E2 self-check's
+    ex20 counterexample, 2026-09-03). The citation-derived view counts only rows that are NOT intent rows. */
+abstract sig IntentRecord extends Snapshot {}
 
 // ── the CONFIRM semantics — the module parameter `Sem` ──────────────────────────────────────────
 /** Semantics — what CONFIRM means on an intent chain (DT-027 §5, design call 1). */
