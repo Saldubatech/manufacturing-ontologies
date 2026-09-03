@@ -23,6 +23,11 @@ one sig HoldSem extends Semantics {}
 /** MoveSem — CONFIRM completes a one-shot movement and frees the key; no TRANSFER, no sub-intents.
     Chain B-mov (pool merge / extract). */
 one sig MoveSem extends Semantics {}
+/** holdSemantics — the markers under which CONFIRM opens a durable custody. An instance reads its
+    own `Sem` against this SET (`Sem in holdSemantics`), never against `HoldSem` itself: parameter
+    substitution makes `HoldSem in HoldSem` / `MoveSem in HoldSem` literal, and the analyzer flags
+    both as a redundant subset (same value / always disjoint). */
+fun holdSemantics: set Semantics { HoldSem }
 
 // ── the phase of a key on its intent chain ──────────────────────────────────────────────────────
 /** Phase — where a key stands on its intent chain (the head record's `iPhase`). */

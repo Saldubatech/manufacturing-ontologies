@@ -94,7 +94,7 @@ check conv_il_holdingsReadTheHead for 5 but 5 Int, 2 Porter, 2 Cart, 0 Vat, 2 Po
 run conv_il_pourArc {
   some v: Vat, r: pour/ReserveOcc, p: PourOcc, f: pour/ConfirmOcc | {
     committed[r] and committed[p] and committed[f]
-    r.subject = v and p.subject = v and f.subject = v and p.movement = r
+    r.subject = v and p.subject = v and f.subject = v and p.arche = r
     precedes[r.tick, p.tick] and precedes[p.tick, f.tick]
     pour/phaseAt[v, f.tick] = sem/I_DONE
   }
@@ -105,7 +105,7 @@ run conv_il_twoPoursAttributed {
   some v: Vat, disj r1, r2: pour/ReserveOcc, disj p1, p2: PourOcc | {
     committed[r1] and committed[r2] and committed[p1] and committed[p2]
     r1.subject = v and r2.subject = v and p1.subject = v and p2.subject = v
-    p1.movement = r1 and p2.movement = r2
+    p1.arche = r1 and p2.arche = r2
   }
 } for 6 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 8 Tick, 7 Occurrence, 9 Snapshot, 8 EntityId expect 1
 
@@ -113,7 +113,7 @@ run conv_il_twoPoursAttributed {
 run conv_il_lateActDetected {
   some v: Vat, r: pour/ReserveOcc, l: pour/ReleaseOcc, p: PourOcc | {
     committed[r] and committed[l] and committed[p]
-    r.subject = v and l.subject = v and p.subject = v and p.movement = r
+    r.subject = v and l.subject = v and p.subject = v and p.arche = r
     precedes[r.tick, l.tick] and precedes[l.tick, p.tick]
     lateAct[p]
   }
@@ -125,7 +125,7 @@ run conv_il_reversalExcluded {
   some v: Vat, r: pour/ReserveOcc, l: pour/ReleaseOcc, p: PourOcc, r2: pour/ReserveOcc, q: PourOcc | {
     committed[r] and committed[l] and committed[p] and committed[r2] and committed[q]
     r.subject = v and l.subject = v and p.subject = v and r2.subject = v and q.subject = v
-    p.movement = r and q.movement = r2 and q.reverses = p
+    p.arche = r and q.arche = r2 and q.reverses = p
     precedes[r.tick, l.tick] and precedes[l.tick, p.tick] and precedes[p.tick, r2.tick] and precedes[r2.tick, q.tick]
     not lateAct[p] and not lateAct[q]
   }

@@ -18,8 +18,8 @@ module conventions/intent_log/intent_log
  *     "peer moved" IS "moved by this intent";
  *   - the ADDITIVE arm (MOVEMENT chain): the peer act stacks (`pour` into a Vat) and the peer head
  *     cannot tell one pour from another — so the peer ROW carries the intent's identity
- *     (`movement` = the RESERVE it fulfils; the runtime's `movementId` column + partial unique
- *     index), a late pour citing a RELEASEd intent is DETECTABLE, and a reversal is itself a new
+ *     (`arche` = the RESERVE it fulfils, its ORIGIN identity — SAMWISE-S1; the runtime's `arche_id`
+ *     column + partial unique index), a late pour citing a RELEASEd intent is DETECTABLE, and a reversal is itself a new
  *     movement intent naming the row it reverses (the detector excludes reversed rows).
  *
  * THE CAST: a Porter (owner) claims Carts (exclusive peer, HOLD) and pours into Vats (additive
@@ -114,10 +114,10 @@ sig VatRec extends Snapshot { vLevel: one Int }
 fact VatRecExtensional { all disj a, b: VatRec | a.vLevel != b.vLevel }
 
 sig AddVatOcc extends vlog/SubjectOcc {} { bindings = subject }   // genesis → level 0
-/** PourOcc — the additive act. `movement` is the intent identity the row carries (the runtime
-    `movementId` = the RESERVE's rId); `reverses` names the pour this pour undoes, if any. */
-sig PourOcc extends vlog/SubjectOcc { amount: one Int, movement: lone univ, reverses: lone univ }
-  { bindings = subject + amount + movement + reverses }
+/** PourOcc — the additive act. `arche` is the ORIGIN identity the row carries (the runtime
+    `arche_id` = the RESERVE's rId, SAMWISE-S1); `reverses` names the pour this pour undoes, if any. */
+sig PourOcc extends vlog/SubjectOcc { amount: one Int, arche: lone univ, reverses: lone univ }
+  { bindings = subject + amount + arche + reverses }
 
 fun vatLevelAt[v: Vat, t: Tick]: lone Int { vlog/recordAt[v, t].vLevel }
 fun vPre[o: vlog/SubjectOcc]: lone VatRec { o.pre & VatRec }
@@ -197,7 +197,7 @@ fun reserveOf[o: pour/ViewOcc]: lone pour/ReserveOcc {
 }
 /** poursCiting — the committed pours on the vat carrying this intent's identity. */
 fun poursCiting[r: pour/ReserveOcc]: set PourOcc {
-  { p: PourOcc | committed[p] and p.subject = r.subject and p.movement = r }
+  { p: PourOcc | committed[p] and p.subject = r.subject and p.arche = r }
 }
 /** The saga discipline for the additive arm: MOVED_BY_THIS iff a committed pour cites the
     reservation this occurrence settles; there is no "otherwise" for an additive peer (another
@@ -206,22 +206,22 @@ fact PourViews {
   all o: pour/ViewOcc |
     o.peerView = ((some p: poursCiting[reserveOf[o]] | precedes[p.tick, o.tick]) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
 }
-/** The peer-row citation discipline (the runtime's `movementId` column + partial unique index):
-    a pour's movement is a committed RESERVE on this vat that precedes it, and no two committed
-    pours carry the same movement. */
-fact MovementIdentity {
-  all p: PourOcc | some p.movement implies
-    (p.movement in pour/ReserveOcc and committed[p.movement & pour/ReserveOcc] and (p.movement & pour/ReserveOcc).subject = p.subject
-     and precedes[(p.movement & pour/ReserveOcc).tick, p.tick])
-  all disj p, q: PourOcc | (committed[p] and committed[q] and some p.movement and p.subject = q.subject) implies p.movement != q.movement   // per (movement, vat): a transfer's two halves on two vats share one identity (SAMWISE-S1)
+/** The peer-row citation discipline (the runtime's `arche_id` column + partial unique index):
+    a pour's arche is a committed RESERVE on this vat that precedes it, and no two committed
+    pours on one vat carry the same arche. */
+fact ArcheIdentity {
+  all p: PourOcc | some p.arche implies
+    (p.arche in pour/ReserveOcc and committed[p.arche & pour/ReserveOcc] and (p.arche & pour/ReserveOcc).subject = p.subject
+     and precedes[(p.arche & pour/ReserveOcc).tick, p.tick])
+  all disj p, q: PourOcc | (committed[p] and committed[q] and some p.arche and p.subject = q.subject) implies p.arche != q.arche   // per (arche, vat): a transfer's two halves on two vats share one identity (SAMWISE-S1)
   all p: PourOcc | some p.reverses implies (p.reverses in PourOcc and committed[p.reverses & PourOcc] and (p.reverses & PourOcc).subject = p.subject
                                             and precedes[(p.reverses & PourOcc).tick, p.tick] and p.amount = minus[0, (p.reverses & PourOcc).amount])
 }
-/** lateAct — the DETECTOR: a committed pour whose movement's chain reads FREE at the pour's tick
+/** lateAct — the DETECTOR: a committed pour whose cited RESERVE's chain reads FREE at the pour's tick
     (the intent was RELEASEd before the act landed — rule R1 broken by a timeout read as a refusal),
     unless a committed reversal names it. */
 pred lateAct[p: PourOcc] {
-  committed[p] and some p.movement and pour/phaseAt[p.subject, p.tick] = sem/I_FREE
+  committed[p] and some p.arche and pour/phaseAt[p.subject, p.tick] = sem/I_FREE
   and no q: PourOcc | committed[q] and q.reverses = p
 }
 

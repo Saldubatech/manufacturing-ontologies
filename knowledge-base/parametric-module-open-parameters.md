@@ -41,10 +41,10 @@ matches".
 
 ## 3. `univ`-typed fields need a cast before a join
 
-`ownerVersion: one univ` / `movement: lone univ` let a meta module carry an identity the
-applying module binds to its own atoms (the runtime's `owner_rid` / `movementId`). A join
-through such a field (`p.movement.subject`) is a type error — cast first:
-`(p.movement & pour/ReserveOcc).subject`.
+`ownerVersion: one univ` / `arche: lone univ` let a meta module carry an identity the
+applying module binds to its own atoms (the runtime's `owner_rid` / `arche_id`). A join
+through such a field (`p.arche.subject`) is a type error — cast first:
+`(p.arche & pour/ReserveOcc).subject`.
 
 ## 3a. A `univ` binding names a MARKER atom, never a kind SET
 

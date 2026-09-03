@@ -121,8 +121,9 @@ pred closingAct[o: ilog/SubjectOcc] { o in ActConfirmOcc and iPre[o].iMode = AM_
 /** liveAt / heldAt — the key is taken / a hold is in force as of `t`. */
 pred liveAt[k: Key, t: Tick] { phaseAt[k, t] in livePhases }
 pred heldAt[k: Key, t: Tick] { phaseAt[k, t] in heldPhases }
-/** isHold — this chain was instantiated with HOLD semantics. */
-pred isHold { Sem in HoldSem }
+/** isHold — this chain was instantiated with HOLD semantics (read through the `holdSemantics` set —
+    see semantics.als for why not `Sem in HoldSem`). */
+pred isHold { Sem in holdSemantics }
 
 // ── admission (reason-precise, per kind — the reason_precise_refusals idiom) ────────────────────
 fun prePhase[o: ilog/SubjectOcc]: one Phase { some iPre[o] => iPre[o].iPhase else I_FREE }
