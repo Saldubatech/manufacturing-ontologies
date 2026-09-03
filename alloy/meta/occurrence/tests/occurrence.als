@@ -34,3 +34,22 @@ run unit_occ_noteWitness {
 run unit_occ_noteOptional {
   some disj a, b: TestOcc | some a.note and no b.note
 } for 4 but exactly 1 String expect 1
+
+// The ORIGIN seat (DT-029 E1): absence reads as self-minted — exactly one representation of "no caller".
+run unit_occ_archeOfSelfMinted {
+  some o: TestOcc | no o.arche and archeOf[o] = o
+} for 4 expect 1
+
+// An origin is strictly earlier than the occurrence citing it.
+assert unit_occ_archeOriginPrecedes { all o: TestOcc | some o.arche implies occPrecedes[o.arche, o] }
+check unit_occ_archeOriginPrecedes for 5 expect 0
+
+// A self-citation is unrepresentable — "self-minted" cannot be spelled as a loop (negative run).
+run unit_occ_archeSelfCiteImpossible {
+  some o: TestOcc | o.arche = o
+} for 4 expect 0
+
+// The field is genuinely optional: a cited origin and an uncited (self-minted) occurrence coexist.
+run unit_occ_archeOptional {
+  some disj a, b: TestOcc | a.arche = b and no b.arche
+} for 4 expect 1

@@ -6,6 +6,7 @@ open meta/intent_log/semantics as sem
 // cannot see a library's alias for a parametric instance, so it re-opens them under the same names.
 open meta/intent_log/intent_log[Cart, sem/HoldSem] as claim
 open meta/intent_log/intent_log[Vat, sem/MoveSem]  as pour
+open meta/subject_log/subject_log[Vat, VatRec] as vlog   // the vat's own log too (E1: its archeUniquePerSubject is checked below)
 
 /*
  * Root for the INTENT-LOG exemplar (DT-027). Tiny scopes; command prefix `conv_il_*`. Verifies the
@@ -136,6 +137,20 @@ check conv_il_confirmedPourCited for 5 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 Por
 
 assert conv_il_releasedReserveUncited { releasedReserveUncited }
 check conv_il_releasedReserveUncited for 5 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 8 EntityId expect 0
+
+/** The IDEMPOTENT CALLEE (DT-029 E1): a second pour re-sending an origin already committed on the vat is
+    refused RDuplicateArche at admission; the first pour stands (the lost-reply retry lands exactly once). */
+run conv_il_duplicatePourRefused {
+  some v: Vat, r: pour/ReserveOcc, disj p, q: PourOcc | {
+    committed[r] and committed[p] and refusedAtAdmission[q] and q.admission.because = sem/RDuplicateArche
+    r.subject = v and p.subject = v and q.subject = v and p.arche = r and q.arche = r
+    precedes[r.tick, p.tick] and precedes[p.tick, q.tick]
+  }
+} for 5 but 5 Int, 1 Porter, 0 Cart, 1 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
+
+/** Uniqueness per (arche, vat) is a THEOREM of the refusal in the guard — the seat check E5 names. */
+assert conv_il_archeUniquePerVat { vlog/archeUniquePerSubject }
+check conv_il_archeUniquePerVat for 5 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 8 EntityId expect 0
 
 assert conv_il_guarantees { intent_log/guarantees }
 check conv_il_guarantees for 5 but 5 Int, 2 Porter, 1 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0

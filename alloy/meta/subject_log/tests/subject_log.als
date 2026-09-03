@@ -16,11 +16,15 @@ sig WidgetState extends Snapshot { level: one Int }
 fact WidgetStateExtensional { all disj a, b: WidgetState | a.level != b.level }
 
 one sig RNegative extends Reason {}
+one sig RDuplicateArche extends Reason {}   // this root's own typed refusal for a re-sent origin (the pattern's atom lives in meta/intent_log/semantics)
 
 sig SetLevelOcc extends wl/SubjectOcc { to: one Int } { bindings = subject + to }
 
 fact SpineAdopted { wl/chained and wl/commitAlwaysAccepts }
-fun setViol[o: SetLevelOcc]: set Reason { (o.to < 0) => RNegative else none }
+fun setViol[o: SetLevelOcc]: set Reason {
+  ((o.to < 0) => RNegative else none)
+  + (wl/archeDuplicate[o] => RDuplicateArche else none)   // DT-029 E1: the idempotent callee's refusal
+}
 fact SetLevelWitness {
   all o: SetLevelOcc | (o.admission = Accepted iff no setViol[o])
     and (o.admission in Rejected implies o.admission.because = setViol[o])
@@ -86,3 +90,40 @@ assert unit_slog_threadIsCommitted {
   all o: wl/SubjectOcc | some o.pre implies committed[wl/priorOn[o]]
 }
 check unit_slog_threadIsCommitted for 5 but 4 Int expect 0
+
+// ── origin identity (DT-029 E1): per (arche, subject), adopted by this log through its guard ───────
+// A second operation re-sending an origin already committed on the widget is refused RDuplicateArche;
+// the first stands (the lost-reply retry lands exactly once).
+run unit_slog_archeDuplicateRefused {
+  some w: Widget, o: SetLevelOcc, disj a, b: SetLevelOcc |
+    committed[o] and o.subject != w and committed[a] and refusedAtAdmission[b] and b.admission.because = RDuplicateArche
+    and a.subject = w and b.subject = w and a.arche = o and b.arche = o
+    and precedes[o.tick, a.tick] and precedes[a.tick, b.tick]
+} for 5 but 4 Int expect 1
+
+// One origin may span TWO subjects (a transfer's paired rows, SAMWISE-S1): uniqueness is per (arche, subject).
+run unit_slog_archeTwoSubjectsOneArche {
+  some o: SetLevelOcc, disj a, b: SetLevelOcc |
+    committed[o] and committed[a] and committed[b] and a.subject != b.subject
+    and a.arche = o and b.arche = o and o.subject != a.subject and o.subject != b.subject
+} for 5 but 4 Int expect 1
+
+// Citing a SELF-MINTED row on the same subject is unrepresentable: that row's origin IS its own identity
+// (archeOf[o] = o), so the citer re-sends it — the runtime index refuses it too. Consequence: a chain's own
+// follow-up rows never cite their own chain's originator via `arche` (they are self-minted, or cite THEIR caller).
+run unit_slog_archeSelfMintedSameSubjectRefused {
+  some w: Widget, o, a: SetLevelOcc | committed[o] and no o.arche and committed[a] and o.subject = w and a.subject = w and a.arche = o
+} for 5 but 4 Int expect 0
+
+// But citing an already-CITED row on the same subject is a DISTINCT origin (immediate cause, not a root — MP 3.2),
+// so it is legal: the first run of this pair was written as "never along a chain" and the solver refuted it
+// (2026-09-03) with exactly this instance. Recorded as a witness so the semantics stay visible.
+run unit_slog_archeCitedTriggerDistinct {
+  some w: Widget, x, o, a: SetLevelOcc | committed[x] and committed[o] and committed[a]
+    and o.subject = w and a.subject = w and o.arche = x and a.arche = o
+} for 5 but 4 Int expect 1
+
+// The uniqueness predicate is a THEOREM of the refusal sitting in the guard (D-3: adopt it as a fact only where
+// a log models the index without modelling the refusal).
+assert unit_slog_archeUniqueTheorem { wl/archeUniquePerSubject }
+check unit_slog_archeUniqueTheorem for 5 but 4 Int expect 0

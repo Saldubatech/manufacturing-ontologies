@@ -114,9 +114,10 @@ sig VatRec extends Snapshot { vLevel: one Int }
 fact VatRecExtensional { all disj a, b: VatRec | a.vLevel != b.vLevel }
 
 sig AddVatOcc extends vlog/SubjectOcc {} { bindings = subject }   // genesis → level 0
-/** PourOcc — the additive act. `arche` is the ORIGIN identity the row carries (the runtime
-    `arche_id` = the RESERVE's rId, SAMWISE-S1); `reverses` names the pour this pour undoes, if any. */
-sig PourOcc extends vlog/SubjectOcc { amount: one Int, arche: lone univ, reverses: lone univ }
+/** PourOcc — the additive act. `arche` — the ORIGIN identity every occurrence carries since DT-029 E1
+    (kernel-typed `lone Occurrence`, no field of its own here) — is bound to the RESERVE the pour fulfils (the
+    runtime `arche_id` = the RESERVE's rId, SAMWISE-S1); `reverses` names the pour this pour undoes, if any. */
+sig PourOcc extends vlog/SubjectOcc { amount: one Int, reverses: lone univ }
   { bindings = subject + amount + arche + reverses }
 
 fun vatLevelAt[v: Vat, t: Tick]: lone Int { vlog/recordAt[v, t].vLevel }
@@ -125,7 +126,10 @@ fun vPost[o: vlog/SubjectOcc]: lone VatRec { o.post & VatRec }
 
 one sig RVatStarted, RVatUnborn extends Reason {}
 fun addVatViol[o: AddVatOcc]: set Reason { (some vlog/priorOn[o]) => RVatStarted else none }
-fun pourViol[o: PourOcc]: set Reason { (no o.pre) => RVatUnborn else none }
+fun pourViol[o: PourOcc]: set Reason {
+  ((no o.pre) => RVatUnborn else none)
+  + (vlog/archeDuplicate[o] => sem/RDuplicateArche else none)   // the idempotent callee: a re-sent origin is refused, typed (DT-029 E1)
+}
 fact VatAdmission {
   all o: AddVatOcc | (o.admission = Accepted iff no addVatViol[o]) and (o.admission in Rejected implies o.admission.because = addVatViol[o])
   all o: PourOcc   | (o.admission = Accepted iff no pourViol[o])   and (o.admission in Rejected implies o.admission.because = pourViol[o])
@@ -206,14 +210,14 @@ fact PourViews {
   all o: pour/ViewOcc |
     o.peerView = ((some p: poursCiting[reserveOf[o]] | precedes[p.tick, o.tick]) => sem/PV_MOVED_BY_THIS else sem/PV_UNMOVED)
 }
-/** The peer-row citation discipline (the runtime's `arche_id` column + partial unique index):
-    a pour's arche is a committed RESERVE on this vat that precedes it, and no two committed
-    pours on one vat carry the same arche. */
+/** The peer-row citation discipline (the runtime's `arche_id` column): a pour's arche is a committed RESERVE
+    on this vat (strict precedence is the kernel's `ArcheOriginPrecedes`; the cast is needed because `subject`
+    is per-instantiation — knowledge-base §3). Uniqueness per (arche, vat) is no longer stated here: it is
+    a THEOREM of the `archeDuplicate` refusal in `pourViol` (`conv_il_archeUniquePerVat`), per (arche, subject)
+    by construction — a transfer's two halves on two vats still share one identity (SAMWISE-S1). */
 fact ArcheIdentity {
   all p: PourOcc | some p.arche implies
-    (p.arche in pour/ReserveOcc and committed[p.arche & pour/ReserveOcc] and (p.arche & pour/ReserveOcc).subject = p.subject
-     and precedes[(p.arche & pour/ReserveOcc).tick, p.tick])
-  all disj p, q: PourOcc | (committed[p] and committed[q] and some p.arche and p.subject = q.subject) implies p.arche != q.arche   // per (arche, vat): a transfer's two halves on two vats share one identity (SAMWISE-S1)
+    (p.arche in pour/ReserveOcc and committed[p.arche & pour/ReserveOcc] and (p.arche & pour/ReserveOcc).subject = p.subject)
   all p: PourOcc | some p.reverses implies (p.reverses in PourOcc and committed[p.reverses & PourOcc] and (p.reverses & PourOcc).subject = p.subject
                                             and precedes[(p.reverses & PourOcc).tick, p.tick] and p.amount = minus[0, (p.reverses & PourOcc).amount])
 }

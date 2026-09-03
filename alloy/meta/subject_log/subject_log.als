@@ -55,6 +55,28 @@ pred chained {
     until a result policy exists (the deferred ABAC/commit-guard hook). */
 pred commitAlwaysAccepts { all o: SubjectOcc | some o.commit implies o.commit = Accepted }
 
+// ── origin identity (DT-029 E1): uniqueness per (arche, subject) — ADOPTED per log, never a global fact ──
+/** archeDuplicate — the guard CONDITION an applier maps to its typed refusal (the runtime's partial unique
+    index per (arche_id, subject) firing): an earlier committed occurrence on this subject already carries
+    this occurrence's origin. Absent origins are self-minted (`archeOf[o] = o`), so uncited rows never
+    collide. CONSEQUENCE: a row citing a SELF-MINTED row on the same subject collides with it (that row's origin
+    IS its own identity), so a chain's follow-up rows never cite their own chain's originator via `arche`;
+    citing an already-cited row is a distinct origin (immediate cause, not a root) and is legal — tests
+    `archeSelfMintedSameSubjectRefused` / `archeCitedTriggerDistinct`. A pattern deriving "who cited my
+    reservation" must therefore exclude its own log's rows from the citers it counts (meta/intent_log, E2).
+    Idiom, in a kind's violation set: `(log/archeDuplicate[o] => RDuplicateArche else none)` (the reason atom
+    is the applier's — `meta/intent_log/semantics` names it for the pattern's logs). */
+pred archeDuplicate[o: SubjectOcc] {
+  some b: SubjectOcc | committed[b] and b.subject = o.subject and precedes[b.tick, o.tick] and archeOf[b] = archeOf[o]
+}
+/** archeUniquePerSubject — no two committed occurrences on one subject share an origin: per (arche, subject)
+    BY CONSTRUCTION, so one origin may span two subjects (a transfer's paired rows, SAMWISE-S1). A THEOREM of
+    `archeDuplicate` sitting in every kind's guard; adopt it as a FACT instead where a log models the index
+    without modelling the refusal (D-3: opt-in — roots that ignore origins pay nothing). */
+pred archeUniquePerSubject {
+  all disj a, b: SubjectOcc | (committed[a] and committed[b] and a.subject = b.subject) implies archeOf[a] != archeOf[b]
+}
+
 /** lastTouch — the latest committed occurrence on `s` at-or-before `t`. */
 fun lastTouch[s: Subject, t: Tick]: lone SubjectOcc {
   { o: SubjectOcc | committed[o] and o.subject = s and notAfter[o.tick, t]

@@ -41,10 +41,11 @@ matches".
 
 ## 3. `univ`-typed fields need a cast before a join
 
-`ownerVersion: one univ` / `arche: lone univ` let a meta module carry an identity the
-applying module binds to its own atoms (the runtime's `owner_rid` / `arche_id`). A join
-through such a field (`p.arche.subject`) is a type error — cast first:
-`(p.arche & pour/ReserveOcc).subject`.
+`ownerVersion: one univ` lets a meta module carry an identity the applying module binds to its
+own atoms (the runtime's `owner_rid`); `arche` is kernel-typed `lone Occurrence` since DT-029 E1.
+Either way a join to a PER-INSTANTIATION field (`p.arche.subject` — every `subject_log` instance
+declares its own `subject`) is ambiguous — cast first: `(p.arche & pour/ReserveOcc).subject`.
+(`p.arche.tick` needs no cast: `tick` is the kernel's.)
 
 ## 3a. A `univ` binding names a MARKER atom, never a kind SET
 
