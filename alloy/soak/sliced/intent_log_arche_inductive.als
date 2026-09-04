@@ -112,6 +112,13 @@ fun parkResidualAt[s: Slot, t: Tick]: one sem/PeerView {
 fact ClaimViews {
   all o: claim/ConfirmOcc + claim/ReleaseOcc       | not claim/cited[o] implies o.peerView = slotResidualAt[o.subject, o.tick]
   all o: claim/ActConfirmOcc + claim/ActReleaseOcc | not claim/cited[o] implies o.peerView = parkResidualAt[o.subject, o.tick]
+  all o: claim/ConfirmOcc + claim/ReleaseOcc | claim/prePhase[o] = sem/I_HELD implies                  // THE HELD RULE (E2b, DT-029 Q9)
+    o.peerView = (slotHeadCitesAt[o.subject, o.tick] => sem/PV_MOVED_BY_THIS else slotResidualAt[o.subject, o.tick])
+}
+/** slotHeadCitesAt — the slot's latest committed row cites a row of the current claim (the peer is STILL ours). */
+pred slotHeadCitesAt[s: Slot, t: Tick] {
+  let h = slog/lastTouch[s, t], r = claim/openerBefore[s, t] |
+    some h and some r and h.arche in claim/IntentOcc and (h.arche & claim/IntentOcc).subject = s and notAfter[r.tick, h.arche.tick]
 }
 
 // ── the three laws (premise-free) ──────────────────────────────────────────────────────────────
@@ -126,10 +133,16 @@ fun openerAt[s: Slot, t: Tick]: lone claim/IntentOcc {
 fun takesCiting[s: Slot, i: claim/IntentOcc]: set TakeOcc { { x: TakeOcc | committed[x] and x.subject = s and x.arche = i } }
 /** takesCitingAt — the same, at-or-before `t` (the invariant must never count a FUTURE take: the first base run's CTI). */
 fun takesCitingAt[s: Slot, i: claim/IntentOcc, t: Tick]: set TakeOcc { { x: takesCiting[s, i] | notAfter[x.tick, t] } }
+/** Law A (attribution soundness) — E2b': at the intent's open a committed view reads MOVED_BY_THIS iff a take or park
+    ON THE SUBJECT cites the settled intent before it; at HELD iff the slot's HEAD cites a row of the current hold (the
+    applier's rule, Q9). The old single iff encoded the STICKY reading and failed, as pre-registered it should not have,
+    on a RELEASE at HELD after a stranger's park (E2b's first execution, 2026-09-04 — instance read). */
 pred lawA {
   all o: claim/ViewOcc | committed[o] implies
     ((o.peerView = sem/PV_MOVED_BY_THIS) iff
-     (some x: TakeOcc + ParkOcc | committed[x] and x.subject = o.subject and x.arche = claim/settledIntent[o] and precedes[x.tick, o.tick]))
+     (claim/prePhase[o] = sem/I_HELD
+        => slotHeadCitesAt[o.subject, o.tick]
+        else (some x: TakeOcc + ParkOcc | committed[x] and x.subject = o.subject and x.arche = claim/settledIntent[o] and precedes[x.tick, o.tick])))
 }
 pred lawB {
   all o: claim/ConfirmOcc + claim/ActConfirmOcc | committed[o] implies
@@ -174,6 +187,12 @@ assert e7_base { not seedAt[tord/first] implies e7Inv[tord/first] }
 assert e7_step {
   all t: Tick - tord/last | let t2 = tord/next[t] | (e7Inv[t] and not seedAt[t2]) implies e7Inv[t2]
 }
+/** THE HELD-RULE THEOREM CHECK (E5 S-3) for this slice — base set. */
+assert e7_heldViewHeadBased {
+  all o: claim/ConfirmOcc + claim/ReleaseOcc | claim/prePhase[o] = sem/I_HELD implies
+    ((o.peerView = sem/PV_MOVED_BY_THIS) iff slotHeadCitesAt[o.subject, o.tick])
+}
+check e7_heldViewHeadBased for 6 but 5 Int, 2 Slot, 2 Owner, 2 Version, 7 Tick, 7 Occurrence, 8 Snapshot, 8 EntityId expect 0
 assert e7_law_A { lawA }
 assert e7_law_B { (all t: Tick | e7Inv[t]) implies lawB }
 assert e7_law_C { (all t: Tick | e7Inv[t]) implies lawC }

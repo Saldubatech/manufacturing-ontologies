@@ -131,6 +131,14 @@ fact HavocDiscipline {
   all h: HavocVatOcc + HavocMoveOcc | h.admission = Accepted and h.arche = h
   all h: HavocVatOcc,  o: vlog/SubjectOcc - HavocVatOcc   | precedes[h.tick, o.tick]
   all h: HavocMoveOcc, o: move/IntentOcc - HavocMoveOcc   | precedes[h.tick, o.tick]
+  // REACHABILITY CLAIM (E2b', 2026-09-04): a MOVE chain's head is only ever FREE, RESERVED or DONE. Justification, structural:
+  //   HELD is entered only by a CONFIRM under HoldSem (the confirm effect's semantics branch — under MoveSem it enters
+  //   DONE); ACTING is entered only by a committed ACT_RESERVE, and on a MOVE instance `actReserveViol` fires
+  //   RNotHoldSemantics on every one (`not isHold`). A seed at HELD / ACTING is therefore an UNREACHABLE state — E2b's
+  //   first execution found law A SAT on exactly such a seed (a RELEASE at a seeded HELD reading ABSENT while a pour
+  //   cited the seeded opener; instance read). FAILURE MODE NAMED: an OVER-restricted seed set yields a spurious UNSAT —
+  //   if a later law returns UNSAT where a counterexample was expected, this line is the first suspect (MINESWEEPER).
+  all h: HavocMoveOcc | move/iPost[h].iPhase in sem/I_FREE + sem/I_RESERVED + sem/I_DONE
 }
 pred seedAt[t: Tick] { some h: HavocVatOcc + HavocMoveOcc | h.tick = t }
 

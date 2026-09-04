@@ -174,7 +174,25 @@ pred actCitedAt[k: Key, t: Tick] { some x: citers[actOpenerBefore[k, t]] | notAf
     or law changes: `confirmRequiresLanded` / `releaseRequiresUnlanded` now read "a CONFIRM is cited, a
     RELEASE is not". Adopted, not global, because the module's own suite binds the view freely to test
     guards, effects and re-drive with no peer domain at all. */
-pred citationView { all o: ViewOcc | (o.peerView = PV_MOVED_BY_THIS) iff cited[o] }
+pred citationSound { all o: ViewOcc | o.peerView = PV_MOVED_BY_THIS implies (cited[o] and prePhase[o] in livePhases) }
+/** citationLands — at the intent's OPEN (a view at RESERVED or ACTING) a citer IS the landing: nothing has happened
+    since, so history and current state coincide. THE THREE FACTS PARTITION THE PHASES, each with its own reason
+    (E2b', 2026-09-04): FREE / DONE — no live intent, nothing to attribute (`citationSound`'s liveness conjunct);
+    RESERVED / ACTING — the intent's own open window, the citer IS the landing (this pred); HELD — the attributed thing
+    is "still ours", which only the PEER HEAD can say: the applier's rule (DT-029 Q9). HELD's silence follows from Q9,
+    ruled before any counterexample existed — a partition, not a carve-out. */
+pred citationLands { all o: ViewOcc | prePhase[o] in I_RESERVED + I_ACTING implies ((o.peerView = PV_MOVED_BY_THIS) iff cited[o]) }
+/** citationView — the two together. DELIBERATELY SILENT AT HELD (DT-029 Q9 / E2b, 2026-09-03): `cited` is MONOTONE —
+    once a citer exists it exists forever — so MOVED_BY_THIS derived from it is STICKY: right as history ("the peer did
+    move by my intent"), wrong as what `releaseViol` reads at HELD ("the peer is STILL held by me"). Bound at HELD, the
+    law refused every RELEASE that ends a hold after the peer moved otherwise (DT-027 §6.1's three cases, C-7,
+    `redrive[I_HELD, PV_MOVED_OTHERWISE] = RD_RELEASE_DETACH`) as RLanded — probe: a committed RELEASE after a cited
+    take and a third-party retire was UNSAT. The module cannot see the peer's later rows (D-2), so at HELD it stops
+    constraining: THE HELD RULE IS THE APPLIER'S, read from the PEER HEAD — MOVED_BY_THIS iff the peer's latest
+    committed row cites a row of the current hold, else the residual — and EVERY HOLD-chain seat owes it together
+    with a per-instance THEOREM CHECK of it in its root (E5 S-3; a missing rule turns that check SAT instead of
+    binding the view freely — MINESWEEPER's Q5 point, 2026-09-03). The exemplar shows both. */
+pred citationView { citationSound and citationLands }
 /** closingAct — an ACT_CONFIRM whose sub-intent was reserved in CLOSE mode: it ends the hold. */
 pred closingAct[o: ilog/SubjectOcc] { o in ActConfirmOcc and iPre[o].iMode = AM_CLOSE }
 /** liveAt / heldAt — the key is taken / a hold is in force as of `t`. */

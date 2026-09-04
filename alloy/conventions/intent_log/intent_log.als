@@ -211,6 +211,16 @@ fun actResidualAt[c: Cart, act: univ, t: Tick]: one sem/PeerView {
 fact ClaimViews {
   all o: claim/ConfirmOcc + claim/ReleaseOcc | not claim/cited[o] implies o.peerView = cartResidualAt[o.subject, o.tick]
   all o: claim/ActConfirmOcc + claim/ActReleaseOcc | not claim/cited[o] implies o.peerView = actResidualAt[o.subject, claim/iPre[o].iAct, o.tick]
+  all o: claim/ConfirmOcc + claim/ReleaseOcc | claim/prePhase[o] = sem/I_HELD implies
+    o.peerView = (cartHeadCitesAt[o.subject, o.tick] => sem/PV_MOVED_BY_THIS else cartResidualAt[o.subject, o.tick])   // THE HELD RULE (E2b)
+}
+/** cartHeadCitesAt — THE HELD RULE's reading (DT-029 Q9 / E2b): the cart's latest committed row at `t` cites a row of
+    the hold the cart is under (the opener or a sub-intent after it) — the peer is STILL held by this claim. A later
+    third-party row (a retire, a stranger's park) is the head and cites nothing of ours → the residual → a RELEASE ends
+    the hold. `cited` cannot say this: it is monotone. Every HOLD-chain seat owes this rule + its theorem check. */
+pred cartHeadCitesAt[c: Cart, t: Tick] {
+  let h = clog/lastTouch[c, t], r = claim/openerBefore[c, t] |
+    some h and some r and h.arche in claim/IntentOcc and (h.arche & claim/IntentOcc).subject = c and notAfter[r.tick, h.arche.tick]
 }
 
 // ── ARM 2 — the ADDITIVE arm (vat pour): the citation attributes; the residual is UNMOVED ───────────

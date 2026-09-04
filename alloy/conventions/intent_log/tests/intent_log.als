@@ -161,6 +161,36 @@ run conv_il_duplicatePourRefused {
   }
 } for 5 but 5 Int, 1 Porter, 0 Cart, 1 Vat, 1 PorterVersion, 6 Tick, 5 Occurrence, 7 Snapshot, 6 EntityId expect 1
 
+// ── E2b (DT-029 Q9): a hold ENDS by RELEASE once the peer moved otherwise; while the peer is ours it cannot ──
+/** The missing witness: after a cited take and a CONFIRM, a third party RETIRES the cart; the owner's RELEASE at HELD
+    COMMITS, reading the peer as moved-otherwise (the head is the retire, citing nothing of ours). */
+run conv_il_releaseAfterRetireUnderHold {
+  some c: Cart, k: TakeOcc, f: claim/ConfirmOcc, x: RetireOcc, r: claim/ReleaseOcc | {
+    committed[k] and committed[f] and committed[x] and committed[r]
+    k.subject = c and f.subject = c and x.subject = c and r.subject = c
+    precedes[k.tick, f.tick] and precedes[f.tick, x.tick] and precedes[x.tick, r.tick]
+    claim/prePhase[r] = sem/I_HELD and r.peerView = sem/PV_MOVED_OTHERWISE
+    takeOnlyByClaimants
+  }
+} for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 8 Tick, 7 Occurrence, 8 Snapshot, 6 EntityId expect 1
+/** While the cart is still ours (the cited take is the head), a RELEASE at HELD is refused RLanded — the hold ends by
+    the CLOSE act (park), never by abandoning a held cart. */
+run conv_il_releaseAtHeldWhileOursRefused {
+  some c: Cart, k: TakeOcc, f: claim/ConfirmOcc, r: claim/ReleaseOcc | {
+    committed[k] and committed[f]
+    k.subject = c and f.subject = c and r.subject = c
+    precedes[k.tick, f.tick] and precedes[f.tick, r.tick]
+    claim/prePhase[r] = sem/I_HELD and r.admission in Rejected and sem/RLanded in r.admission.because
+    takeOnlyByClaimants
+  }
+} for 5 but 5 Int, 1 Porter, 1 Cart, 0 Vat, 1 PorterVersion, 7 Tick, 6 Occurrence, 8 Snapshot, 6 EntityId expect 1
+/** THE HELD-RULE THEOREM CHECK (E5 S-3, MINESWEEPER's Q5 point): a seat that forgets its HELD rule turns this SAT. */
+assert conv_il_heldViewHeadBased {
+  all o: claim/ConfirmOcc + claim/ReleaseOcc | claim/prePhase[o] = sem/I_HELD implies
+    ((o.peerView = sem/PV_MOVED_BY_THIS) iff cartHeadCitesAt[o.subject, o.tick])
+}
+check conv_il_heldViewHeadBased for 5 but 5 Int, 2 Porter, 2 Cart, 0 Vat, 2 PorterVersion, 7 Tick, 7 Occurrence, 8 Snapshot, 8 EntityId expect 0
+
 /** Uniqueness per (arche, vat) is a THEOREM of the refusal in the guard — the seat check E5 names. */
 assert conv_il_archeUniquePerVat { vlog/archeUniquePerSubject }
 check conv_il_archeUniquePerVat for 5 but 5 Int, 2 Porter, 0 Cart, 1 Vat, 2 PorterVersion, 6 Tick, 6 Occurrence, 8 Snapshot, 8 EntityId expect 0

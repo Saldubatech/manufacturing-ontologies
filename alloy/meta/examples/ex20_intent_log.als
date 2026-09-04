@@ -83,7 +83,16 @@ fun residualAt[c: LuggageCart, t: Tick]: one sem/PeerView {
   (no lcart/recordAt[c, t]) => sem/PV_ABSENT
   else (availAt[c, t] = IN_RACK) => sem/PV_UNMOVED else sem/PV_MOVED_OTHERWISE
 }
-fact ClaimViews { all o: claim/ViewOcc | not claim/cited[o] implies o.peerView = residualAt[o.subject, o.tick] }
+fact ClaimViews {
+  all o: claim/ViewOcc | not claim/cited[o] implies o.peerView = residualAt[o.subject, o.tick]
+  all o: claim/ViewOcc | claim/prePhase[o] = sem/I_HELD implies                                   // THE HELD RULE (E2b, DT-029 Q9)
+    o.peerView = (cartHeadCitesAt[o.subject, o.tick] => sem/PV_MOVED_BY_THIS else residualAt[o.subject, o.tick])
+}
+/** cartHeadCitesAt — the cart's latest committed row cites a row of the current claim: the peer is STILL ours. */
+pred cartHeadCitesAt[c: LuggageCart, t: Tick] {
+  let h = lcart/lastTouch[c, t], r = claim/openerBefore[c, t] |
+    some h and some r and h.arche in claim/IntentOcc and (h.arche & claim/IntentOcc).subject = c and notAfter[r.tick, h.arche.tick]
+}
 /** viewAt — the view as the bellhop reads it at `t` (the probe's input): cited → moved-by-this, else the residual. */
 fun viewAt[c: LuggageCart, t: Tick]: one sem/PeerView { claim/citedAt[c, t] => sem/PV_MOVED_BY_THIS else residualAt[c, t] }
 /** checkOutOnlyByClaimants — the exclusive-arm PREMISE of the theorem below: check-outs cite their live claim. */
@@ -127,3 +136,9 @@ assert ex20_checkedOutIsHeld {
     all c: LuggageCart, t: Tick | availAt[c, t] = CHECKED_OUT implies some claim/holderAt[c, t]
 }
 check ex20_checkedOutIsHeld for 5 but 5 Int, 2 Bellhop, 2 LuggageCart, 2 Shift, 6 Tick, 6 Occurrence, 8 Snapshot, 10 EntityId expect 0
+
+/** THE HELD-RULE THEOREM CHECK (E5 S-3): a seat that forgets its HELD rule turns this SAT. */
+assert ex20_heldViewHeadBased {
+  all o: claim/ViewOcc | claim/prePhase[o] = sem/I_HELD implies ((o.peerView = sem/PV_MOVED_BY_THIS) iff cartHeadCitesAt[o.subject, o.tick])
+}
+check ex20_heldViewHeadBased for 5 but 5 Int, 2 Bellhop, 2 LuggageCart, 2 Shift, 7 Tick, 7 Occurrence, 8 Snapshot, 8 EntityId expect 0
